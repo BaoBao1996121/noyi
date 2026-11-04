@@ -25,6 +25,30 @@ async def client_for(store, tmp_path, model=None, run_service=False):
 
 
 @pytest.mark.asyncio
+async def test_desktop_shutdown_requires_token_and_signals_only_its_own_instance(store, tmp_path):
+    event = asyncio.Event()
+    app = create_app(store, tmp_path / 'data', ScriptedModel([]), run_service=False, shutdown_event=event)
+    async with TestClient(TestServer(app)) as client:
+        boot = await (await client.get('/api/bootstrap')).json()
+        assert boot['version'] == '0.5.0' and boot['instance_id']
+        denied = await client.post('/api/shutdown')
+        assert denied.status == 403 and not event.is_set()
+        response = await client.post('/api/shutdown', headers={'X-PA-Token': boot['token']})
+        result = await response.json()
+        assert result['instance_id'] == boot['instance_id']
+        await asyncio.wait_for(event.wait(), timeout=1)
+
+
+def test_workspace_id_is_persistent_but_service_instance_and_tokens_change(store, tmp_path):
+    from personal_agent.webui import Console
+    a = Console(store, tmp_path / 'data', ScriptedModel([]))
+    b = Console(store, tmp_path / 'data', ScriptedModel([]))
+    assert a.workspace_id == b.workspace_id
+    assert a.token != b.token and a.instance_id != b.instance_id
+    assert b.snapshot()['workspace_id'] == a.workspace_id
+
+
+@pytest.mark.asyncio
 async def test_web_upload_submit_nonce_retry_and_no_private_paths(store, tmp_path):
     async with client_for(store, tmp_path) as client:
         form = aiohttp.FormData()

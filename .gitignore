@@ -9,3 +9,5 @@ __pycache__/
 .pa/
 pa.local.toml
 *.sqlite*
+build/
+dist/

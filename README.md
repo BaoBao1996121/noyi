@@ -1,26 +1,24 @@
 # Personal Agent Core
 
-一个可恢复的个人 Agent。当前已完成 M0–M4 与 WebUI：使用 Pi 循环和 Qwen 官网模型，支持长期多 Bot、私聊与群协作、显式记忆、后台 Worker、审核返工、持续目标、周期/资料变化检查和有界的新工作准入。SQLite 保存任务、输入责任、请求、工具、调度与投递状态。M5 的证据复盘、实验与自用调优正在继续开发。
+一个可恢复的个人 Agent。**0.5.0 已完成 M1–M5 全部计划范围和初步调优**：使用 Pi 循环和 Qwen 官网模型，支持长期多 Bot、私聊与群协作、显式记忆、后台 Worker、审核返工、持续目标、周期/资料变化检查、证据复盘、观察计划与反馈。SQLite 保存任务、输入责任、请求、工具、调度与投递状态。
 
-安装后可运行 `python -m personal_agent --data .pa/personal web`，在浏览器打开 `http://127.0.0.1:8765`。首次使用在设置中配置自己的 Qwen 官网凭据；页面支持上传文本资料、交办与补充任务、回答问题和查看成果。关闭浏览器不会停止服务，关闭启动进程会停止执行。[提前版界面验收](docs/validation/UI_EARLY_REPORT.md)。
+Windows 首次双击 `Install.cmd`，日常双击 `Start Personal Agent.cmd`，在浏览器打开 `http://127.0.0.1:8765`。首次使用在设置中配置自己的 Qwen 官网凭据；页面支持上传文本资料、交办与补充任务、回答问题、查看成果、复盘和下载备份。关闭浏览器后后台服务仍运行，双击 `Stop Personal Agent.cmd` 停止。完整操作见 [自用指南](docs/self-use-guide.md)。
 
-持续使用入口见 [持续目标说明](docs/ongoing-goals.md)。当前进度和真实验证结果见 [STATUS](STATUS.md)、[M4 报告](docs/validation/M4_REPORT.md)，完整范围见 [M1–M5 计划](docs/plan-m1-m5.md)。本页的例子是可执行的虚构活动资料，不是已经完成的真实工作报告。
+持续使用入口见 [持续目标说明](docs/ongoing-goals.md)，模块替换边界见 [模块接口](docs/module-interfaces.md)。真实验证结果见 [STATUS](STATUS.md)、[M5 报告](docs/validation/M5_REPORT.md)，完整范围见 [M1–M5 计划](docs/plan-m1-m5.md)。本页的例子是可执行的虚构活动资料，不是已经完成的真实工作报告。
 
 ## 安装
 
 需要 Python 3.11 或以上、Node.js 22.19 或以上。核心循环使用固定版本的 Pi Agent，接口边界见 [Pi 核心接入](docs/pi-kernel.md)。以下命令在仓库根目录的 Windows PowerShell 中执行；无需激活虚拟环境。
 
 ```powershell
-python -m venv .venv
-& .\.venv\Scripts\python.exe -m pip install -e '.[test]'
-npm ci --prefix .\src\personal_agent\pi_bridge --ignore-scripts
+& .\scripts\install.ps1
 ```
 
 ## 配置 Qwen 官方模型
 
 默认模型是 `qwen3.7-plus`，默认地址是 Qwen 官网开放平台的 `https://maas.qianwenaiapi.com/compatible-mode/v1`。具体配置、其他官方账号地址和选型依据见 [模型配置](docs/model-configuration.md)。配置不会自动切换到其他提供方。
 
-执行服务的 PowerShell 进程需要 `DASHSCOPE_API_KEY`。其他电脑若已设置该环境变量，可以直接使用；否则在当前窗口安全输入，不将密钥写进命令历史：
+WebUI 可在设置中保存本机密钥；已有 `DASHSCOPE_API_KEY` 环境变量也可直接使用。命令行 `serve` 使用环境变量；可在当前窗口安全输入，不将密钥写进命令历史：
 
 ```powershell
 $env:DASHSCOPE_API_KEY = [System.Net.NetworkCredential]::new('', (Read-Host 'Qwen API Key' -AsSecureString)).Password
@@ -106,5 +104,7 @@ npm test --prefix .\src\personal_agent\pi_bridge
 - `submit_result` 检查产物完整性、资料读取覆盖、引用和用户指定文本条件。`succeeded/acceptance=passed` 表示这些明确检查通过，不证明所有语义、推理或事实都正确。真实任务仍需按根要求检查内容；文件存在或关键词出现不能取代结果质量验收。
 - 本地文件投递可按 delivery ID 重放；没有承诺第三方平台 exactly-once。未接入的渠道没有端到端验证。
 - 服务在当前电脑当前用户权限下运行，资料与产物保留在本地数据目录。只授权任务所需资料；读取到的文件内容是证据，不会因此获得执行权限。
+- 复盘页面和下载报告的事实来自冻结账本，模型解释单独标注；保留失败和原始模型草稿。没有测量的数据保持未知。多日真实稳定性、长期收益和一般语义正确性不由本轮初测保证。
+- 周期和变化检查依赖本机服务运行；没有远程唤醒、第三方账号连接或 DSH/Pi 原样插件安装器。当前实现提供可验证的替换接口，生态适配留待后续增量。
 
 `.pa/`、本地配置、虚拟环境和数据库默认不进 Git。架构资料来自研究，不代表上游代码或上游测试成绩已经成为本产品能力。

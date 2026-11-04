@@ -1,0 +1,1 @@
+{"before_model_requests": 64, "after_model_requests": 64, "integrity": "ok", "goals": [{"status": "paused", "n": 1}], "unfinished_tasks": [{"status": "paused", "n": 1}], "admission_modes": ["off"], "credentials_file_present": false}

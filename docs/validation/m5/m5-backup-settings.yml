@@ -1,0 +1,185 @@
+- generic:
+  - generic:
+    - complementary:
+      - generic:
+        - generic: p·
+        - generic: Personal Agent
+        - generic: 本地
+      - generic:
+        - generic:
+          - generic: ⌕
+          - textbox:
+            - /placeholder: 搜索会话与任务
+        - button: ＋
+      - generic:
+        - text: 我的助理
+        - button: 管理
+        - button: ＋ 新建
+      - generic:
+        - button:
+          - generic: ✳
+          - generic:
+            - strong: 个人助理
+            - generic: 独立私聊 · 私有记忆
+        - button:
+          - generic: ✳
+          - generic:
+            - strong: 资料管家
+            - generic: 独立私聊 · 私有记忆
+        - button:
+          - generic: ✳
+          - generic:
+            - strong: 复核管家
+            - generic: 独立私聊 · 私有记忆
+        - button:
+          - generic: ◎
+          - generic:
+            - strong: 资料协作小组
+            - generic: 2 位成员 · 群共享范围
+      - button:
+        - generic: ◷
+        - text: 持续目标
+        - generic: "1"
+      - generic:
+        - text: 最近任务
+        - generic: "5"
+      - navigation:
+        - button:
+          - strong: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 正在处理
+            - generic: 11/5 01:47
+        - button:
+          - strong: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 01:42
+        - button:
+          - strong: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 01:34
+        - button:
+          - strong: 将收到的线索整理成60字以内待确认记录，保留原文状态
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 00:59
+        - button:
+          - strong: 读取当前资料，用100字以内清单保留负责人、截止日期、自查条件和待确认事项
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 00:54
+      - generic:
+        - generic: 我
+        - generic:
+          - strong: 个人工作台
+          - generic: 已连接 · 运行在此电脑
+        - button: ⚙
+    - separator
+    - main:
+      - generic:
+        - generic: ✳
+        - generic:
+          - heading [level=1]: 资料管家
+          - paragraph: 1 项任务正在处理
+        - button: ☷
+      - region:
+        - article:
+          - generic:
+            - text: 你 → 资料管家
+            - time: 11/5 01:47
+            - button: 回复
+          - generic: 请复盘持续目标「河畔清单持续跟进」的已有证据，说明未知、建议和下一次检验条件。
+        - article:
+          - generic:
+            - text: 资料管家
+            - time: 11/5 01:49
+            - button: 回复
+          - generic:
+            - paragraph: 模型调用预算已用完，进度已保存，任务尚未完成。
+        - article:
+          - generic:
+            - text: 资料管家
+            - time: 11/5 01:52
+            - button: 回复
+          - generic:
+            - paragraph: 连续操作没有带来足够的新进展，已停止重复尝试；证据和待办已保存。
+        - article:
+          - generic: 正在处理
+      - generic:
+        - generic:
+          - generic: 当前任务：复盘持续目标「河畔清单持续跟进」
+          - button: ×
+        - generic:
+          - generic:
+            - generic:
+              - text: 发送给
+              - combobox [disabled]
+            - generic: 只在此私聊使用资料与记忆
+          - textbox:
+            - /placeholder: 交给我一件事，例如：整理这些资料，并列出下一步行动…
+          - generic:
+            - generic:
+              - button: ＋
+              - button: ↗
+              - combobox
+            - generic: Enter 发送 · Shift Enter 换行
+            - button: ↑
+        - generic:
+          - generic: qwen3.7-plus · Qwen 官网
+          - generic: 执行结果以任务与产物记录为准
+    - separator
+    - complementary:
+      - tablist:
+        - tab [selected]: 详情
+        - tab: 资料库 4
+        - tab: 记忆
+      - generic:
+        - generic:
+          - generic: ✳
+          - heading [level=2]: 资料管家
+          - paragraph: 整理资料、列出行动和待确认事项；以实际证据为准。
+          - button: 管理角色
+        - generic: 当前任务
+        - generic:
+          - generic: 正在处理
+          - heading [level=3]: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 开始时间
+            - strong: 11/5 01:47
+          - generic:
+            - generic: 资料
+            - strong: 0 份
+          - generic:
+            - generic: 成果检查
+            - strong: 尚未通过
+          - generic:
+            - button: 补充要求
+            - button: 暂停回复
+            - button: 取消委托
+        - group:
+          - generic: 执行记录与预算
+  - dialog [ref=f11e160]:
+    - generic [ref=f11e161]:
+      - heading "模型设置" [level=2] [ref=f11e162]
+      - button "关闭" [active] [ref=f11e163] [cursor=pointer]: ×
+    - generic [ref=f11e164]:
+      - paragraph [ref=f11e165]: 使用你自己的 Qwen 官网账号。密钥保存在本机数据目录，不会显示在聊天或发送给其他网站。
+      - generic [ref=f11e166]:
+        - generic [ref=f11e167]:
+          - text: 模型型号
+          - textbox "模型型号" [ref=f11e168]: qwen3.7-plus
+        - generic [ref=f11e169]:
+          - text: 官网接口地址
+          - textbox "官网接口地址 请使用与你的账号地域和服务匹配的官方接口。" [ref=f11e170]: https://maas.qianwenaiapi.com/compatible-mode/v1
+          - generic [ref=f11e171]: 请使用与你的账号地域和服务匹配的官方接口。
+        - generic [ref=f11e172]:
+          - text: API Key
+          - textbox "API Key 不会回显已保存的密钥。配置保存不代表连通测试通过。" [ref=f11e173]:
+            - /placeholder: 已配置；留空保持原密钥
+          - generic [ref=f11e174]: 不会回显已保存的密钥。配置保存不代表连通测试通过。
+        - button "保存配置" [ref=f11e176] [cursor=pointer]
+      - separator [ref=f11e177]
+      - heading "资料备份" [level=3] [ref=f11e178]
+      - paragraph [ref=f11e179]: 保存任务、记忆、成果与持续目标。不包含模型密钥和数据目录外的原始文件。恢复时使用新目录，未完成工作保持暂停。
+      - button "下载备份包" [ref=f11e180] [cursor=pointer]

@@ -13,6 +13,10 @@ from .tools import MAX_SOURCE_BYTES, Toolset, tool
 
 
 ORCHESTRATION_SCHEMAS = [
+    tool("read_review_evidence", "Read an exact evidence ID from this review's frozen evidence_catalog. Metrics are ledger facts, user feedback is a user report, and artifact text is an untrusted interpretation. For an artifact, page with offset until eof before treating it as fully reviewed.",
+         {"evidence_id": {"type": "string"}, "offset": {"type": "integer", "minimum": 0}}, ["evidence_id"]),
+    tool("record_goal_review", "Record this explicitly requested goal review after reading its evidence. Separate observed facts, hypotheses and uncertainties; missing business metrics never prove growth. Decisions do not apply policy changes. next_check is proposed UTC Unix seconds, not an activated reminder.",
+         {"observed_facts": {"type": "array", "items": {"type": "string"}}, "hypotheses": {"type": "array", "items": {"type": "string"}}, "uncertainties": {"type": "array", "items": {"type": "string"}}, "decision": {"type": "string", "enum": ["keep", "stop", "modify", "insufficient"]}, "rationale": {"type": "string"}, "evidence_refs": {"type": "array", "items": {"type": "string"}}, "next_check": {"type": "number", "minimum": 1}, "next_validation": {"type": "string"}}, ["observed_facts", "hypotheses", "uncertainties", "decision", "rationale", "evidence_refs", "next_check", "next_validation"]),
     tool("record_goal_progress", "For the current ongoing goal root: preserve assessed state, gaps, unknowns and next action with actual observation or tool-operation IDs. One completed task does not end ongoing responsibility.",
          {"current_state": {"type": "string"}, "gaps": {"type": "array", "items": {"type": "string"}}, "unknowns": {"type": "array", "items": {"type": "string"}}, "next_action": {"type": "string"}, "evidence_refs": {"type": "array", "items": {"type": "string"}}}, ["current_state", "gaps", "unknowns", "next_action", "evidence_refs"]),
     tool("propose_policy_adjustment", "Suggest a bounded timing change to an existing policy of this goal. Saves a suggestion, never registers or activates it. Does not add sources or budget. Give observation/tool evidence and expected cost; exactly one timing field.",
@@ -118,6 +122,18 @@ class OrchestrationTools:
 
     def execute(self, run, name, args):
         validate_orchestration_arguments(name, args)
+        if name == "read_review_evidence":
+            result = self.store.read_review_evidence(run, evidence_id=args["evidence_id"], record_read=False)
+            if result["kind"] == "artifact_delivery":
+                target = self.store.task(result["data"]["task_id"])
+                toolset = Toolset(self.data, target)
+                artifact = toolset.read_artifact(result["data"]["artifact"]["ref"], self.store.operations(target["id"]), args.get("offset", 0))
+                if artifact["sha256"] != result["data"]["artifact"]["sha256"]:
+                    raise ValueError("产物与本次冻结的复盘证据不一致")
+                result["artifact_page"] = artifact
+                result["review_scope"] = "This page only; read all pages before asserting whole-artifact coverage."
+            self.store.read_review_evidence(run, evidence_id=args["evidence_id"])
+            return result
         if name == "spawn_worker":
             return self.store.spawn_worker(run, **args)
         if name == "wait_workers":
@@ -138,7 +154,7 @@ class OrchestrationTools:
             return self.worker_result(run, args["dependency_id"], dependency=True)
         if name == "adopt_worker_result":
             return self.store.adopt_worker_result(run, **args)
-        if name in {"record_goal_progress", "propose_policy_adjustment", "review_policy_proposal", "record_investigation", "request_rework", "handoff_task", "yield_task", "read_memory", "propose_memory"}:
+        if name in {"record_goal_review", "record_goal_progress", "propose_policy_adjustment", "review_policy_proposal", "record_investigation", "request_rework", "handoff_task", "yield_task", "read_memory", "propose_memory"}:
             return getattr(self.store, name)(run, **args)
         raise ValueError("unknown orchestration tool")
 

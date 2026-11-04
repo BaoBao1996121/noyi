@@ -130,6 +130,8 @@ class TriggerScheduler:
                 self.materialize(row["id"])
             if hasattr(self.store, "apply_pending_admissions"):
                 self.store.apply_pending_admissions(now=now)
+            if hasattr(self.store, "tick_review_reminders"):
+                self.store.tick_review_reminders(now=now)
 
     async def run(self):
         try:

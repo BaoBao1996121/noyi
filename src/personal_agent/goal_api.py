@@ -21,9 +21,13 @@ def goal_snapshot(store, room):
         for rule in rules:
             rule["template"]["sources"] = [{k: v for k, v in s.items() if k != "location"} for s in rule["template"]["sources"]]
         goal.update(policies=policies, rules=rules,
+                    experiments=[store.experiment(e["id"]) for e in store.all("SELECT id FROM experiments WHERE goal_id=? ORDER BY created DESC LIMIT 20", (goal["id"],))],
+                    reviews=[{**r, **{k: json.loads(r[k]) for k in ("observed_facts", "hypotheses", "uncertainties", "evidence_refs")}} for r in store.all("SELECT * FROM goal_reviews WHERE goal_id=? ORDER BY created DESC LIMIT 8", (goal["id"],))],
                     occurrences=store.all("SELECT o.id,o.policy_id,o.status,o.task_id,o.reason,o.scheduled_at,o.observed_at FROM policy_occurrences o JOIN routine_policies p ON p.id=o.policy_id WHERE p.goal_id=? ORDER BY o.created DESC LIMIT 12", (goal["id"],)),
                     admissions=store.all("SELECT d.id,d.state,d.reason,d.task_id,d.created FROM admission_decisions d JOIN admission_rules r ON r.id=d.rule_id WHERE r.goal_id=? ORDER BY d.created DESC LIMIT 12", (goal["id"],)),
                     proposals=store.all("SELECT * FROM policy_proposals WHERE goal_id=? AND state IN ('pending','approved') ORDER BY created", (goal["id"],)))
+        for review in goal["reviews"]:
+            review["verified_facts"] = store.review_report(review["id"])["facts"]
         result.append(goal)
     return result
 
@@ -65,6 +69,20 @@ def goal_action(store, name, body):
 
 
 def _apply(s, name, b):
+    if name == "review":
+        return s.request_goal_review(b["id"], nonce=b["nonce"], experiment_id=b.get("experiment_id"), days=b.get("days", 7))
+    if name == "experiment":
+        return s.create_experiment(b["id"], title=b["title"], hypothesis=b["hypothesis"], metric=b["metric"], baseline=b["baseline"], variant=b["variant"], success_criteria=b["success_criteria"], window_start=b["window_start"], window_end=b["window_end"], next_check=b["next_check"])
+    if name == "revise_experiment":
+        return s.revise_experiment(b["id"], expected_version=b["version"], reason=b["reason"], next_check=b.get("next_check"), state=b.get("state"))
+    if name == "adopt_review_time":
+        review = s.one("SELECT * FROM goal_reviews WHERE id=?", (b["id"],))
+        if not review or not review["experiment_id"]:
+            raise ValueError("这份复盘没有关联观察计划，请先添加观察计划")
+        s.goal(review["goal_id"], "local-user")
+        return s.revise_experiment(review["experiment_id"], expected_version=review["experiment_version"], reason="用户采纳复盘建议的下次检验时间：" + review["id"], next_check=review["next_check"])
+    if name == "feedback":
+        return s.save_feedback(b["task_id"], rating=b["rating"], note=b["note"], management_kind=b.get("management_kind", "feedback"), management_seconds=b.get("management_seconds"))
     if name == "create":
         return s.create_goal(room=b["room"], actor_id=b["actor_id"], title=b["title"], objective=b["objective"], calls_limit=b.get("calls_limit", 120), tools_limit=b.get("tools_limit", 400), allow_policy_adjustments=b.get("allow_policy_adjustments", False))
     if name == "state":

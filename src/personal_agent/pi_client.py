@@ -13,6 +13,32 @@ from .contracts import encode
 BRIDGE = Path(__file__).parent / "pi_bridge" / "bridge.mjs"
 
 
+async def close_pi(proc):
+    """Release every pipe while its loop is alive, including Windows handles."""
+    if proc.stdin:
+        proc.stdin.close()
+    if proc.returncode is None:
+        try:
+            proc.terminate()
+        except ProcessLookupError:
+            pass
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=5)
+    except TimeoutError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        await proc.wait()
+    if proc.stdin:
+        try:
+            await proc.stdin.wait_closed()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+    if proc.stdout:
+        await proc.stdout.read()
+
+
 async def run_pi(messages, tools, model_name, handle):
     node = shutil.which("node")
     if not node or not BRIDGE.is_file():
@@ -23,10 +49,18 @@ async def run_pi(messages, tools, model_name, handle):
         "PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "PATHEXT", "COMSPEC",
         "LOCALAPPDATA", "APPDATA", "USERPROFILE", "HOME",
     }}
-    proc = await asyncio.create_subprocess_exec(
+    creation = asyncio.create_task(asyncio.create_subprocess_exec(
         node, str(BRIDGE), stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-        cwd=str(BRIDGE.parent), env=env, limit=8 * 1024 * 1024)
+        cwd=str(BRIDGE.parent), env=env, limit=8 * 1024 * 1024))
+    try:
+        proc = await asyncio.shield(creation)
+    except asyncio.CancelledError:
+        # Cancelling halfway through Windows process creation must still take
+        # ownership of the resulting child and release its pipe transports.
+        proc = await creation
+        await close_pi(proc)
+        raise
     try:
         proc.stdin.write((encode({"type": "start", "messages": messages,
                                   "tools": tools, "model": model_name}) + "\n").encode())
@@ -45,9 +79,4 @@ async def run_pi(messages, tools, model_name, handle):
                 raise RuntimeError("invalid Pi transport event")
         raise RuntimeError("Pi process exited before finishing")
     finally:
-        if proc.returncode is None:
-            try:
-                proc.terminate()
-            except ProcessLookupError:
-                pass
-        await proc.wait()
+        await close_pi(proc)

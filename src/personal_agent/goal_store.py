@@ -139,6 +139,8 @@ class GoalStore:
                     same_grant = p and p["state"] == "active" and p["revision"] == root["policy_revision"]
                     if root["admission_rule_id"]:
                         same_grant = self.admission_gate(root) is None
+                    if not p and not root["admission_rule_id"] and hasattr(self, "explicit_goal_task_granted"):
+                        same_grant = self.explicit_goal_task_granted(root)
                     if same_grant:
                         self.db.execute("UPDATE tasks SET goal_revision=? WHERE id=?", (revision, root["id"]))
                         for task in self.all("SELECT id,actor_id,room_id FROM tasks WHERE root_task_id=? AND status NOT IN ('succeeded','cancelled')", (root["id"],)):
@@ -313,7 +315,7 @@ class GoalStore:
         allowed = {r["id"] for r in self.all("SELECT id FROM operations WHERE task_id=? AND status IN ('succeeded','failed')", (task["id"],))}
         allowed |= {r["id"] for r in self.all("SELECT o.id FROM observations o JOIN routine_policies p ON p.id=o.policy_id WHERE p.goal_id=?", (task["goal_id"],))}
         if not isinstance(evidence_refs, list) or not evidence_refs or len(evidence_refs) > 20 or any(r not in allowed for r in evidence_refs):
-            raise ValueError("进展记录必须引用本目标实际的观察或工具回执")
+            raise ValueError("引用本目标 observation ID，或工具返回的 operation_id；不要使用 source_id、artifact_ref 或哈希")
         with self.transaction():
             self.db.execute("UPDATE goals SET current_state=?,gaps=?,unknowns=?,next_action=?,evidence=?,assessment_at=?,updated=? WHERE id=?", (current_state, encode(gaps), encode(unknowns), next_action, encode(evidence_refs), time.time(), time.time(), task["goal_id"]))
             self.goal_event(task["goal_id"], "evidence_linked_progress", {"current_state": current_state, "gaps": gaps, "unknowns": unknowns, "next_action": next_action, "evidence_refs": evidence_refs, "trust": "agent assessment, not independently verified truth"}, run["id"])

@@ -54,6 +54,11 @@ class LifecycleStore:
                 summary = encode({k: result[k] for k in ("source_id", "start", "end", "total", "eof", "sha256")})
             elif tool == "read_source" and result.get("error") == "SourceUnavailable":
                 kind, fingerprint, summary = "negative_evidence", args["source_id"], "Authorized source unavailable: " + args["source_id"]
+            elif tool == "read_review_evidence" and not failed:
+                page = result.get("artifact_page", {})
+                kind = "review_evidence"
+                fingerprint = encode([result["snapshot_id"], result["evidence_id"], page.get("sha256"), page.get("start"), page.get("end")])
+                summary = encode({"snapshot_id": result["snapshot_id"], "evidence_id": result["evidence_id"], "start": page.get("start"), "end": page.get("end")})
             elif tool in {"read_worker_result", "read_dependency"} and not failed:
                 kind = "child_observation"
                 child_id = args.get("child_id", args.get("dependency_id"))
@@ -73,6 +78,14 @@ class LifecycleStore:
             self.db.execute("INSERT INTO activity_log VALUES(?,?,?,?,?,?,?)", (operation_id, run["task_id"], run["id"], tool, "failure" if failed else "success", int(progress), time.time()))
             # Artifact edits or invented hypotheses alone do not reset stagnation.
             self.db.execute("UPDATE tasks SET stagnant_tools=CASE WHEN ? THEN 0 ELSE stagnant_tools+1 END,failure_streak=CASE WHEN ? THEN failure_streak+1 ELSE 0 END WHERE id=?", (int(progress), int(failed), run["task_id"]))
+
+    def resume(self, tid, **kwargs):
+        # An explicit user retry starts a fresh consecutive-failure window.
+        # Lifetime model/tool/time usage and all failure evidence remain intact.
+        with self.transaction():
+            result = super().resume(tid, **kwargs)
+            self.db.execute("UPDATE tasks SET stagnant_tools=0,failure_streak=0 WHERE id=?", (tid,))
+        return result
 
     def record_investigation(self, run, *, kind, statement, evidence_refs):
         if not self.current(run) or kind not in {"hypothesis", "ruled_out", "coverage", "unknown"} or not isinstance(statement, str) or not statement.strip() or len(statement) > 1500:

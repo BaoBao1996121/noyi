@@ -10,7 +10,7 @@ import uuid
 
 from .contracts import TaskSpec, encode
 from .model import ModelConfig, QwenModel
-from .service import Service
+from .service import Service, ServiceLock
 from .store import Store
 
 
@@ -67,6 +67,11 @@ def parser():
     sub.add_parser("inbox")
     s = sub.add_parser("model-config", help="Show effective non-secret configuration without contacting the provider")
     s.add_argument("--config", type=Path)
+    s = sub.add_parser("backup", help="Back up managed data without credentials (stop the service first)")
+    s.add_argument("--output", type=Path, required=True)
+    s = sub.add_parser("restore", help="Restore into a new directory with work paused")
+    s.add_argument("archive", type=Path)
+    s.add_argument("--destination", type=Path, required=True)
     return p
 
 
@@ -79,6 +84,18 @@ def main():
     try:
         if args.command == "model-config":
             print(encode(asdict(ModelConfig.load(args.config))))
+            return
+        if args.command == "restore":
+            from .backup import restore_backup
+            print(encode(restore_backup(args.archive, args.destination)))
+            return
+        if args.command == "backup":
+            from .backup import create_backup
+            if not (data / "state.sqlite").is_file():
+                raise ValueError("数据目录中没有可备份的资料库")
+            with ServiceLock(data):
+                store = Store(data / "state.sqlite")
+                print(encode(create_backup(store, data, args.output)))
             return
         if args.command == "web":
             from .webui import serve_web

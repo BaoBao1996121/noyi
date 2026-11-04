@@ -1,0 +1,257 @@
+- generic:
+  - generic:
+    - complementary:
+      - generic:
+        - generic: p·
+        - generic: Personal Agent
+        - generic: 本地
+      - generic:
+        - generic:
+          - generic: ⌕
+          - textbox:
+            - /placeholder: 搜索会话与任务
+        - button: ＋
+      - generic:
+        - text: 我的助理
+        - button: 管理
+        - button: ＋ 新建
+      - generic:
+        - button:
+          - generic: ✳
+          - generic:
+            - strong: 个人助理
+            - generic: 独立私聊 · 私有记忆
+        - button:
+          - generic: ✳
+          - generic:
+            - strong: 资料管家
+            - generic: 独立私聊 · 私有记忆
+        - button:
+          - generic: ✳
+          - generic:
+            - strong: 复核管家
+            - generic: 独立私聊 · 私有记忆
+        - button:
+          - generic: ◎
+          - generic:
+            - strong: 资料协作小组
+            - generic: 2 位成员 · 群共享范围
+      - button:
+        - generic: ◷
+        - text: 持续目标
+      - generic:
+        - text: 最近任务
+        - generic: "7"
+      - navigation:
+        - button:
+          - strong: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 02:02
+        - button:
+          - strong: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 01:59
+        - button:
+          - strong: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 01:47
+        - button:
+          - strong: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 01:42
+        - button:
+          - strong: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 01:34
+        - button:
+          - strong: 将收到的线索整理成60字以内待确认记录，保留原文状态
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 00:59
+        - button:
+          - strong: 读取当前资料，用100字以内清单保留负责人、截止日期、自查条件和待确认事项
+          - generic:
+            - generic: 已完成
+            - generic: 11/5 00:54
+      - generic:
+        - generic: 我
+        - generic:
+          - strong: 个人工作台
+          - generic: 已连接 · 运行在此电脑
+        - button: ⚙
+    - separator
+    - main:
+      - generic:
+        - generic: ✳
+        - generic:
+          - heading [level=1]: 资料管家
+          - paragraph: 帮你把事情持续管好
+        - button: ☷
+      - region:
+        - generic:
+          - generic:
+            - heading [level=2]: 持续目标
+            - paragraph: 让助理长期照看一件事。每次检查和成果都会留下记录。
+          - button: 返回对话
+        - generic:
+          - button: ＋ 新建持续目标
+          - button: 添加一条线索
+        - article:
+          - generic:
+            - heading [level=3]: 河畔清单持续跟进
+            - generic: 已暂停
+          - paragraph: 跟进河畔资料变化，维护负责人、截止时间和待确认事项，变化时更新短清单。
+          - generic:
+            - generic:
+              - text: 负责人
+              - strong: 资料管家
+            - generic:
+              - text: 模型调用
+              - strong: 68 / 80
+            - generic:
+              - text: 工具操作
+              - strong: 72 / 480
+          - generic:
+            - text: 最近一次检查已完成：已完成河畔清单持续跟进的历史复盘。读取了全部6项证据（目标状态、指标、用户反馈、两份工作成果、来源观察），区分了观测事实、解释假设和未知事项。机制运行正常（383次检查0连续失败），已产出工作成果并有一次有用反馈，但缺乏真实用户长期反馈和业务效果数据。决定保留现有做法继续观察，建议下次检验时间为2026年11月6日02时02分北京时间。
+            - generic: 下一步：等待下次检查周期，如有变化则更新清单 用户暂停
+          - generic:
+            - button: 恢复目标
+            - button: 增加预算
+            - button: 结束目标
+          - generic:
+            - generic:
+              - strong: 资料变化 · 每 5 秒检查
+              - generic: 已注册
+            - paragraph: 读取当前资料，用100字以内清单保留负责人、截止日期、自查条件和待确认事项。记录持续目标状态，写成果并引用 [source1]。不委派，不新增审批。
+            - text: source1 · 可读取 · 476 次检查
+            - generic:
+              - generic: 最近成功检查
+              - strong: 11/5 02:09
+            - generic:
+              - generic: 下次计划时间
+              - strong: 等待恢复
+            - generic:
+              - button: 查看与修改
+          - generic:
+            - generic:
+              - strong: 线索包含「河畔待确认」
+              - combobox
+            - paragraph: 1/2 次 · 12/5 00:58 到期 · 冷却 30 秒
+          - generic:
+            - generic:
+              - strong: 复盘与观察
+              - generic: 0 项观察中
+            - paragraph: 保留证据、未知和下一次检验条件，再判断什么值得继续。
+            - generic:
+              - strong: 验收观察：减少人工纠错是否有依据
+              - generic: 版本 3 · 已停止
+              - paragraph: 假设：证据清单可能减少人工纠错，但目前尚无长期真实使用数据。
+              - generic:
+                - generic: 观察窗口
+                - strong: 11/5 01:34 — 11/12 01:34
+              - generic:
+                - generic: 复盘提醒
+                - strong: 已停止
+              - paragraph: 检验：至少两次真实用户使用反馈并与来源比对；Codex代测不能证明长期效果。 指标：真实纠错次数、采纳率与人工管理耗时；缺失数据保持未知。
+            - generic:
+              - generic: 建议保留
+              - paragraph: 模型建议：现有做法有效：机制稳定运行（383次检查零失败），已产出实际工作成果并获得一条有用反馈。但缺乏真实用户长期反馈和业务效果数据，无法证明实际价值。决定保留现有做法继续观察，等待更多真实使用数据和反馈。下次检验时间建议为2026年11月6日02时02分北京时间。
+              - group:
+                - generic: 查看结论依据与未知
+              - generic:
+                - button: 查看复盘报告
+          - group:
+            - generic: 差距、未知与最近记录
+        - paragraph: 这台电脑上的服务运行时，计划才会执行。关机期间错过的检查会按你的设置处理；没有变化时不调用模型，也不重复提醒。线索入口是本地手动输入，尚未连接外部消息服务。
+    - separator
+    - complementary:
+      - tablist:
+        - tab [selected]: 详情
+        - tab: 资料库 7
+        - tab: 记忆
+      - generic:
+        - generic:
+          - generic: ✳
+          - heading [level=2]: 资料管家
+          - paragraph: 整理资料、列出行动和待确认事项；以实际证据为准。
+          - button: 管理角色
+        - generic: 当前任务
+        - generic:
+          - generic: 已完成
+          - heading [level=3]: 复盘持续目标「河畔清单持续跟进」
+          - generic:
+            - generic: 开始时间
+            - strong: 11/5 01:47
+          - generic:
+            - generic: 资料
+            - strong: 0 份
+          - generic:
+            - generic: 成果检查
+            - strong: 已通过
+          - generic:
+            - button: 基于成果追加任务
+        - group:
+          - generic: 执行记录与预算
+  - dialog [ref=f12e349]:
+    - generic [ref=f12e350]:
+      - heading "复盘报告" [level=2] [ref=f12e351]
+      - button "关闭" [active] [ref=f12e352] [cursor=pointer]: ×
+    - generic [ref=f12e353]:
+      - generic [ref=f12e354]:
+        - heading "河畔清单持续跟进 · 复盘记录" [level=2] [ref=f12e355]
+        - paragraph
+        - heading "账本事实" [level=3] [ref=f12e356]
+        - paragraph
+        - paragraph [ref=f12e357]: "- 截取范围：2026年11月05日 00:53 至 2026年11月05日 02:02（北京时间）。"
+        - paragraph [ref=f12e358]: "- 本次为历史记录复盘，没有关联实验。"
+        - paragraph [ref=f12e359]: "- 窗口内创建 6 项根任务（包含工作和复盘），另有 0 项后台协作者任务。"
+        - paragraph [ref=f12e360]: "- 上述任务中当前通过结构检查的共 6 项；结构检查不等于内容无误或现实效果提升。"
+        - paragraph [ref=f12e361]: "- 本次证据目录收录文档回执 2 份（最多收录最近 16 份），后台协作者数不代表成果数。"
+        - paragraph [ref=f12e362]: "- 窗口内收到模型响应 59 次，输入 730588 token，输出 18713 token；失败工具操作 15 次。"
+        - paragraph [ref=f12e363]: "- 窗口内有 1 条用户反馈，0 条任务补充；反馈内容是用户报告。"
+        - paragraph [ref=f12e364]: "- 人工管理耗时未填写，保持未知。"
+        - paragraph [ref=f12e365]: "- 未接入业务效果测量和实际账单金额，不能据此证明采纳率、满意度或节省时间。"
+        - paragraph [ref=f12e366]: "- 来源 source1：累计登记检查 383 次，快照时连续失败 0 次；连续失败数不是全部历史失败总数。"
+        - paragraph
+        - heading "用户反馈原文" [level=3] [ref=f12e367]
+        - paragraph
+        - paragraph [ref=f12e368]: "- Codex 验收代测，非真实用户长期反馈：已对照来源核对负责人、截止日期和作者自查要求，事实一致。未测量实际采纳率、满意度或人工节省时间。"
+        - paragraph
+        - heading "模型建议（需要核对）" [level=3] [ref=f12e369]
+        - paragraph
+        - paragraph [ref=f12e370]: 建议：保留。
+        - paragraph
+        - paragraph [ref=f12e371]: 现有做法有效：机制稳定运行（383次检查零失败），已产出实际工作成果并获得一条有用反馈。但缺乏真实用户长期反馈和业务效果数据，无法证明实际价值。决定保留现有做法继续观察，等待更多真实使用数据和反馈。下次检验时间建议为2026年11月6日02时02分北京时间。
+        - paragraph
+        - paragraph [ref=f12e372]: 以上是模型解释，可能过度推断；次数、状态和测量范围以账本事实为准。
+        - paragraph
+        - paragraph [ref=f12e373]: 假设：
+        - paragraph [ref=f12e374]: "- 机制持续运行且零连续失败，说明监控逻辑稳定"
+        - paragraph [ref=f12e375]: "- 已产出两份工作成果，证明系统能提取和记录清单信息"
+        - paragraph [ref=f12e376]: "- 有一条有用反馈但属于验收代测，非真实用户长期使用反馈"
+        - paragraph
+        - paragraph [ref=f12e377]: 尚不确定：
+        - paragraph [ref=f12e378]: "- 缺乏真实用户长期反馈和采纳率数据"
+        - paragraph [ref=f12e379]: "- 尚未接入业务效果测量，无法评估实际业务价值"
+        - paragraph [ref=f12e380]: "- 无人工管理时间统计，无法量化效率提升"
+        - paragraph [ref=f12e381]: "- 当前反馈仅为验收代测，不代表真实用户满意度"
+        - paragraph
+        - heading "下一次检验" [level=3] [ref=f12e382]
+        - paragraph
+        - paragraph [ref=f12e383]: 建议时间：2026年11月06日 02:02（北京时间）。
+        - paragraph
+        - paragraph [ref=f12e384]: 检验条件：2026-11-06 02:02 北京时间
+        - paragraph
+        - paragraph [ref=f12e385]: 建议不会自动修改检查计划、权限或提醒时间。
+        - paragraph
+        - paragraph [ref=f12e386]: 证据引用：goal_state、metrics、feedback:0d47be44fdda43939efff865c6fbf582、delivery:7902d4907e2842f48ec7bd12d7386ac7、delivery:a1c450bc4f9c4ddd9aca478761bd2d2e、observation:2477dafab9ed4fe49250ee8b3783e368
+        - paragraph
+      - generic [ref=f12e387]:
+        - button "查看执行记录与模型草稿" [ref=f12e388] [cursor=pointer]
+        - link "下载复盘记录" [ref=f12e389] [cursor=pointer]:
+          - /url: /api/reviews/823c67fadf91462fb1b5417a71ba539f?download=1

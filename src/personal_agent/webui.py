@@ -67,9 +67,14 @@ class LocalModel:
 
 
 class Console:
-    def __init__(self, store, data, model, *, run_service=True):
+    def __init__(self, store, data, model, *, run_service=True, shutdown_event=None):
         self.store, self.data, self.model = store, Path(data).resolve(), model
+        self.store.db.execute("CREATE TABLE IF NOT EXISTS local_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
+        self.store.db.execute("INSERT OR IGNORE INTO local_metadata VALUES('workspace_id',?)", (uuid.uuid4().hex,))
+        self.workspace_id = self.store.one("SELECT value FROM local_metadata WHERE key='workspace_id'")["value"]
         self.token = secrets.token_urlsafe(32)
+        self.instance_id = uuid.uuid4().hex
+        self.shutdown_event = shutdown_event
         self.service = Service(store, self.data, model)
         self.run_service = run_service
         self.service_error = None
@@ -88,7 +93,14 @@ class Console:
         # Details are fetched separately; physical paths and credentials are not UI state.
         for t in tasks:
             t["spec"]["sources"] = [{k: v for k, v in s.items() if k != "location"} for s in t["spec"]["sources"]]
-        messages = self.store.all("SELECT m.id,m.actor_id,m.task_id,m.kind,m.content,m.status,COALESCE(p.created,f.created,MIN(e.created),0) AS created FROM messages m LEFT JOIN events e ON e.message_id=m.id LEFT JOIN followups f ON f.message_id=m.id LEFT JOIN pending_routes p ON p.message_id=m.id WHERE m.room_id=? AND m.source NOT IN ('runtime','route') GROUP BY m.id ORDER BY m.rowid DESC LIMIT 300", (room,))
+            review = self.store.one("SELECT id FROM goal_reviews WHERE task_id=? ORDER BY created DESC LIMIT 1", (t["id"],))
+            t["review_report_id"] = review["id"] if review else None
+        messages = self.store.all("SELECT m.id,m.source,m.actor_id,m.task_id,m.kind,m.content,m.status,COALESCE(p.created,f.created,MIN(e.created),0) AS created FROM messages m LEFT JOIN events e ON e.message_id=m.id LEFT JOIN followups f ON f.message_id=m.id LEFT JOIN pending_routes p ON p.message_id=m.id WHERE m.room_id=? AND m.source NOT IN ('runtime','route') GROUP BY m.id ORDER BY m.rowid DESC LIMIT 300", (room,))
+        for message in messages:
+            if message["source"] == "goal_review":
+                goal = self.store.one("SELECT g.title FROM goals g JOIN goal_review_requests r ON r.goal_id=g.id WHERE r.task_id=?", (message["task_id"],))
+                if goal:
+                    message["content"] = "请复盘持续目标「" + goal["title"] + "」的已有证据，说明未知、建议和下一次检验条件。"
         deliveries = self.store.all("SELECT d.id,d.task_id,r.actor_id,d.content,d.artifact,d.state,d.kind,d.attention_id,COALESCE(NULLIF(d.created,0),r.ended,a.created,0) AS created FROM deliveries d LEFT JOIN runs r ON r.id=d.run_id LEFT JOIN attentions a ON a.id=d.attention_id WHERE d.room_id=? ORDER BY d.rowid DESC LIMIT 300", (room,))
         for d in deliveries:
             d["artifact"] = json.loads(d["artifact"]) if d["artifact"] else None
@@ -97,7 +109,7 @@ class Console:
             q["options"] = json.loads(q["options"])
         pending = self.store.all("SELECT f.id,f.state,m.content FROM followups f JOIN messages m ON m.id=f.message_id WHERE m.room_id=? AND f.owner_task IS NULL AND f.state='unassigned'", (room,))
         config = getattr(self.model, "config", ModelConfig())
-        return {"tasks": tasks, "messages": list(reversed(messages)), "deliveries": list(reversed(deliveries)), "questions": questions,
+        return {"workspace_id": self.workspace_id, "tasks": tasks, "messages": list(reversed(messages)), "deliveries": list(reversed(deliveries)), "questions": questions,
                 "goals": goal_snapshot(self.store, room),
                 "unassigned": pending, "server_time": time.time(), "ready": getattr(self.model, "ready", True),
                 "model": {"name": config.name, "base_url": config.base_url}, "service_error": self.service_error or self.service.triggers.error,
@@ -202,7 +214,7 @@ async def json_body(request):
 
 async def boot(request):
     c = request.app[CONSOLE]
-    return web.json_response({"token": c.token, "version": "0.2.0", "title": "Personal Agent"})
+    return web.json_response({"token": c.token, "instance_id": c.instance_id, "workspace_id": c.workspace_id, "version": "0.5.0", "title": "Personal Agent"})
 
 
 async def snapshot(request):
@@ -275,6 +287,13 @@ async def policy_detail(request):
     return web.json_response(request.app[CONSOLE].store.policy(request.match_info["policy_id"], "local-user"))
 
 
+async def review_report(request):
+    report = request.app[CONSOLE].store.review_report(request.match_info["review_id"])
+    if request.query.get("download") == "1":
+        return web.Response(body=report["text"].encode(), content_type="application/octet-stream", headers={"Content-Disposition": 'attachment; filename="goal-review.md"'})
+    return web.json_response(report)
+
+
 async def upload(request):
     c = request.app[CONSOLE]
     room = c.room(request.query.get("room", "local"))
@@ -319,9 +338,27 @@ async def settings(request):
     return web.json_response(await c.model.configure(name=body["name"], base_url=body["base_url"], key=body.get("key")))
 
 
+async def backup(request):
+    from .backup import create_backup
+    c = request.app[CONSOLE]
+    # Synchronous snapshot runs between host tool commits, so the database and
+    # its managed immutable files are captured without a concurrent writer.
+    path = c.data.parent / "backups" / ("personal-agent-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8] + ".zip")
+    create_backup(c.store, c.data, path)
+    return web.FileResponse(path, headers={"Content-Disposition": 'attachment; filename="' + path.name + '"'})
+
+
+async def shutdown(request):
+    c = request.app[CONSOLE]
+    if c.shutdown_event is None:
+        raise ValueError("当前服务未启用桌面停止入口")
+    asyncio.get_running_loop().call_later(0.1, c.shutdown_event.set)
+    return web.json_response({"accepted": True, "instance_id": c.instance_id})
+
+
 async def static(request):
     name = request.match_info.get("name", "index.html")
-    if name not in {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css"}:
+    if name not in {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js"}:
         raise web.HTTPNotFound()
     return web.FileResponse(WEB / name)
 
@@ -356,15 +393,18 @@ async def lifecycle(app):
                 await asyncio.gather(trigger_job, return_exceptions=True)
 
 
-def create_app(store, data, model, *, run_service=True):
+def create_app(store, data, model, *, run_service=True, shutdown_event=None):
     app = web.Application(middlewares=[security], client_max_size=MAX_SOURCE_BYTES + 20000)
-    app[CONSOLE] = Console(store, data, model, run_service=run_service)
+    app[CONSOLE] = Console(store, data, model, run_service=run_service, shutdown_event=shutdown_event)
     app.add_routes([web.get("/", static), web.get("/assets/{name}", static), web.get("/api/bootstrap", boot),
                     web.get("/api/state", snapshot), web.get("/api/tasks/{task_id}", detail), web.post("/api/messages", submit),
                     web.post("/api/actions/{name}", action), web.post("/api/uploads", upload),
                     web.get("/api/artifacts/{delivery_id}", artifact), web.post("/api/settings", settings),
+                    web.post("/api/backup", backup),
+                    web.post("/api/shutdown", shutdown),
                     web.post("/api/manage/{name}", manage), web.post("/api/goals/{name}", goal_manage),
                     web.get("/api/policies/{policy_id}", policy_detail)])
+    app.router.add_get("/api/reviews/{review_id}", review_report)
     app.cleanup_ctx.append(lifecycle)
     return app
 
@@ -373,10 +413,19 @@ def serve_web(data, config=None, port=8765):
     data = Path(data).resolve()
     store = Store(data / "state.sqlite")
     model = LocalModel(data, config or ModelConfig.load())
-    app = create_app(store, data, model)
-    async def cleanup(app):
-        await model.close()
+    async def run():
+        stopping = asyncio.Event()
+        app = create_app(store, data, model, shutdown_event=stopping)
+        runner = web.AppRunner(app, access_log=None, shutdown_timeout=10)
+        try:
+            await runner.setup()
+            await web.TCPSite(runner, "127.0.0.1", port).start()
+            print(f"Personal Agent: http://127.0.0.1:{port}  （关闭浏览器后仍会运行；使用停止入口结束服务）", flush=True)
+            await stopping.wait()
+        finally:
+            await runner.cleanup()
+            await model.close()
+    try:
+        asyncio.run(run())
+    finally:
         store.close()
-    app.on_cleanup.append(cleanup)
-    web.run_app(app, host="127.0.0.1", port=port, access_log=None,
-                print=lambda message: print(f"Personal Agent: http://127.0.0.1:{port}  （关闭此进程将停止执行）", flush=True))
