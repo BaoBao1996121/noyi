@@ -1,14 +1,16 @@
 # M0–M1 实施方案：单 Bot 交付 + 单层后台 Worker 闭环
 
-日期：2026-11-04。状态：方案，未实现、未测试。
+日期：2026-11-04。状态：融合设计已确认，M0 实现及本轮验收完成；M1 尚未实现。
 
 输入：交接设计（`temp` 仓库 `02_UPDATED_DESIGN.md`、`03_IMPLEMENTATION_AND_EVAL.md`）与 Codex 的《后台任务与自动续接设计》《实施交接说明》。本文在两者之间取一套口径，作为 M0–M1 的实施依据；与交接设计不同的地方记在 [decisions.md](decisions.md)。
 
+2026-11-04 增补：[DeepSeek 融合方案](deepseek-integration-review.md) 已并入本文的输入、恢复和切片设计。新增语义已获用户确认，不能当作已实现或已测试；既有 D-A 至 D-E 保持有效。当前事实以 [STATUS](../STATUS.md) 为准。
+
 ## 1. 现状核实
 
-- 产品代码：无。本仓库是 2026-11-04 新建的空仓，交接仓库 `temp` 只有文档、验收规格和交接校验脚本。
-- 所以下文的「已具备」只表示交接设计里已有对应规则，不表示代码已实现。
-- Codex 文档列的「开发前必须核实的项目事实」，答案目前都是“没有现成执行器”。这些事实由本方案自己决定，见第 6 节。
+- M0 已实现持久存储、Qwen 官网适配、Pi 核心循环、受控工具、常驻服务和 CLI；119 项 Python 测试、11 项 Node 测试及真实任务已完成，证据见 [M0 验收报告](validation/M0_REPORT.md)。
+- 下文对照表的「已具备（设计）」仍只表示交接设计里已有对应规则；M1 的 Worker、责任归属及人工等待不因此成为已实现能力。
+- 本轮验收覆盖第 6 节的 M0 切片，后续阶段仍按原顺序推进。内容正确性与机械门禁分别记录，不把模型自报完成当验收。
 
 ## 2. 概念对齐
 
@@ -34,7 +36,7 @@
 | 总控同时只跑一轮，并发完成合并 | 需补齐 | 每 actor 一个活动 Run 的唯一约束 + 批量认领（4.3） |
 | 停止回复 / 停止任务 / 取消委托三种语义 | 需补齐 | 交接设计只有取消事实，新增停止契约（5） |
 | 自动续接开关（停止后暂停） | 需补齐 | 根 Task 加 `auto_continue`：on / paused / forbidden |
-| 输入“已送达”与“已采用”分开 | 需补齐 | 消息记录 `adopted_by_run`，晚到补充标未采用并触发下一轮 |
+| 输入保存、请求使用与处理责任分开 | 需补齐（本次增量已确认） | 用 InputUsage 记录每次请求纳入的输入，disposition 记录责任结论；`adopted_by_run` 仅作兼容摘要，晚到补充仍保留 |
 | 多次回报：阶段 / 最终 / 失败 / 已停止 | 需补齐 | 事件带 `kind` 与 `seq`，按 event_id 去重而非 task_id |
 | 自动续接次数预算 | 需补齐 | 并入 D08 的预算维度，按根 Task 计 |
 | 任务切片顺序 | 冲突 | 交接设计 Worker 在 M2、Nudge 在 M1；按本次要求把单层 Worker 闭环提到 M1，Nudge 顺延 M2（D-A） |
@@ -47,16 +49,19 @@
 
 ### 4.1 进程与入口
 
-- `pa serve`：常驻服务进程，单进程 asyncio，有界并发，SQLite（WAL）为唯一权威状态。
-- `pa chat / submit / status / stop / cancel / continue`：CLI 客户端，只读写数据库并唤醒服务，关掉 CLI 不影响服务。
+- `pa serve`：Python asyncio 常驻服务，管理 Pi 的 Node 执行子进程；M0 总并发为一，SQLite（WAL）为唯一权威状态。原单 OS 进程方案按 D-L 调整。
+- CLI 客户端读写数据库，关掉 CLI 不影响服务。M0 已有 `chat / submit / status / inbox / resume / retry / model-config`；`stop / cancel` 等完整控制契约留到 M1。
 - 每个 Run 是服务里独立的 asyncio 任务。Worker 的 Run 从第一天就不挂在总控 Run 的取消作用域下，“总控结束本轮、Worker 继续”是默认形态，不需要“转后台”动作。
 - 停掉 `serve` 就停掉全部执行，结果和进度保留。界面如实说明这一点，不暗示后台仍在跑。
 
 ### 4.2 记录（在交接设计 M0 表基础上增量）
 
-| 表 | M1 新增的关键字段 |
+| 表 | M0–M1 关键字段与增量 |
 |---|---|
-| `messages` | `client_nonce`（唯一）、`kind`（user / system_event / peer / delivery）、`status`（received / adopted / not_adopted）、`adopted_by_run`、`applied_revision` |
+| `messages` | 来源/账号与 `client_nonce` 防重、`kind`（user / system_event / peer / delivery）、保存状态、输入版本；`adopted_by_run` / `applied_revision` 仅作摘要，不证明责任解决 |
+| `input_usage`（M0 已实现请求证据） | message/event、run、请求序号、内容版本/哈希、请求状态；认领与实际模型请求分别留证 |
+| `thread_subscriptions` / `followup_dispositions`（提案） | own/context、受众引用；follow-up 的唯一负责根 Task、责任代次、状态、处理依据与交回历史 |
+| `attentions`（复用 wait/Approval 的提案） | question_id、task、答复者、requirement_revision、information/authorization/review、状态、resolution、投递引用 |
 | `tasks` | `root_task_id`、`result_receiver`、`auto_continue`、`cancel_state`、`wait_spec`（等哪些子任务、any/all、截止时间）、续接计数 |
 | `runs` | `trigger`、`phase`（running / waiting_children / finalizing / ended）、`end_reason`、`stop_requested_at`、`stopped_at`、心跳 |
 | `events` | `event_id`、`root_task_id`、`task_id`、`run_id`、`seq`、`kind`（partial / final / failed / stopped / needs_user / interrupted）、`result_ref`、`receiver`、`state`（pending / claimed / consumed / archived）、`claimed_by_run`、`consumed_by_run` |
@@ -67,14 +72,16 @@
 
 完成回调只做“落库 + 唤醒调度器”，不直接调模型。调度器在被唤醒或定时巡检时，对每个空闲 actor：
 
-1. 收集待处理输入：用户消息优先，其次是发给它的事件。
+1. 收集待处理输入：用户消息优先，其次是发给它的事件。先依据明确引用或有效关系确定负责根 Task；背景分发与接单判断分别记录，不能因已订阅就跳过全部准入判断。
 2. 逐项检查门禁：委托已取消 → 事件归档；`auto_continue` 为 paused → 保留不唤醒；有待用户授权 → 不自动续接；续接预算用尽 → 暂停并说明；事件 run 版本过期 → 归档为历史。
 3. 按 `wait_spec` 判断时机：默认等本阶段要求的子任务到齐（all）；失败、需用户处理、超过截止时间则提前唤醒。
 4. 在一个事务里插入新 Run 并把选中的事件标为 claimed。数据库唯一约束保证每个 actor 只有一个活动 Run，并发完成只会成功启动一轮。
-5. Run 结束时，只有真正放进上下文的事件才标 consumed；其余退回 pending，结束后立即重新检查，不靠后续事件触发。
+5. Run 结束时，仅对有实际模型请求纳入记录的事件更新 consumed；未纳入的退回 pending，发送状态不明的保留 unknown 并恢复核对。consumed 不等于该要求已完成；未解决的 follow-up 仍须继续、持久等待或明确交回。结束后立即重新检查，不靠后续事件触发。
 6. 合并有上限（条数和等待时长），不无限凑批。
 
 崩溃恢复：服务启动时，`claimed` 但所属 Run 已不存在的事件退回 `pending`；状态为 running 的 Run 标为 interrupted，并给负责人发 `interrupted` 事件。只读或草稿写入的 Worker 任务可以按配置开新 Run 重做，外部副作用工具留到 M2 以后，按 operation 规则处理。
+
+以上 input_usage / disposition 等为已确认增量；详细责任转移、输入证据及恢复规则见 [融合方案第 4–7 节](deepseek-integration-review.md#4-后续输入谁接是否看过是否做完)。M0 已实现请求输入证据与恢复；完整 disposition、Worker 结果续接及责任转移留到 M1。
 
 ### 4.4 续接输入
 
@@ -88,24 +95,26 @@
 | 停止当前回复（默认停止键） | 取消 | 继续 | → paused | “当前回复已停止，N 项后台工作仍在进行，完成后暂不自动继续” |
 | 停止某个任务 | 不受影响 | 只停该任务的活动 Run | 不变；负责人收到 `stopped` 事件 | 该任务“正在停止”→“已停止” |
 | 取消整项委托（含“全部停掉”“不做了”） | 取消 | 全部取消 | → forbidden | 已完成部分和取消记录保留 |
-| 明确继续（点继续，或发任意新消息） | — | — | paused → on | 新消息和待处理结果一起起一轮 |
+| 明确继续（点继续，或发属于该根 Task 的任意新消息；归属细化已确认） | — | — | 目标 Task 的 paused → on | 新消息和待处理结果一起起一轮 |
 
 - 停止请求带目标 `run_id`，只作用于那一次 Run。旧 Run 的停止回执不会关闭新 Run。
 - 状态分“已请求 → 正在停止 → 已停止”。只有 asyncio 任务真正退出、Run 记录写好终态后才显示“已停止”。
 - 进程内停止可靠；正在进行的模型请求在客户端中止，提供方是否继续计费如实记为未知。
 - 取消不撤回已经发生的外部动作。M1 的工具都是只读或草稿写入，所以不涉及这类动作。
-- 用户停止之后又发来消息，视为明确继续：paused → on，新消息与待处理结果一起进入下一轮；已取消的委托不会因此恢复（[decisions.md](decisions.md) D-D）。
+- 用户停止之后又发来消息，视为明确继续：paused → on，新消息与待处理结果一起进入下一轮；已取消的委托不会因此恢复（[decisions.md](decisions.md) D-D）。本次 D-H 提案明确：先归属，只恢复目标根 Task；其他任务消息、旧重放与 context 不恢复它。完成后致谢不重跑，有效补充创建关联任务，详见融合方案第 5 节。
 
 ## 6. 切片调整
 
 | 切片 | 内容 | 过关的关键证据 |
 |---|---|---|
-| M0 | 交接设计原 M0（单 Bot 真实交付），但调度器、`messages`、`events` 从第一天就建：用户消息也走“落库 → 调度 → Run”同一条路 | 真实模型 + 真实只读工具 + 产物验收；重复输入不重复建任务；重启后已接受任务仍在 |
-| M1 | 单层 Worker 闭环：`spawn` 派生后台子任务、总控结束本轮等待、结果落库发事件、条件续接、最终交付、三种停止语义、续接预算、晚到补充 | 第 7 节测试 |
+| M0 | 交接设计原 M0（单 Bot 真实交付），调度器、`messages`、`events` 从第一天就建；收口请求输入证据、恢复与 Qwen 配置一致性，不前置完整路由/主动规则系统 | 真实模型 + 真实只读工具 + 产物和根要求验收；重复输入不重复建任务；重启后已接受任务仍在；DS01–DS03 |
+| M1 | 单层 Worker 闭环：`spawn` 异步派生、总控等待、结果事件、条件续接、验收交付、停止/取消/预算/晚到补充；分 A 输入归属与控制入口、B Worker、C 持久问题与整体闭环三个增量 | 第 7 节 B01–B15 与融合方案 DS04–DS11；一条真实模型 Worker 闭环 |
 | M2 | 原 M1：结束门禁扩展、Nudge、进展/停滞判断、调查记录；原 M2 余下的 handoff、review 返工、产物 base_version | 交接设计原过关条件 |
-| M3–M5 | 不变 | — |
+| M3–M5 | 阶段目标不变；准入、权限和持续使用的协议增量见融合方案 | 按对应阶段验证，当前未运行 |
 
 打榜接口：调度器提供 `run_until_quiescent()`，在没有待处理事件、也没有活动 Run 时返回。测试用它配合假时钟和本地模拟执行器，复现时序问题；τ-bench 适配器以后也用它把异步流程驱动成同步回合。
+
+DeepSeek 研究的旧排序不适用：M1-A/B/C 都属于 M1，Worker 不移回 M2。新增验收为本次自拟，M0 对应场景已落实，B01–B15 及 DS04–DS16 的后续阶段场景尚未运行；不是研究包中尚未上传的原 30 个场景。完整阶段映射见 [融合方案第 8 节](deepseek-integration-review.md#8-实施顺序与过关条件)及 [M0 验收报告](validation/M0_REPORT.md)。
 
 ## 7. M1 测试清单（均未实现、未运行）
 
@@ -116,7 +125,7 @@
 | B01 | 总控结束本轮、Worker 未完成：Worker 继续，不提前报完成 | Codex 场景 1 |
 | B02 | 两个必要 Worker 同时完成：最多启动一轮，结果都入库、只交付一次 | Codex 场景 2、交接 B 组 |
 | B03 | 续接中途又到一个结果：不丢，本轮结束后重新检查 | Codex 场景 3 |
-| B04 | 停止当前回复后 Worker 完成：结果保存，不自动续接；用户点继续或发任意新消息后才恢复，且新一轮带上该结果 | Codex 场景 4、D-D |
+| B04 | 停止当前回复后 Worker 完成：结果保存，不自动续接；用户点继续或发属于该根 Task 的任意新消息后才恢复，且新一轮带上该结果；其他任务不受影响 | Codex 场景 4、D-D；归属细化 D-H 已确认 |
 | B05 | 停止旧 Run 时新 Run 已启动：旧回执不关闭新 Run | Codex 场景 5 |
 | B06 | 停止单个 Worker：其他任务继续，确认终态后才显示已停止 | Codex 场景 6 |
 | B07 | 取消委托后迟到结果：存为历史，不唤醒 | Codex 场景 7、交接 T30 思路 |

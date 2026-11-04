@@ -1,0 +1,11 @@
+.venv/
+node_modules/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.env
+.env.*
+!.env.example
+.pa/
+pa.local.toml
+*.sqlite*

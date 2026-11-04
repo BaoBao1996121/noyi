@@ -1,0 +1,2931 @@
+{
+  "date": "2026-11-04",
+  "scope": "M0; real provider calls, bounded read-only tools and local artifacts",
+  "provider": "qwen_official",
+  "model": "qwen3.7-plus",
+  "endpoint": "https://maas.qianwenaiapi.com/compatible-mode/v1",
+  "money_cost": "unknown; provider token usage recorded, billing not inspected",
+  "offline_tests": {
+    "python": 119,
+    "node_bridge": 11,
+    "all_passed": true,
+    "network_models_used": false
+  },
+  "runs": [
+    {
+      "id": "610ca4a1e0484ab48efe7753f88b7216",
+      "root_task_id": "610ca4a1e0484ab48efe7753f88b7216",
+      "parent_task_id": null,
+      "actor_id": "default",
+      "room_id": "local",
+      "requirement_revision": 1,
+      "execution_epoch": 1,
+      "status": "succeeded",
+      "reason": "accepted",
+      "acceptance": "passed",
+      "calls_used": 9,
+      "tools_used": 9,
+      "active_seconds": 266.71603631973267,
+      "created": 1793797021.1572294,
+      "spec": {
+        "max_calls": 16,
+        "max_seconds": 600,
+        "max_tools": 40,
+        "objective": "请依据提供的 Personal Agent 当前实施方案、已确认决策、融合设计，制作一份可交给下一位开发者使用的中文 M0 开工与验收清单。逐项写出 M0 必须交付什么、证据怎样留存；说明 M1 Worker/M2 Nudge 的先后顺序；区分收到输入、进入模型请求、要求落实；解释暂停/取消/完成后补充的差别。明确 Qwen 官网模型 qwen3.7-plus，不能把设计文档当作已实现或测试通过的证据。请写有实际判断和检查步骤的 markdown 文件 m0-handoff-checklist.md，引用资料ID。当前任务只生成审查材料，不运行项目代码或修改其他文档。",
+        "required_text": [
+          "M0",
+          "M1",
+          "M2",
+          "qwen3.7-plus",
+          "验收",
+          "暂停",
+          "取消"
+        ],
+        "sources": [
+          {
+            "id": "plan",
+            "kind": "file",
+            "location": "docs/plan-m0-m1.md",
+            "required": true
+          },
+          {
+            "id": "decisions",
+            "kind": "file",
+            "location": "docs/decisions.md",
+            "required": true
+          },
+          {
+            "id": "integration",
+            "kind": "file",
+            "location": "docs/deepseek-integration-review.md",
+            "required": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "id": "b040c81f73f44172a9039ba57b93555f",
+          "actor_id": "default",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "trigger": "user_task",
+          "epoch": 1,
+          "revision": 1,
+          "phase": "ended",
+          "end_reason": "accepted",
+          "started": 1793797021.1598773,
+          "ended": 1793797287.875979,
+          "context_manifest": "{\"execution_epoch\": 1, \"prior_operations\": [], \"prompt_sha256\": \"f11d352d7d435604abe26844a8d3879322bf1b05b3e80c63b7b483c26a4c01c1\", \"prompt_version\": 1, \"requirement_revision\": 1, \"source_ids\": [\"plan\", \"decisions\", \"integration\"], \"tools\": [\"read_source\", \"write_artifact\", \"submit_result\"]}"
+        }
+      ],
+      "requests": [
+        {
+          "id": "de8bb563b82346a390f0c7212f21de71",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "sequence": 1,
+          "payload_sha256": "3aa6cc9c59c1594f07a96950dcde2e3f030cef7edc42f5938e77d1c4bffac928",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793797021.1653366,
+          "ended": 1793797024.3347893
+        },
+        {
+          "id": "ab07389797164942a16c1a7fb24d2cfc",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "sequence": 2,
+          "payload_sha256": "b50a6768e71033cb70edb606fd3731bbeafd05471fa0454a199ac06a2706d22f",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793797024.3463516,
+          "ended": 1793797026.454759
+        },
+        {
+          "id": "6bd88592422346648c84317306ecbb45",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "sequence": 3,
+          "payload_sha256": "bc75349f5d2b92b9e2f7c1c937186a66066738f9fc8cfc4074d23a7104b726f3",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793797026.4705508,
+          "ended": 1793797028.4970315
+        },
+        {
+          "id": "6edc78ec3d6b4d8b88639bb1979656a3",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "sequence": 4,
+          "payload_sha256": "66dff401413ba4a6c218d7e4cb2bdb829891ee3a38be2fd86d7b9a56028240b7",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793797028.508642,
+          "ended": 1793797030.7339082
+        },
+        {
+          "id": "875754405bf24fb6969d09bc567dc822",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "sequence": 5,
+          "payload_sha256": "ca3fee710180f36ac114847e0277229787c4ac6f6ac1f049ee1854fdcb85e5e8",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793797030.739739,
+          "ended": 1793797097.6551929
+        },
+        {
+          "id": "8a7f243dee7d47d6adaa3ab86b4be023",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "sequence": 6,
+          "payload_sha256": "139107e1c5b5414f345546ade6329f747b62085bb861736e088310b001ff0cc6",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793797097.6631331,
+          "ended": 1793797164.7852268
+        },
+        {
+          "id": "d974623cac7a4352a933de890864a4e2",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "sequence": 7,
+          "payload_sha256": "95c335c73e998d519b32bbfbb668e0701aa1e42fae27668d115c412a1939b4dd",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793797164.7944734,
+          "ended": 1793797231.8015733
+        },
+        {
+          "id": "35e52fad501f40ccbc44bd946779b2f1",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "sequence": 8,
+          "payload_sha256": "d7e9dcf0659e627b6c12f5d9f503ed386385c5e47315dccd020cab8481f55b32",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793797231.8108773,
+          "ended": 1793797282.8246028
+        },
+        {
+          "id": "edeea1c9502d438799ece38903b5c168",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "sequence": 9,
+          "payload_sha256": "1d1cf19110cb31abda799cc5c1d938991db1e91dde2a95288c4d34c222c7022e",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793797282.8528433,
+          "ended": 1793797287.8614266
+        }
+      ],
+      "input_usage": [
+        {
+          "request_id": "de8bb563b82346a390f0c7212f21de71",
+          "event_id": "dd3080e5bba340b5a45e8da13f345c7e",
+          "message_id": "ff9b3dc65c3545f1ba0d482bd3e09629",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "input_sha256": "67e1ea621479a670c132c0f21f0925b5e52ebc3e513259d6959e37d32d8fc1c5",
+          "state": "completed"
+        },
+        {
+          "request_id": "ab07389797164942a16c1a7fb24d2cfc",
+          "event_id": "dd3080e5bba340b5a45e8da13f345c7e",
+          "message_id": "ff9b3dc65c3545f1ba0d482bd3e09629",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "input_sha256": "67e1ea621479a670c132c0f21f0925b5e52ebc3e513259d6959e37d32d8fc1c5",
+          "state": "completed"
+        },
+        {
+          "request_id": "6bd88592422346648c84317306ecbb45",
+          "event_id": "dd3080e5bba340b5a45e8da13f345c7e",
+          "message_id": "ff9b3dc65c3545f1ba0d482bd3e09629",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "input_sha256": "67e1ea621479a670c132c0f21f0925b5e52ebc3e513259d6959e37d32d8fc1c5",
+          "state": "completed"
+        },
+        {
+          "request_id": "6edc78ec3d6b4d8b88639bb1979656a3",
+          "event_id": "dd3080e5bba340b5a45e8da13f345c7e",
+          "message_id": "ff9b3dc65c3545f1ba0d482bd3e09629",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "input_sha256": "67e1ea621479a670c132c0f21f0925b5e52ebc3e513259d6959e37d32d8fc1c5",
+          "state": "completed"
+        },
+        {
+          "request_id": "875754405bf24fb6969d09bc567dc822",
+          "event_id": "dd3080e5bba340b5a45e8da13f345c7e",
+          "message_id": "ff9b3dc65c3545f1ba0d482bd3e09629",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "input_sha256": "67e1ea621479a670c132c0f21f0925b5e52ebc3e513259d6959e37d32d8fc1c5",
+          "state": "completed"
+        },
+        {
+          "request_id": "8a7f243dee7d47d6adaa3ab86b4be023",
+          "event_id": "dd3080e5bba340b5a45e8da13f345c7e",
+          "message_id": "ff9b3dc65c3545f1ba0d482bd3e09629",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "input_sha256": "67e1ea621479a670c132c0f21f0925b5e52ebc3e513259d6959e37d32d8fc1c5",
+          "state": "completed"
+        },
+        {
+          "request_id": "d974623cac7a4352a933de890864a4e2",
+          "event_id": "dd3080e5bba340b5a45e8da13f345c7e",
+          "message_id": "ff9b3dc65c3545f1ba0d482bd3e09629",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "input_sha256": "67e1ea621479a670c132c0f21f0925b5e52ebc3e513259d6959e37d32d8fc1c5",
+          "state": "completed"
+        },
+        {
+          "request_id": "35e52fad501f40ccbc44bd946779b2f1",
+          "event_id": "dd3080e5bba340b5a45e8da13f345c7e",
+          "message_id": "ff9b3dc65c3545f1ba0d482bd3e09629",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "input_sha256": "67e1ea621479a670c132c0f21f0925b5e52ebc3e513259d6959e37d32d8fc1c5",
+          "state": "completed"
+        },
+        {
+          "request_id": "edeea1c9502d438799ece38903b5c168",
+          "event_id": "dd3080e5bba340b5a45e8da13f345c7e",
+          "message_id": "ff9b3dc65c3545f1ba0d482bd3e09629",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "input_sha256": "67e1ea621479a670c132c0f21f0925b5e52ebc3e513259d6959e37d32d8fc1c5",
+          "state": "completed"
+        }
+      ],
+      "steps": [
+        {
+          "kind": "model",
+          "data": {
+            "input_tokens": 959,
+            "model": "qwen3.7-plus",
+            "output_tokens": 79,
+            "request_id": "ee19d341-2118-9832-ba32-1f023250e781",
+            "seconds": 3.1715622000047006
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "input_tokens": 5170,
+            "model": "qwen3.7-plus",
+            "output_tokens": 52,
+            "request_id": "71112d5f-abdb-9ac0-ac56-5514a5a8d2e9",
+            "seconds": 2.1166501000116114
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "input_tokens": 6488,
+            "model": "qwen3.7-plus",
+            "output_tokens": 51,
+            "request_id": "686b5622-7db5-9686-8c24-66aa43db02b3",
+            "seconds": 2.0274156000232324
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "input_tokens": 10876,
+            "model": "qwen3.7-plus",
+            "output_tokens": 66,
+            "request_id": "f88145cd-d3ba-9fa2-aad7-2529e59ffe43",
+            "seconds": 2.2264601000060793
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "input_tokens": 12182,
+            "model": "qwen3.7-plus",
+            "output_tokens": 4096,
+            "request_id": "8f48cebf-fa14-9a65-90c0-ba43e8cfa20e",
+            "seconds": 66.91724710000562
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "input_tokens": 16335,
+            "model": "qwen3.7-plus",
+            "output_tokens": 4096,
+            "request_id": "897bdb42-5fc0-9162-b48d-1c1c15312cc4",
+            "seconds": 67.1240589999943
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "input_tokens": 20488,
+            "model": "qwen3.7-plus",
+            "output_tokens": 4096,
+            "request_id": "849d2a84-a3b8-9b68-a115-a751e9764be4",
+            "seconds": 67.0094196999853
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "input_tokens": 24640,
+            "model": "qwen3.7-plus",
+            "output_tokens": 3093,
+            "request_id": "ebf4a89c-968b-96ee-a696-bcb420702455",
+            "seconds": 51.01940800002194
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "input_tokens": 27875,
+            "model": "qwen3.7-plus",
+            "output_tokens": 222,
+            "request_id": "415a58a7-48bd-93f7-9d52-d72f6980cb65",
+            "seconds": 5.0111397999862675
+          }
+        },
+        {
+          "kind": "acceptance",
+          "data": {
+            "artifact": {
+              "bytes": 10834,
+              "ref": "artifacts/43a3637818834c03a4384be36f8ab01d/m0-handoff-checklist.md",
+              "sha256": "3c9534d414694626feff5b8b56d860808d6b607a6139097290eb3f7539cf5124"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "60761359a491dfc7b5b3cc6e42e6102e977638fc64203c1d4f3672518c6101c2",
+                "source": "plan"
+              },
+              {
+                "full_read": true,
+                "sha256": "e14f104e1a2534b123eed029872caa933e59d84d1b520e4cdbaed14d010a1d6d",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "19d0677bd68badfcdb1b47effed2f973ab7c643caa44b4522647723f09271a14",
+                "source": "integration"
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "60efda7365f049f59c41ab7ab0424418",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 0,
+            "source_id": "plan"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 7320,
+            "eof": true,
+            "sha256": "60761359a491dfc7b5b3cc6e42e6102e977638fc64203c1d4f3672518c6101c2",
+            "snapshot": "sources\\64879f7d6b960a01909762d911a32d4582c20010c5641ee90278b644a9e3b525.txt",
+            "source_id": "plan",
+            "start": 0,
+            "total": 7320
+          },
+          "created": 1793797024.3380172
+        },
+        {
+          "id": "6f759b50ab7a4df7b8a242d6faa48d5b",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 0,
+            "source_id": "decisions"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 1866,
+            "eof": true,
+            "sha256": "e14f104e1a2534b123eed029872caa933e59d84d1b520e4cdbaed14d010a1d6d",
+            "snapshot": "sources\\3183d37be5060278b0f0b2ea1095fea98e027d276f661719821018f5511f4927.txt",
+            "source_id": "decisions",
+            "start": 0,
+            "total": 1866
+          },
+          "created": 1793797026.464018
+        },
+        {
+          "id": "c605d757791847dea1bfe3f8c8d131c8",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 0,
+            "source_id": "integration"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 8000,
+            "eof": false,
+            "sha256": "19d0677bd68badfcdb1b47effed2f973ab7c643caa44b4522647723f09271a14",
+            "snapshot": "sources\\eb92cc52a766c500e001d02f1eaa78784da47f8c96b019ce874d3e3c205b4e3c.txt",
+            "source_id": "integration",
+            "start": 0,
+            "total": 9824
+          },
+          "created": 1793797028.499019
+        },
+        {
+          "id": "7e3e9d3583a445df8991feefecaeb0a2",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 8000,
+            "source_id": "integration"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 9824,
+            "eof": true,
+            "sha256": "19d0677bd68badfcdb1b47effed2f973ab7c643caa44b4522647723f09271a14",
+            "snapshot": "sources\\eb92cc52a766c500e001d02f1eaa78784da47f8c96b019ce874d3e3c205b4e3c.txt",
+            "source_id": "integration",
+            "start": 8000,
+            "total": 9824
+          },
+          "created": 1793797030.7358592
+        },
+        {
+          "id": "de7fe493716e45f6bd564226b6ca2c29",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "tool": "write_artifact",
+          "arguments": {},
+          "status": "failed",
+          "result": {
+            "detail": "Extra data: line 1 column 8513 (char 8512)",
+            "error": "JSONDecodeError"
+          },
+          "created": 1793797097.6605103
+        },
+        {
+          "id": "bfde142161364ffebc09152f9a19640d",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "tool": "write_artifact",
+          "arguments": {},
+          "status": "failed",
+          "result": {
+            "detail": "Extra data: line 1 column 8808 (char 8807)",
+            "error": "JSONDecodeError"
+          },
+          "created": 1793797164.7892601
+        },
+        {
+          "id": "73a39c18acfd485283054322516da112",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "tool": "write_artifact",
+          "arguments": {},
+          "status": "failed",
+          "result": {
+            "detail": "Extra data: line 1 column 8632 (char 8631)",
+            "error": "JSONDecodeError"
+          },
+          "created": 1793797231.8050447
+        },
+        {
+          "id": "43a3637818834c03a4384be36f8ab01d",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "tool": "write_artifact",
+          "arguments": {
+            "name": "m0-handoff-checklist.md",
+            "content_sha256": "3c9534d414694626feff5b8b56d860808d6b607a6139097290eb3f7539cf5124"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact_ref": "artifacts/43a3637818834c03a4384be36f8ab01d/m0-handoff-checklist.md",
+            "bytes": 10834,
+            "sha256": "3c9534d414694626feff5b8b56d860808d6b607a6139097290eb3f7539cf5124"
+          },
+          "created": 1793797282.828651
+        },
+        {
+          "id": "b4c308926a70488a80c4ecf03791a8f5",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "tool": "submit_result",
+          "arguments": {
+            "artifact_ref": "artifacts/43a3637818834c03a4384be36f8ab01d/m0-handoff-checklist.md",
+            "limitations": [],
+            "summary": "已生成 M0 开工与验收清单 m0-handoff-checklist.md，包含：M0 必须交付内容与证据留存检查步骤、M1 Worker 与 M2 Nudge 的先后顺序说明（Worker 在 M1、Nudge 在 M2）、输入处理三阶段区分（收到输入/进入模型请求/要求落实）、暂停/取消/完成后补充的差别对比表与验收检查步骤、明确 qwen3.7-plus 模型配置、强调设计文档不等于实现证据。所有结论均引用 [plan][decisions][integration] 源文件。"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact": {
+              "bytes": 10834,
+              "ref": "artifacts/43a3637818834c03a4384be36f8ab01d/m0-handoff-checklist.md",
+              "sha256": "3c9534d414694626feff5b8b56d860808d6b607a6139097290eb3f7539cf5124"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "60761359a491dfc7b5b3cc6e42e6102e977638fc64203c1d4f3672518c6101c2",
+                "source": "plan"
+              },
+              {
+                "full_read": true,
+                "sha256": "e14f104e1a2534b123eed029872caa933e59d84d1b520e4cdbaed14d010a1d6d",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "19d0677bd68badfcdb1b47effed2f973ab7c643caa44b4522647723f09271a14",
+                "source": "integration"
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          },
+          "created": 1793797287.8686225
+        }
+      ],
+      "deliveries": [
+        {
+          "id": "7d168d6ae8644c1da67bfea2ef01095e",
+          "task_id": "610ca4a1e0484ab48efe7753f88b7216",
+          "run_id": "b040c81f73f44172a9039ba57b93555f",
+          "room_id": "local",
+          "content": "已生成 M0 开工与验收清单 m0-handoff-checklist.md，包含：M0 必须交付内容与证据留存检查步骤、M1 Worker 与 M2 Nudge 的先后顺序说明（Worker 在 M1、Nudge 在 M2）、输入处理三阶段区分（收到输入/进入模型请求/要求落实）、暂停/取消/完成后补充的差别对比表与验收检查步骤、明确 qwen3.7-plus 模型配置、强调设计文档不等于实现证据。所有结论均引用 [plan][decisions][integration] 源文件。",
+          "artifact": "{\"bytes\": 10834, \"ref\": \"artifacts/43a3637818834c03a4384be36f8ab01d/m0-handoff-checklist.md\", \"sha256\": \"3c9534d414694626feff5b8b56d860808d6b607a6139097290eb3f7539cf5124\"}",
+          "state": "accepted",
+          "attempts": 1,
+          "receipt": "{\"accepted\": true, \"channel\": \"local_file\", \"human_read\": \"unknown\", \"id\": \"7d168d6ae8644c1da67bfea2ef01095e\"}",
+          "last_error": null,
+          "exported_artifact": "docs/validation/artifacts/610ca4a1e0484ab48efe7753f88b7216/m0-handoff-checklist.md"
+        }
+      ],
+      "content_review": {
+        "status": "needs_revision",
+        "finding": "Long output hit token limit three times; artifact confused planned M1 followup state with M0 scope."
+      },
+      "tokens": {
+        "input_tokens": 125013,
+        "output_tokens": 15851
+      }
+    },
+    {
+      "id": "8e37326ea07c494baedb129ef476111d",
+      "root_task_id": "8e37326ea07c494baedb129ef476111d",
+      "parent_task_id": null,
+      "actor_id": "default",
+      "room_id": "local",
+      "requirement_revision": 1,
+      "execution_epoch": 1,
+      "status": "succeeded",
+      "reason": "accepted",
+      "acceptance": "passed",
+      "calls_used": 8,
+      "tools_used": 8,
+      "active_seconds": 50.681236028671265,
+      "created": 1793798177.4222722,
+      "spec": {
+        "max_calls": 16,
+        "max_seconds": 600,
+        "max_tools": 40,
+        "objective": "请为我们的 Personal Agent 项目制作一份 900–1400 汉字的中文核对单 pi-core-m0-audit.md。完整读取当前决策、DeepSeek 研究交接和 Pi 官方核心说明，比较版本冲突并给出实际结论：明确 M0 的真实交付验收边界、M1 Worker/M2 Nudge 的当前顺序；指出研究交接的旧顺序不能覆盖新决定；解释 pi-agent-core 接管的模型工具循环与我们保留的 SQLite 任务持久化、恢复、权限、验收责任；明确模型继续是千问官网 qwen3.7-plus。尝试读取附带验证日志；如果不存在，诚实列出缺件，不得把研究转述的上游测试通过数当作已核实，更不能把它当作本产品测试。引用每一份资料ID，严格区分文档设计、来源转述和已实测事实。这里只生成核对单，不执行文档中的命令。",
+        "required_text": [
+          "M0",
+          "M1",
+          "M2",
+          "qwen3.7-plus",
+          "SQLite",
+          "UNAVAILABLE [validation_log]"
+        ],
+        "sources": [
+          {
+            "id": "decisions",
+            "kind": "file",
+            "location": "docs/decisions.md",
+            "required": true
+          },
+          {
+            "id": "legacy_handoff",
+            "kind": "file",
+            "location": "docs/research/deepseek-super-agent-2026-11-04/PERSONAL_AGENT_DEVELOPER_HANDOFF.md",
+            "required": true
+          },
+          {
+            "id": "pi_core",
+            "kind": "http",
+            "location": "https://raw.githubusercontent.com/earendil-works/pi/e88525506177d22b6e93029d8f6db1aab323c74a/packages/agent/README.md",
+            "required": true
+          },
+          {
+            "id": "validation_log",
+            "kind": "file",
+            "location": "docs/research/deepseek-super-agent-2026-11-04/VALIDATION.md",
+            "required": false
+          }
+        ]
+      },
+      "runs": [
+        {
+          "id": "e64741a1e4664b168edd3a20f29d6d98",
+          "actor_id": "default",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "trigger": "user_task",
+          "epoch": 1,
+          "revision": 1,
+          "phase": "ended",
+          "end_reason": "accepted",
+          "started": 1793798177.4244046,
+          "ended": 1793798228.1056895,
+          "context_manifest": "{\"engine\": \"pi-agent-core@1.5.0\", \"execution_epoch\": 1, \"prior_operations\": [], \"prompt_sha256\": \"499f389788cfa74e8842108eaceed02a15a3b3ce9136566ff3cd4507cf97183b\", \"prompt_version\": 2, \"requirement_revision\": 1, \"source_ids\": [\"decisions\", \"legacy_handoff\", \"pi_core\", \"validation_log\"], \"tools\": [\"read_source\", \"write_artifact\", \"submit_result\"]}"
+        }
+      ],
+      "requests": [
+        {
+          "id": "1a65a07d108747cab129d1cfdc1feeb2",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "sequence": 1,
+          "payload_sha256": "c32eb4d1bce71126dd3c446bc7973f5b0220c4ef30bd5906814d89575f0fac09",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798177.551767,
+          "ended": 1793798180.126567
+        },
+        {
+          "id": "a8a5e387eabc4fd4afe86a734d27fc60",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "sequence": 2,
+          "payload_sha256": "e17d7537b939f40708d1707f1d77044489f4c2a61e371e9b275bcd3a7d0d1205",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798180.1387398,
+          "ended": 1793798181.7808547
+        },
+        {
+          "id": "69ee0c8d9e67404aaf29942b899d534d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "sequence": 3,
+          "payload_sha256": "7595c0d4b281abe56b290f4e63997132deff3b3e5b16d2d485de3e27b2db2989",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798181.7927978,
+          "ended": 1793798183.6683872
+        },
+        {
+          "id": "d6e2422c194a4ea794b115e3f13e2c10",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "sequence": 4,
+          "payload_sha256": "a4ab86c5203fea83c74c74ac03db3a92db9bf43ea68aa3dfcba24bb24677e59b",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798185.7422812,
+          "ended": 1793798188.0233395
+        },
+        {
+          "id": "ff0d91e46d864435a98e671c26f981b2",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "sequence": 5,
+          "payload_sha256": "e31ae3023567463a32298e16fcbf2a5a74d940e1ceff3bb43a0b4e49aad69010",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798188.0303965,
+          "ended": 1793798189.70274
+        },
+        {
+          "id": "6a8f99eabd1449ea9c979fd2a5413495",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "sequence": 6,
+          "payload_sha256": "c1e65eb2bedfbc4308d574806a7f8c89289baed37fa5927ed64e8f7e9f3951cf",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798189.7093165,
+          "ended": 1793798191.350182
+        },
+        {
+          "id": "7642fa8d0d144ceda3ea40ca2b3d6360",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "sequence": 7,
+          "payload_sha256": "cfe90a6edc05da3fd13e8909f9172b89d01edfe78e2036b5dff48ed9df0ae78b",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798191.3578908,
+          "ended": 1793798223.9874258
+        },
+        {
+          "id": "4fe92f5a9b1d4cb89719c310a02d671d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "sequence": 8,
+          "payload_sha256": "9b771f721ed5c832ed1baffa2962d083b335c353869ea28aa205e76666c881fb",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798224.000747,
+          "ended": 1793798228.0997443
+        }
+      ],
+      "input_usage": [
+        {
+          "request_id": "1a65a07d108747cab129d1cfdc1feeb2",
+          "event_id": "b2303b85673943999f8de7dc72506f36",
+          "message_id": "417b28871b634139b9fb5577bff9a252",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "input_sha256": "2e15b91b6824d3ec3151db368eca65aa0f53235eeaf6101e12431687e1041273",
+          "state": "completed"
+        },
+        {
+          "request_id": "a8a5e387eabc4fd4afe86a734d27fc60",
+          "event_id": "b2303b85673943999f8de7dc72506f36",
+          "message_id": "417b28871b634139b9fb5577bff9a252",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "input_sha256": "2e15b91b6824d3ec3151db368eca65aa0f53235eeaf6101e12431687e1041273",
+          "state": "completed"
+        },
+        {
+          "request_id": "69ee0c8d9e67404aaf29942b899d534d",
+          "event_id": "b2303b85673943999f8de7dc72506f36",
+          "message_id": "417b28871b634139b9fb5577bff9a252",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "input_sha256": "2e15b91b6824d3ec3151db368eca65aa0f53235eeaf6101e12431687e1041273",
+          "state": "completed"
+        },
+        {
+          "request_id": "d6e2422c194a4ea794b115e3f13e2c10",
+          "event_id": "b2303b85673943999f8de7dc72506f36",
+          "message_id": "417b28871b634139b9fb5577bff9a252",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "input_sha256": "2e15b91b6824d3ec3151db368eca65aa0f53235eeaf6101e12431687e1041273",
+          "state": "completed"
+        },
+        {
+          "request_id": "ff0d91e46d864435a98e671c26f981b2",
+          "event_id": "b2303b85673943999f8de7dc72506f36",
+          "message_id": "417b28871b634139b9fb5577bff9a252",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "input_sha256": "2e15b91b6824d3ec3151db368eca65aa0f53235eeaf6101e12431687e1041273",
+          "state": "completed"
+        },
+        {
+          "request_id": "6a8f99eabd1449ea9c979fd2a5413495",
+          "event_id": "b2303b85673943999f8de7dc72506f36",
+          "message_id": "417b28871b634139b9fb5577bff9a252",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "input_sha256": "2e15b91b6824d3ec3151db368eca65aa0f53235eeaf6101e12431687e1041273",
+          "state": "completed"
+        },
+        {
+          "request_id": "7642fa8d0d144ceda3ea40ca2b3d6360",
+          "event_id": "b2303b85673943999f8de7dc72506f36",
+          "message_id": "417b28871b634139b9fb5577bff9a252",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "input_sha256": "2e15b91b6824d3ec3151db368eca65aa0f53235eeaf6101e12431687e1041273",
+          "state": "completed"
+        },
+        {
+          "request_id": "4fe92f5a9b1d4cb89719c310a02d671d",
+          "event_id": "b2303b85673943999f8de7dc72506f36",
+          "message_id": "417b28871b634139b9fb5577bff9a252",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "input_sha256": "2e15b91b6824d3ec3151db368eca65aa0f53235eeaf6101e12431687e1041273",
+          "state": "completed"
+        }
+      ],
+      "steps": [
+        {
+          "kind": "engine",
+          "data": {
+            "name": "pi-agent-core",
+            "version": "1.5.0"
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 1107,
+            "model": "qwen3.7-plus",
+            "output_tokens": 51,
+            "request_id": "c5342685-a31a-96ec-aaee-380ff4b84d69",
+            "seconds": 2.5755801999766845
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 2576,
+            "model": "qwen3.7-plus",
+            "output_tokens": 39,
+            "request_id": "14100577-6da7-9078-a68b-62692fa9a96f",
+            "seconds": 1.6429359999892768
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 6540,
+            "model": "qwen3.7-plus",
+            "output_tokens": 39,
+            "request_id": "257f7fde-e494-9f49-9e65-1ed70d63cdf2",
+            "seconds": 1.8767350999987684
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 8707,
+            "model": "qwen3.7-plus",
+            "output_tokens": 59,
+            "request_id": "ab1c71de-d1a4-9764-b7a0-14ce9f779b39",
+            "seconds": 2.2826096000208054
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 11089,
+            "model": "qwen3.7-plus",
+            "output_tokens": 53,
+            "request_id": "5caa4eae-7ded-9d3a-90ec-d293d22f5f93",
+            "seconds": 1.673167500004638
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 12845,
+            "model": "qwen3.7-plus",
+            "output_tokens": 45,
+            "request_id": "ee77ea2e-3b5b-91f0-80c9-616ed7f2db63",
+            "seconds": 1.6426255000114907
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 12923,
+            "model": "qwen3.7-plus",
+            "output_tokens": 1960,
+            "request_id": "ee0a0689-00e5-9f46-8675-08cf259abdc6",
+            "seconds": 32.63049929999397
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 15010,
+            "model": "qwen3.7-plus",
+            "output_tokens": 187,
+            "request_id": "a1fdef8d-a1b6-9faf-b0d5-0ba535c8991d",
+            "seconds": 4.100435000000289
+          }
+        },
+        {
+          "kind": "acceptance",
+          "data": {
+            "artifact": {
+              "bytes": 5479,
+              "ref": "artifacts/029cdd0bf977407aa9eac43bb5b4bad9/pi-core-m0-audit.md",
+              "sha256": "b3c7aefa3128c08e6409a5332fc775c9cde919f0a5dbbe42365127b9fe85d0db"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+                "source": "legacy_handoff"
+              },
+              {
+                "full_read": true,
+                "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+                "source": "pi_core"
+              },
+              {
+                "source": "validation_log",
+                "unavailable_disclosed": true
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "261b7a87eb5e487a92722d75c2eee9b9",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "decisions"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 2164,
+            "eof": true,
+            "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+            "snapshot": "sources\\3183d37be5060278b0f0b2ea1095fea98e027d276f661719821018f5511f4927.txt",
+            "source_id": "decisions",
+            "start": 0,
+            "total": 2164
+          },
+          "created": 1793798180.1321087
+        },
+        {
+          "id": "f3a5776f9f5b4b9192f01e2a4b736bc8",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "legacy_handoff"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 7199,
+            "eof": true,
+            "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+            "snapshot": "sources\\3aed9702e287012a2b7055827aef42feb5fed5e7fb4a224d21d2932a7550f67f.txt",
+            "source_id": "legacy_handoff",
+            "start": 0,
+            "total": 7199
+          },
+          "created": 1793798181.7835877
+        },
+        {
+          "id": "92b61ab5d70f444599de099942678cf4",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 8000,
+            "eof": false,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 0,
+            "total": 21570
+          },
+          "created": 1793798183.6708226
+        },
+        {
+          "id": "b53f2e74229c42ac8b0fbf78eda05828",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 8000,
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 16000,
+            "eof": false,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 8000,
+            "total": 21570
+          },
+          "created": 1793798188.0263188
+        },
+        {
+          "id": "ac1e4389232e46ddb179dbeabad49a55",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 16000,
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 21570,
+            "eof": true,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 16000,
+            "total": 21570
+          },
+          "created": 1793798189.7048955
+        },
+        {
+          "id": "78f1d42716724025b2df378b24f67b69",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "validation_log"
+          },
+          "status": "failed",
+          "result": {
+            "detail": "authorized source could not be read",
+            "error": "SourceUnavailable"
+          },
+          "created": 1793798191.3535824
+        },
+        {
+          "id": "029cdd0bf977407aa9eac43bb5b4bad9",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "tool": "write_artifact",
+          "arguments": {
+            "name": "pi-core-m0-audit.md",
+            "content_sha256": "b3c7aefa3128c08e6409a5332fc775c9cde919f0a5dbbe42365127b9fe85d0db"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact_ref": "artifacts/029cdd0bf977407aa9eac43bb5b4bad9/pi-core-m0-audit.md",
+            "bytes": 5479,
+            "sha256": "b3c7aefa3128c08e6409a5332fc775c9cde919f0a5dbbe42365127b9fe85d0db"
+          },
+          "created": 1793798223.989842
+        },
+        {
+          "id": "cfde36dfe7464bb29ab5bfda9b303e42",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "tool": "submit_result",
+          "arguments": {
+            "artifact_ref": "artifacts/029cdd0bf977407aa9eac43bb5b4bad9/pi-core-m0-audit.md",
+            "limitations": [
+              "validation_log"
+            ],
+            "summary": "已生成 M0 核对单，明确：D-A 决定覆盖研究交接的旧顺序，当前有效顺序为 M0(基础闭环)→M1(Worker闭环)→M2(Nudge)；pi-agent-core 接管模型工具循环，我们保留 SQLite 任务持久化、恢复、权限与验收责任；模型为 qwen3.7-plus；验证日志不可用，上游测试数据不代表本产品实测。"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact": {
+              "bytes": 5479,
+              "ref": "artifacts/029cdd0bf977407aa9eac43bb5b4bad9/pi-core-m0-audit.md",
+              "sha256": "b3c7aefa3128c08e6409a5332fc775c9cde919f0a5dbbe42365127b9fe85d0db"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+                "source": "legacy_handoff"
+              },
+              {
+                "full_read": true,
+                "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+                "source": "pi_core"
+              },
+              {
+                "source": "validation_log",
+                "unavailable_disclosed": true
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          },
+          "created": 1793798228.1026
+        }
+      ],
+      "deliveries": [
+        {
+          "id": "8cab6f3f81a6424ba574ba31055d3c18",
+          "task_id": "8e37326ea07c494baedb129ef476111d",
+          "run_id": "e64741a1e4664b168edd3a20f29d6d98",
+          "room_id": "local",
+          "content": "已生成 M0 核对单，明确：D-A 决定覆盖研究交接的旧顺序，当前有效顺序为 M0(基础闭环)→M1(Worker闭环)→M2(Nudge)；pi-agent-core 接管模型工具循环，我们保留 SQLite 任务持久化、恢复、权限与验收责任；模型为 qwen3.7-plus；验证日志不可用，上游测试数据不代表本产品实测。",
+          "artifact": "{\"bytes\": 5479, \"ref\": \"artifacts/029cdd0bf977407aa9eac43bb5b4bad9/pi-core-m0-audit.md\", \"sha256\": \"b3c7aefa3128c08e6409a5332fc775c9cde919f0a5dbbe42365127b9fe85d0db\"}",
+          "state": "accepted",
+          "attempts": 1,
+          "receipt": "{\"accepted\": true, \"channel\": \"local_file\", \"human_read\": \"unknown\", \"id\": \"8cab6f3f81a6424ba574ba31055d3c18\"}",
+          "last_error": null,
+          "exported_artifact": "docs/validation/artifacts/8e37326ea07c494baedb129ef476111d/pi-core-m0-audit.md"
+        }
+      ],
+      "content_review": {
+        "status": "needs_revision",
+        "finding": "Absent upstream log was incorrectly used to infer missing product evidence; D-L verification status was overstated."
+      },
+      "tokens": {
+        "input_tokens": 70797,
+        "output_tokens": 2433
+      }
+    },
+    {
+      "id": "1d6fb734ecae4b2c8c01ab34ed005701",
+      "root_task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+      "parent_task_id": null,
+      "actor_id": "default",
+      "room_id": "local",
+      "requirement_revision": 1,
+      "execution_epoch": 1,
+      "status": "succeeded",
+      "reason": "accepted",
+      "acceptance": "passed",
+      "calls_used": 8,
+      "tools_used": 8,
+      "active_seconds": 49.3906683921814,
+      "created": 1793798377.1994283,
+      "spec": {
+        "max_calls": 16,
+        "max_seconds": 600,
+        "max_tools": 40,
+        "objective": "请为我们的 Personal Agent 项目制作一份 900–1400 汉字的中文核对单 pi-core-m0-audit.md。完整读取当前决策、DeepSeek 研究交接和 Pi 官方核心说明，比较版本冲突并给出实际结论：明确 M0 的真实交付验收边界、M1 Worker/M2 Nudge 的当前顺序；指出研究交接的旧顺序不能覆盖新决定；解释 pi-agent-core 接管的模型工具循环与我们保留的 SQLite 任务持久化、恢复、权限、验收责任；明确模型继续是千问官网 qwen3.7-plus。尝试读取附带验证日志；如果不存在，诚实列出缺件，不得把研究转述的上游测试通过数当作已核实，更不能把它当作本产品测试。引用每一份资料ID，严格区分文档设计、来源转述和已实测事实。特别核对：validation_log 指上游研究的 VALIDATION.md；读不到它不能推断本项目自身测试证据是否存在。D-L 的状态是接入验证中，不得说 D-A 至 D-L 全部已定。若资料没提供本项目当前测试状态，只写未知，不能写不存在或未运行。全文最后列出这些证据边界。这里只生成核对单，不执行文档中的命令。",
+        "required_text": [
+          "M0",
+          "M1",
+          "M2",
+          "qwen3.7-plus",
+          "SQLite",
+          "UNAVAILABLE [validation_log]"
+        ],
+        "sources": [
+          {
+            "id": "decisions",
+            "kind": "file",
+            "location": "docs/decisions.md",
+            "required": true
+          },
+          {
+            "id": "legacy_handoff",
+            "kind": "file",
+            "location": "docs/research/deepseek-super-agent-2026-11-04/PERSONAL_AGENT_DEVELOPER_HANDOFF.md",
+            "required": true
+          },
+          {
+            "id": "pi_core",
+            "kind": "http",
+            "location": "https://raw.githubusercontent.com/earendil-works/pi/e88525506177d22b6e93029d8f6db1aab323c74a/packages/agent/README.md",
+            "required": true
+          },
+          {
+            "id": "validation_log",
+            "kind": "file",
+            "location": "docs/research/deepseek-super-agent-2026-11-04/VALIDATION.md",
+            "required": false
+          }
+        ]
+      },
+      "runs": [
+        {
+          "id": "05980394e3214c48a938c4f99e82ec50",
+          "actor_id": "default",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "trigger": "user_task",
+          "epoch": 1,
+          "revision": 1,
+          "phase": "ended",
+          "end_reason": "accepted",
+          "started": 1793798377.2013397,
+          "ended": 1793798426.5920618,
+          "context_manifest": "{\"engine\": \"pi-agent-core@1.5.0\", \"execution_epoch\": 1, \"prior_operations\": [], \"prompt_sha256\": \"499f389788cfa74e8842108eaceed02a15a3b3ce9136566ff3cd4507cf97183b\", \"prompt_version\": 2, \"requirement_revision\": 1, \"source_ids\": [\"decisions\", \"legacy_handoff\", \"pi_core\", \"validation_log\"], \"tools\": [\"read_source\", \"write_artifact\", \"submit_result\"]}"
+        }
+      ],
+      "requests": [
+        {
+          "id": "104fd6a0bb6646c2b875cce912ea57ff",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "sequence": 1,
+          "payload_sha256": "e4230179c6254320f089e9bf6ccce6a7e541bca658cd600f4220bfd3d4554e38",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798377.330797,
+          "ended": 1793798380.0703168
+        },
+        {
+          "id": "bc27c50d34d54dfbae141cf0bb25b439",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "sequence": 2,
+          "payload_sha256": "0edfa16546417e661eb933a02fe2a69fcd522d30885b9afcfa40067f261ee646",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798380.0827866,
+          "ended": 1793798382.0173855
+        },
+        {
+          "id": "88438a34ca1849bead0e1fc49260b2e6",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "sequence": 3,
+          "payload_sha256": "34813c69e49aeeac1d8efd46368da6621b6199ad97e512e242067fdacf70532c",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798382.027553,
+          "ended": 1793798383.6346352
+        },
+        {
+          "id": "6be23c4eb0b04a56923d47ef04b8aa14",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "sequence": 4,
+          "payload_sha256": "f392fd88ca38f4c051ae706e0c2975a672c8b4471eaa4f2276f86928b902d036",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798387.3724883,
+          "ended": 1793798389.21691
+        },
+        {
+          "id": "076f069237a24e45a5fdff2eb3a64afa",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "sequence": 5,
+          "payload_sha256": "7fa49f7a6051704b9ba1b2b76d3f570b4eba636dda4e959a4401c4eb1bcf2724",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798389.2241216,
+          "ended": 1793798392.0195153
+        },
+        {
+          "id": "f97d08c830124336a679a86e5cbc939f",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "sequence": 6,
+          "payload_sha256": "1c7a9c5ad568e0cacc7b869435d9cda650f799f88573cd081b2c5a0eefe93456",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798392.0265665,
+          "ended": 1793798393.8338182
+        },
+        {
+          "id": "fe7c0640a454446eb2c670a58d23aa4a",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "sequence": 7,
+          "payload_sha256": "d2f3e0f53edc1050c9cacfbac8ad27ef89854b1d171c8db05f95e2eebfe52fd6",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798393.8442628,
+          "ended": 1793798422.0996637
+        },
+        {
+          "id": "cababbf3585c400f96e528ac9b0464af",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "sequence": 8,
+          "payload_sha256": "8414d1dfe5f6d4ca7aaa72ac302ab4ae4ffd50942f387bb7548faf333c859be1",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798422.1139228,
+          "ended": 1793798426.5856729
+        }
+      ],
+      "input_usage": [
+        {
+          "request_id": "104fd6a0bb6646c2b875cce912ea57ff",
+          "event_id": "c97d4e19cfdc43cfbd85e2d6a1c104ff",
+          "message_id": "d7785716ea5a450d80e12a8dc376f3f5",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "input_sha256": "c4cfd8fa5955d9bb0709f1ce08ae45721fbf3b6f35a2b85199383bd8e3a75b17",
+          "state": "completed"
+        },
+        {
+          "request_id": "bc27c50d34d54dfbae141cf0bb25b439",
+          "event_id": "c97d4e19cfdc43cfbd85e2d6a1c104ff",
+          "message_id": "d7785716ea5a450d80e12a8dc376f3f5",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "input_sha256": "c4cfd8fa5955d9bb0709f1ce08ae45721fbf3b6f35a2b85199383bd8e3a75b17",
+          "state": "completed"
+        },
+        {
+          "request_id": "88438a34ca1849bead0e1fc49260b2e6",
+          "event_id": "c97d4e19cfdc43cfbd85e2d6a1c104ff",
+          "message_id": "d7785716ea5a450d80e12a8dc376f3f5",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "input_sha256": "c4cfd8fa5955d9bb0709f1ce08ae45721fbf3b6f35a2b85199383bd8e3a75b17",
+          "state": "completed"
+        },
+        {
+          "request_id": "6be23c4eb0b04a56923d47ef04b8aa14",
+          "event_id": "c97d4e19cfdc43cfbd85e2d6a1c104ff",
+          "message_id": "d7785716ea5a450d80e12a8dc376f3f5",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "input_sha256": "c4cfd8fa5955d9bb0709f1ce08ae45721fbf3b6f35a2b85199383bd8e3a75b17",
+          "state": "completed"
+        },
+        {
+          "request_id": "076f069237a24e45a5fdff2eb3a64afa",
+          "event_id": "c97d4e19cfdc43cfbd85e2d6a1c104ff",
+          "message_id": "d7785716ea5a450d80e12a8dc376f3f5",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "input_sha256": "c4cfd8fa5955d9bb0709f1ce08ae45721fbf3b6f35a2b85199383bd8e3a75b17",
+          "state": "completed"
+        },
+        {
+          "request_id": "f97d08c830124336a679a86e5cbc939f",
+          "event_id": "c97d4e19cfdc43cfbd85e2d6a1c104ff",
+          "message_id": "d7785716ea5a450d80e12a8dc376f3f5",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "input_sha256": "c4cfd8fa5955d9bb0709f1ce08ae45721fbf3b6f35a2b85199383bd8e3a75b17",
+          "state": "completed"
+        },
+        {
+          "request_id": "fe7c0640a454446eb2c670a58d23aa4a",
+          "event_id": "c97d4e19cfdc43cfbd85e2d6a1c104ff",
+          "message_id": "d7785716ea5a450d80e12a8dc376f3f5",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "input_sha256": "c4cfd8fa5955d9bb0709f1ce08ae45721fbf3b6f35a2b85199383bd8e3a75b17",
+          "state": "completed"
+        },
+        {
+          "request_id": "cababbf3585c400f96e528ac9b0464af",
+          "event_id": "c97d4e19cfdc43cfbd85e2d6a1c104ff",
+          "message_id": "d7785716ea5a450d80e12a8dc376f3f5",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "input_sha256": "c4cfd8fa5955d9bb0709f1ce08ae45721fbf3b6f35a2b85199383bd8e3a75b17",
+          "state": "completed"
+        }
+      ],
+      "steps": [
+        {
+          "kind": "engine",
+          "data": {
+            "name": "pi-agent-core",
+            "version": "1.5.0"
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 1179,
+            "model": "qwen3.7-plus",
+            "output_tokens": 46,
+            "request_id": "de1a5b05-8ce0-99d9-90e2-4d66359883ef",
+            "seconds": 2.740953200001968
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 2643,
+            "model": "qwen3.7-plus",
+            "output_tokens": 39,
+            "request_id": "ac6c701b-4852-9ddc-86a4-1bff57e62247",
+            "seconds": 1.9352167999895755
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 6607,
+            "model": "qwen3.7-plus",
+            "output_tokens": 39,
+            "request_id": "e67148d7-5d76-9924-88c7-8baa71d866d3",
+            "seconds": 1.60794519999763
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 8774,
+            "model": "qwen3.7-plus",
+            "output_tokens": 57,
+            "request_id": "3c2968e9-4915-9858-829c-a44ef6f6061e",
+            "seconds": 1.8459009999933187
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 11154,
+            "model": "qwen3.7-plus",
+            "output_tokens": 53,
+            "request_id": "2028b2cd-8765-987b-b4ef-41b3efa9984c",
+            "seconds": 2.7965180999890435
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 12910,
+            "model": "qwen3.7-plus",
+            "output_tokens": 38,
+            "request_id": "f7871efb-05c1-9beb-837d-38e4abeb39aa",
+            "seconds": 1.8098289000045042
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 12981,
+            "model": "qwen3.7-plus",
+            "output_tokens": 1629,
+            "request_id": "9da6a7f2-25c0-9295-ac98-a925fb5dcc17",
+            "seconds": 28.256621000007726
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 14737,
+            "model": "qwen3.7-plus",
+            "output_tokens": 202,
+            "request_id": "256af5c1-bd22-911f-afc6-53ee33b9f790",
+            "seconds": 4.472654099983629
+          }
+        },
+        {
+          "kind": "acceptance",
+          "data": {
+            "artifact": {
+              "bytes": 5341,
+              "ref": "artifacts/1de046a505254dacaf4b006497ef1d00/pi-core-m0-audit.md",
+              "sha256": "980fb2089248c62fe22dade3027298ecc1a810df7b07830c8d54b2f90bd683fb"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+                "source": "legacy_handoff"
+              },
+              {
+                "full_read": true,
+                "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+                "source": "pi_core"
+              },
+              {
+                "source": "validation_log",
+                "unavailable_disclosed": true
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "af485a80aac9448bb2b2dcea3a91623d",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "decisions"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 2164,
+            "eof": true,
+            "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+            "snapshot": "sources\\3183d37be5060278b0f0b2ea1095fea98e027d276f661719821018f5511f4927.txt",
+            "source_id": "decisions",
+            "start": 0,
+            "total": 2164
+          },
+          "created": 1793798380.0759025
+        },
+        {
+          "id": "e3da806197144248b049e095fb2c360c",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "legacy_handoff"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 7199,
+            "eof": true,
+            "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+            "snapshot": "sources\\3aed9702e287012a2b7055827aef42feb5fed5e7fb4a224d21d2932a7550f67f.txt",
+            "source_id": "legacy_handoff",
+            "start": 0,
+            "total": 7199
+          },
+          "created": 1793798382.0193412
+        },
+        {
+          "id": "f1cd0fae3a52433b97a75d00da912358",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 8000,
+            "eof": false,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 0,
+            "total": 21570
+          },
+          "created": 1793798383.6371102
+        },
+        {
+          "id": "f67730e11c0648ec8a6f6b1cba2ee1fc",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 8000,
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 16000,
+            "eof": false,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 8000,
+            "total": 21570
+          },
+          "created": 1793798389.2203877
+        },
+        {
+          "id": "9e9a1c1e6fb7462f80d3c4baec36d985",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 16000,
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 21570,
+            "eof": true,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 16000,
+            "total": 21570
+          },
+          "created": 1793798392.0224116
+        },
+        {
+          "id": "1e28cbdeec0a47eea8e5a2a66f6d3875",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "validation_log"
+          },
+          "status": "failed",
+          "result": {
+            "detail": "authorized source could not be read",
+            "error": "SourceUnavailable"
+          },
+          "created": 1793798393.8390608
+        },
+        {
+          "id": "1de046a505254dacaf4b006497ef1d00",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "tool": "write_artifact",
+          "arguments": {
+            "name": "pi-core-m0-audit.md",
+            "content_sha256": "980fb2089248c62fe22dade3027298ecc1a810df7b07830c8d54b2f90bd683fb"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact_ref": "artifacts/1de046a505254dacaf4b006497ef1d00/pi-core-m0-audit.md",
+            "bytes": 5341,
+            "sha256": "980fb2089248c62fe22dade3027298ecc1a810df7b07830c8d54b2f90bd683fb"
+          },
+          "created": 1793798422.1028907
+        },
+        {
+          "id": "fbb773234d3b4a189895d15c2fd7d5de",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "tool": "submit_result",
+          "arguments": {
+            "artifact_ref": "artifacts/1de046a505254dacaf4b006497ef1d00/pi-core-m0-audit.md",
+            "limitations": [
+              "validation_log"
+            ],
+            "summary": "已完成 Personal Agent 项目 M0 核对单，明确 M0 验收边界、M1/M2 顺序调整（D-A 覆盖研究交接旧顺序）、pi-agent-core 接管范围与本项目保留责任（SQLite 持久化、恢复、权限、验收）、模型为 qwen3.7-plus、D-L 状态为接入验证中而非已定。validation_log 不可用，已在文中标注 UNAVAILABLE [validation_log]，并强调不得将上游研究测试数据当作本产品测试证据。"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact": {
+              "bytes": 5341,
+              "ref": "artifacts/1de046a505254dacaf4b006497ef1d00/pi-core-m0-audit.md",
+              "sha256": "980fb2089248c62fe22dade3027298ecc1a810df7b07830c8d54b2f90bd683fb"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+                "source": "legacy_handoff"
+              },
+              {
+                "full_read": true,
+                "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+                "source": "pi_core"
+              },
+              {
+                "source": "validation_log",
+                "unavailable_disclosed": true
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          },
+          "created": 1793798426.588146
+        }
+      ],
+      "deliveries": [
+        {
+          "id": "85ee84016ebe4d878c6b8a691b7de030",
+          "task_id": "1d6fb734ecae4b2c8c01ab34ed005701",
+          "run_id": "05980394e3214c48a938c4f99e82ec50",
+          "room_id": "local",
+          "content": "已完成 Personal Agent 项目 M0 核对单，明确 M0 验收边界、M1/M2 顺序调整（D-A 覆盖研究交接旧顺序）、pi-agent-core 接管范围与本项目保留责任（SQLite 持久化、恢复、权限、验收）、模型为 qwen3.7-plus、D-L 状态为接入验证中而非已定。validation_log 不可用，已在文中标注 UNAVAILABLE [validation_log]，并强调不得将上游研究测试数据当作本产品测试证据。",
+          "artifact": "{\"bytes\": 5341, \"ref\": \"artifacts/1de046a505254dacaf4b006497ef1d00/pi-core-m0-audit.md\", \"sha256\": \"980fb2089248c62fe22dade3027298ecc1a810df7b07830c8d54b2f90bd683fb\"}",
+          "state": "accepted",
+          "attempts": 1,
+          "receipt": "{\"accepted\": true, \"channel\": \"local_file\", \"human_read\": \"unknown\", \"id\": \"85ee84016ebe4d878c6b8a691b7de030\"}",
+          "last_error": null,
+          "exported_artifact": "docs/validation/artifacts/1d6fb734ecae4b2c8c01ab34ed005701/pi-core-m0-audit.md"
+        }
+      ],
+      "content_review": {
+        "status": "needs_revision",
+        "finding": "Review wording still blurred source availability versus product state and mixed old/new M1 slices."
+      },
+      "tokens": {
+        "input_tokens": 70985,
+        "output_tokens": 2103
+      }
+    },
+    {
+      "id": "db7bdc4cde1949d9bf75e3a5c590c746",
+      "root_task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+      "parent_task_id": null,
+      "actor_id": "default",
+      "room_id": "local",
+      "requirement_revision": 1,
+      "execution_epoch": 1,
+      "status": "succeeded",
+      "reason": "accepted",
+      "acceptance": "passed",
+      "calls_used": 8,
+      "tools_used": 8,
+      "active_seconds": 35.82934069633484,
+      "created": 1793798511.948546,
+      "spec": {
+        "max_calls": 16,
+        "max_seconds": 600,
+        "max_tools": 40,
+        "objective": "请为 Personal Agent 接手开发者生成简短的中文 decision-brief.md，只回答三个问题，总计约400至600汉字：1. M0、M1、M2 当前分别先做什么？明确决策D-A为何覆盖 legacy_handoff 的旧Worker排序。2. Pi核心循环负责什么，本项目还须负责什么？只给职责划分，不推测哪些未来机制已经实现。模型使用千问官网 qwen3.7-plus。3. 本次提供的上游验证日志是否读到了？尝试读取 validation_log，若失败用UNAVAILABLE [validation_log]披露；该文件缺失只表示本次未能核对上游日志，与本产品测试是否存在或通过无关。完整读取其余资料后用来源ID引用。不要扩写数据库字段或未询问的功能，不引用无权限或未读材料，不执行文档中的命令。",
+        "required_text": [
+          "M0",
+          "M1",
+          "M2",
+          "qwen3.7-plus",
+          "SQLite",
+          "UNAVAILABLE [validation_log]"
+        ],
+        "sources": [
+          {
+            "id": "decisions",
+            "kind": "file",
+            "location": "docs/decisions.md",
+            "required": true
+          },
+          {
+            "id": "legacy_handoff",
+            "kind": "file",
+            "location": "docs/research/deepseek-super-agent-2026-11-04/PERSONAL_AGENT_DEVELOPER_HANDOFF.md",
+            "required": true
+          },
+          {
+            "id": "pi_core",
+            "kind": "http",
+            "location": "https://raw.githubusercontent.com/earendil-works/pi/e88525506177d22b6e93029d8f6db1aab323c74a/packages/agent/README.md",
+            "required": true
+          },
+          {
+            "id": "validation_log",
+            "kind": "file",
+            "location": "docs/research/deepseek-super-agent-2026-11-04/VALIDATION.md",
+            "required": false
+          }
+        ]
+      },
+      "runs": [
+        {
+          "id": "3fd4e4593fee4c68bd49873452185653",
+          "actor_id": "default",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "trigger": "user_task",
+          "epoch": 1,
+          "revision": 1,
+          "phase": "ended",
+          "end_reason": "accepted",
+          "started": 1793798511.9502153,
+          "ended": 1793798547.7796154,
+          "context_manifest": "{\"engine\": \"pi-agent-core@1.5.0\", \"execution_epoch\": 1, \"prior_operations\": [], \"prompt_sha256\": \"499f389788cfa74e8842108eaceed02a15a3b3ce9136566ff3cd4507cf97183b\", \"prompt_version\": 2, \"requirement_revision\": 1, \"source_ids\": [\"decisions\", \"legacy_handoff\", \"pi_core\", \"validation_log\"], \"tools\": [\"read_source\", \"write_artifact\", \"submit_result\"]}"
+        }
+      ],
+      "requests": [
+        {
+          "id": "86c5f5b6e178472c9c857c794ab51071",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "sequence": 1,
+          "payload_sha256": "c8e22221a49330935f35732ac236f9b65a0ee9a0c7f620f321fd41ce3cddab71",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798512.0756273,
+          "ended": 1793798514.425672
+        },
+        {
+          "id": "586cccb8717b44588eed7441985b9975",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "sequence": 2,
+          "payload_sha256": "d5e7e21bd89df5bb5e1a6fc7a5040c3f248a27d5f1ec5eee84bb596bd9aad965",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798514.4388592,
+          "ended": 1793798516.064784
+        },
+        {
+          "id": "8edf2fb3bd294c3f82d952aad788e4bd",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "sequence": 3,
+          "payload_sha256": "79ac87f71fbc673e40349c2721ac89d0a15cb9d15c7a96730b3e39683db369e7",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798516.0743127,
+          "ended": 1793798517.8304687
+        },
+        {
+          "id": "b99bb5265794444994a18dabb59c4125",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "sequence": 4,
+          "payload_sha256": "9413960ce2d27ea2132f5608a524fbbb3546ec5606d0e98ce7ee771215cc562c",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798519.302357,
+          "ended": 1793798521.3556602
+        },
+        {
+          "id": "fa264f78d9bc42cdad71fc862f05b25b",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "sequence": 5,
+          "payload_sha256": "5f1865fc63915f674a20d22c72fe8afa30b19abd46c31fc03d9488c0e18c453e",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798521.3625064,
+          "ended": 1793798523.5383928
+        },
+        {
+          "id": "805c119388974433b18ee8c05dc904be",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "sequence": 6,
+          "payload_sha256": "33778a69589fc0d65694929e1718a40a54e7bb0f4b5d044fffe2ec4576e72bc9",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798523.544816,
+          "ended": 1793798525.3345547
+        },
+        {
+          "id": "32a00e47e8fd438b963b305f35b49c69",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "sequence": 7,
+          "payload_sha256": "5fa75439a6c7dad21356bb2a27613a2cdfa4098bf38f9f012f84c16c0b43f2c6",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798525.3421419,
+          "ended": 1793798544.2303417
+        },
+        {
+          "id": "e428e87cdde04a1eb50120d1947ddfd3",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "sequence": 8,
+          "payload_sha256": "d51f4e2c031e126abf95df17a407e0b846ffeacc4a00d976dd6995a90787924f",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798544.2439938,
+          "ended": 1793798547.7723246
+        }
+      ],
+      "input_usage": [
+        {
+          "request_id": "86c5f5b6e178472c9c857c794ab51071",
+          "event_id": "c6a8511a0ccd4f91a52ff35a1bb0be12",
+          "message_id": "4ec7ba55cdd6499ab0a187b181a415d4",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "input_sha256": "c431713a9dd5f6c7c59c2dbd0ce3742c3a986c8dc86a0f8966b8b700adc7ff6a",
+          "state": "completed"
+        },
+        {
+          "request_id": "586cccb8717b44588eed7441985b9975",
+          "event_id": "c6a8511a0ccd4f91a52ff35a1bb0be12",
+          "message_id": "4ec7ba55cdd6499ab0a187b181a415d4",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "input_sha256": "c431713a9dd5f6c7c59c2dbd0ce3742c3a986c8dc86a0f8966b8b700adc7ff6a",
+          "state": "completed"
+        },
+        {
+          "request_id": "8edf2fb3bd294c3f82d952aad788e4bd",
+          "event_id": "c6a8511a0ccd4f91a52ff35a1bb0be12",
+          "message_id": "4ec7ba55cdd6499ab0a187b181a415d4",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "input_sha256": "c431713a9dd5f6c7c59c2dbd0ce3742c3a986c8dc86a0f8966b8b700adc7ff6a",
+          "state": "completed"
+        },
+        {
+          "request_id": "b99bb5265794444994a18dabb59c4125",
+          "event_id": "c6a8511a0ccd4f91a52ff35a1bb0be12",
+          "message_id": "4ec7ba55cdd6499ab0a187b181a415d4",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "input_sha256": "c431713a9dd5f6c7c59c2dbd0ce3742c3a986c8dc86a0f8966b8b700adc7ff6a",
+          "state": "completed"
+        },
+        {
+          "request_id": "fa264f78d9bc42cdad71fc862f05b25b",
+          "event_id": "c6a8511a0ccd4f91a52ff35a1bb0be12",
+          "message_id": "4ec7ba55cdd6499ab0a187b181a415d4",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "input_sha256": "c431713a9dd5f6c7c59c2dbd0ce3742c3a986c8dc86a0f8966b8b700adc7ff6a",
+          "state": "completed"
+        },
+        {
+          "request_id": "805c119388974433b18ee8c05dc904be",
+          "event_id": "c6a8511a0ccd4f91a52ff35a1bb0be12",
+          "message_id": "4ec7ba55cdd6499ab0a187b181a415d4",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "input_sha256": "c431713a9dd5f6c7c59c2dbd0ce3742c3a986c8dc86a0f8966b8b700adc7ff6a",
+          "state": "completed"
+        },
+        {
+          "request_id": "32a00e47e8fd438b963b305f35b49c69",
+          "event_id": "c6a8511a0ccd4f91a52ff35a1bb0be12",
+          "message_id": "4ec7ba55cdd6499ab0a187b181a415d4",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "input_sha256": "c431713a9dd5f6c7c59c2dbd0ce3742c3a986c8dc86a0f8966b8b700adc7ff6a",
+          "state": "completed"
+        },
+        {
+          "request_id": "e428e87cdde04a1eb50120d1947ddfd3",
+          "event_id": "c6a8511a0ccd4f91a52ff35a1bb0be12",
+          "message_id": "4ec7ba55cdd6499ab0a187b181a415d4",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "input_sha256": "c431713a9dd5f6c7c59c2dbd0ce3742c3a986c8dc86a0f8966b8b700adc7ff6a",
+          "state": "completed"
+        }
+      ],
+      "steps": [
+        {
+          "kind": "engine",
+          "data": {
+            "name": "pi-agent-core",
+            "version": "1.5.0"
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 1095,
+            "model": "qwen3.7-plus",
+            "output_tokens": 50,
+            "request_id": "287160c7-df4b-9976-b3c0-48bd210ea95f",
+            "seconds": 2.351057599997148
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 2563,
+            "model": "qwen3.7-plus",
+            "output_tokens": 40,
+            "request_id": "ed70039a-35f4-90bb-a5c6-4f94c0c3c8e8",
+            "seconds": 1.6268394000071567
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 6528,
+            "model": "qwen3.7-plus",
+            "output_tokens": 39,
+            "request_id": "89467a85-6077-95f9-b999-22f7601b1b3d",
+            "seconds": 1.758706799999345
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 8695,
+            "model": "qwen3.7-plus",
+            "output_tokens": 54,
+            "request_id": "9e4051c2-3619-9239-b727-852bdcdf3d99",
+            "seconds": 2.0546160000085365
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 11072,
+            "model": "qwen3.7-plus",
+            "output_tokens": 51,
+            "request_id": "cc7debc8-ff66-97d8-8c56-b6cce118d2c8",
+            "seconds": 2.1767190999817103
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 12826,
+            "model": "qwen3.7-plus",
+            "output_tokens": 42,
+            "request_id": "0f0d19e4-34cb-9a80-9d7e-03c8f5d00b88",
+            "seconds": 1.791528300003847
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 12901,
+            "model": "qwen3.7-plus",
+            "output_tokens": 1069,
+            "request_id": "465003ee-3ced-9cb9-b030-084dbd7f2bed",
+            "seconds": 18.889292700012447
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 14100,
+            "model": "qwen3.7-plus",
+            "output_tokens": 157,
+            "request_id": "9572b593-2de0-9f32-9fbe-3669ab92b29f",
+            "seconds": 3.530148999998346
+          }
+        },
+        {
+          "kind": "acceptance",
+          "data": {
+            "artifact": {
+              "bytes": 1828,
+              "ref": "artifacts/9e27bb9a094048e6b41c4982c95e84d8/decision-brief.md",
+              "sha256": "79657971ed464ddb537779c0e9c5b9829164d5ba457d8acebe783567fd59fc0a"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+                "source": "legacy_handoff"
+              },
+              {
+                "full_read": true,
+                "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+                "source": "pi_core"
+              },
+              {
+                "source": "validation_log",
+                "unavailable_disclosed": true
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "823e9319ddf144fcb2355aa271a90070",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "decisions"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 2164,
+            "eof": true,
+            "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+            "snapshot": "sources\\3183d37be5060278b0f0b2ea1095fea98e027d276f661719821018f5511f4927.txt",
+            "source_id": "decisions",
+            "start": 0,
+            "total": 2164
+          },
+          "created": 1793798514.4315479
+        },
+        {
+          "id": "7b9edc76bc294ce5a671ed139aeae425",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "legacy_handoff"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 7199,
+            "eof": true,
+            "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+            "snapshot": "sources\\3aed9702e287012a2b7055827aef42feb5fed5e7fb4a224d21d2932a7550f67f.txt",
+            "source_id": "legacy_handoff",
+            "start": 0,
+            "total": 7199
+          },
+          "created": 1793798516.0674064
+        },
+        {
+          "id": "a6f79370689b46f9aaf41706163e65e8",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 8000,
+            "eof": false,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 0,
+            "total": 21570
+          },
+          "created": 1793798517.8351703
+        },
+        {
+          "id": "98361300dc6d4dc6880f6d47742d2d01",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 8000,
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 16000,
+            "eof": false,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 8000,
+            "total": 21570
+          },
+          "created": 1793798521.35842
+        },
+        {
+          "id": "67b8489604804b8ebc98e99a5ef1533a",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 16000,
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 21570,
+            "eof": true,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 16000,
+            "total": 21570
+          },
+          "created": 1793798523.5405588
+        },
+        {
+          "id": "f6cf25313fb346119603a2763465cb5b",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "validation_log"
+          },
+          "status": "failed",
+          "result": {
+            "detail": "authorized source could not be read",
+            "error": "SourceUnavailable"
+          },
+          "created": 1793798525.337783
+        },
+        {
+          "id": "9e27bb9a094048e6b41c4982c95e84d8",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "tool": "write_artifact",
+          "arguments": {
+            "name": "decision-brief.md",
+            "content_sha256": "79657971ed464ddb537779c0e9c5b9829164d5ba457d8acebe783567fd59fc0a"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact_ref": "artifacts/9e27bb9a094048e6b41c4982c95e84d8/decision-brief.md",
+            "bytes": 1828,
+            "sha256": "79657971ed464ddb537779c0e9c5b9829164d5ba457d8acebe783567fd59fc0a"
+          },
+          "created": 1793798544.233273
+        },
+        {
+          "id": "c5f6ee4194e149459eae1c6b35238f5f",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "tool": "submit_result",
+          "arguments": {
+            "artifact_ref": "artifacts/9e27bb9a094048e6b41c4982c95e84d8/decision-brief.md",
+            "limitations": [
+              "validation_log"
+            ],
+            "summary": "已生成 decision-brief.md，回答三个问题：M0/M1/M2 当前优先级及 D-A 覆盖原因、Pi 核心循环与本项目职责划分、validation_log 读取失败披露。引用了 decisions、legacy_handoff、pi_core 三个源。"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact": {
+              "bytes": 1828,
+              "ref": "artifacts/9e27bb9a094048e6b41c4982c95e84d8/decision-brief.md",
+              "sha256": "79657971ed464ddb537779c0e9c5b9829164d5ba457d8acebe783567fd59fc0a"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+                "source": "legacy_handoff"
+              },
+              {
+                "full_read": true,
+                "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+                "source": "pi_core"
+              },
+              {
+                "source": "validation_log",
+                "unavailable_disclosed": true
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          },
+          "created": 1793798547.7760057
+        }
+      ],
+      "deliveries": [
+        {
+          "id": "c4e2eacc67044130bb12ac31b50c4bd9",
+          "task_id": "db7bdc4cde1949d9bf75e3a5c590c746",
+          "run_id": "3fd4e4593fee4c68bd49873452185653",
+          "room_id": "local",
+          "content": "已生成 decision-brief.md，回答三个问题：M0/M1/M2 当前优先级及 D-A 覆盖原因、Pi 核心循环与本项目职责划分、validation_log 读取失败披露。引用了 decisions、legacy_handoff、pi_core 三个源。",
+          "artifact": "{\"bytes\": 1828, \"ref\": \"artifacts/9e27bb9a094048e6b41c4982c95e84d8/decision-brief.md\", \"sha256\": \"79657971ed464ddb537779c0e9c5b9829164d5ba457d8acebe783567fd59fc0a\"}",
+          "state": "accepted",
+          "attempts": 1,
+          "receipt": "{\"accepted\": true, \"channel\": \"local_file\", \"human_read\": \"unknown\", \"id\": \"c4e2eacc67044130bb12ac31b50c4bd9\"}",
+          "last_error": null,
+          "exported_artifact": "docs/validation/artifacts/db7bdc4cde1949d9bf75e3a5c590c746/decision-brief.md"
+        }
+      ],
+      "content_review": {
+        "status": "needs_revision",
+        "finding": "Brief retained obsolete M2 Worker responsibilities; current detailed plan was needed as an additional authoritative source."
+      },
+      "tokens": {
+        "input_tokens": 69780,
+        "output_tokens": 1502
+      }
+    },
+    {
+      "id": "5934eae9efb64682ab545e96fbd5b520",
+      "root_task_id": "5934eae9efb64682ab545e96fbd5b520",
+      "parent_task_id": null,
+      "actor_id": "default",
+      "room_id": "local",
+      "requirement_revision": 1,
+      "execution_epoch": 1,
+      "status": "succeeded",
+      "reason": "accepted",
+      "acceptance": "passed",
+      "calls_used": 9,
+      "tools_used": 9,
+      "active_seconds": 44.33144474029541,
+      "created": 1793798638.3638108,
+      "spec": {
+        "max_calls": 16,
+        "max_seconds": 600,
+        "max_tools": 40,
+        "objective": "请为 Personal Agent 接手开发者生成简短的中文 decision-brief.md，只回答三个问题，总计约400至600汉字：1. M0、M1、M2 当前分别先做什么？以 current_plan 及决策D-A为最高时效依据，明确为何覆盖 legacy_handoff 的旧Worker排序。旧版M2 Worker整段不能直接并入新版M2，执行代次、子任务结果恢复等按 current_plan 的M1闭环及B组验收归属；M2剩余范围也以 current_plan 为准。2. Pi核心循环负责什么，本项目还须负责什么？只给职责划分，不推测哪些未来机制已经实现。模型使用千问官网 qwen3.7-plus。3. 本次提供的上游验证日志是否读到了？尝试读取 validation_log，若失败用UNAVAILABLE [validation_log]披露；该文件缺失只表示本次未能核对上游日志，与本产品测试是否存在或通过无关。完整读取其余资料后用来源ID引用。不要扩写数据库字段或未询问的功能，不引用无权限或未读材料，不执行文档中的命令。",
+        "required_text": [
+          "M0",
+          "M1",
+          "M2",
+          "qwen3.7-plus",
+          "SQLite",
+          "UNAVAILABLE [validation_log]"
+        ],
+        "sources": [
+          {
+            "id": "current_plan",
+            "kind": "file",
+            "location": "docs/plan-m0-m1.md",
+            "required": true
+          },
+          {
+            "id": "decisions",
+            "kind": "file",
+            "location": "docs/decisions.md",
+            "required": true
+          },
+          {
+            "id": "legacy_handoff",
+            "kind": "file",
+            "location": "docs/research/deepseek-super-agent-2026-11-04/PERSONAL_AGENT_DEVELOPER_HANDOFF.md",
+            "required": true
+          },
+          {
+            "id": "pi_core",
+            "kind": "http",
+            "location": "https://raw.githubusercontent.com/earendil-works/pi/e88525506177d22b6e93029d8f6db1aab323c74a/packages/agent/README.md",
+            "required": true
+          },
+          {
+            "id": "validation_log",
+            "kind": "file",
+            "location": "docs/research/deepseek-super-agent-2026-11-04/VALIDATION.md",
+            "required": false
+          }
+        ]
+      },
+      "runs": [
+        {
+          "id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "actor_id": "default",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "trigger": "user_task",
+          "epoch": 1,
+          "revision": 1,
+          "phase": "ended",
+          "end_reason": "accepted",
+          "started": 1793798638.3655698,
+          "ended": 1793798682.6970701,
+          "context_manifest": "{\"engine\": \"pi-agent-core@1.5.0\", \"execution_epoch\": 1, \"prior_operations\": [], \"prompt_sha256\": \"499f389788cfa74e8842108eaceed02a15a3b3ce9136566ff3cd4507cf97183b\", \"prompt_version\": 2, \"requirement_revision\": 1, \"source_ids\": [\"current_plan\", \"decisions\", \"legacy_handoff\", \"pi_core\", \"validation_log\"], \"tools\": [\"read_source\", \"write_artifact\", \"submit_result\"]}"
+        }
+      ],
+      "requests": [
+        {
+          "id": "7bbab747315e496c8636cbe04e8d8da1",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "sequence": 1,
+          "payload_sha256": "3c9d0e0fb910fef6a0b0a4a02fdad4fa6027a5910e76a26cf3e7aa3160a797fc",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798638.4998822,
+          "ended": 1793798641.1522572
+        },
+        {
+          "id": "847ebfcc37da4b9c9fb7a011c802b946",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "sequence": 2,
+          "payload_sha256": "640fff2d538a5824a01adf26879016c2e7311ef92849edb4e7d3bc994790c29e",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798641.1655803,
+          "ended": 1793798642.896826
+        },
+        {
+          "id": "82b83067e621403b9bf232db43c34198",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "sequence": 3,
+          "payload_sha256": "dabd2539ef50abd3f31b536d0f809cbb64860dda0745b0a6b68bf97dceec8b3d",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798642.9068723,
+          "ended": 1793798644.6508734
+        },
+        {
+          "id": "c8526fee0a034cc28f8a74e40d3b0346",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "sequence": 4,
+          "payload_sha256": "14e65585ffe7f96c620001e3f2ed1e2c8a34348ff03ed6c896ad7161cdeed5ba",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798644.6625195,
+          "ended": 1793798646.6927178
+        },
+        {
+          "id": "597561b08d9242bea9f556466f7c09be",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "sequence": 5,
+          "payload_sha256": "4de2015baecbece68c259b8fca3d54d9d1b86ad01549d975b06bb1ab41095c56",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798648.853213,
+          "ended": 1793798650.951229
+        },
+        {
+          "id": "77e0c4c35fe140d7833ae5a1c9f1e1ac",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "sequence": 6,
+          "payload_sha256": "ff15485fe5c6283287ac844814ac12d43b94b15a261b3520280a0eebebe89293",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798650.9637046,
+          "ended": 1793798653.4009068
+        },
+        {
+          "id": "410aea9816094861b5587e5dfef4d260",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "sequence": 7,
+          "payload_sha256": "07a939e64e4821288bc601303aee2e98914e5fa202bb3ed843fbad5426a8919c",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798653.407658,
+          "ended": 1793798655.2371068
+        },
+        {
+          "id": "e460a7975362430f992e75bc2a557141",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "sequence": 8,
+          "payload_sha256": "8df9ed248d06b4a8378e7b4bee2460abc585e5dd20323bdc13d5f7df9dbf8df8",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798655.243773,
+          "ended": 1793798678.2180724
+        },
+        {
+          "id": "314798a211a54b30aa1226d402e60ccc",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "sequence": 9,
+          "payload_sha256": "5b60372d7f10b8bf044ea28ac7910cfce4153e951c2561d300eab68bdd3e2bf9",
+          "metadata": "{\"base_url\": \"https://maas.qianwenaiapi.com/compatible-mode/v1\", \"enable_thinking\": false, \"max_output_tokens\": 4096, \"provider\": \"qwen_official\", \"requested_model\": \"qwen3.7-plus\", \"timeout_seconds\": 90}",
+          "state": "completed",
+          "created": 1793798678.2318006,
+          "ended": 1793798682.6910374
+        }
+      ],
+      "input_usage": [
+        {
+          "request_id": "7bbab747315e496c8636cbe04e8d8da1",
+          "event_id": "c5564810ffb641e280316ecc9b9348d0",
+          "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "input_sha256": "861a7e80c8293e8b40f1d30b23b8302b3bf1fb0e4ca333b87bf51bdcbd978262",
+          "state": "completed"
+        },
+        {
+          "request_id": "847ebfcc37da4b9c9fb7a011c802b946",
+          "event_id": "c5564810ffb641e280316ecc9b9348d0",
+          "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "input_sha256": "861a7e80c8293e8b40f1d30b23b8302b3bf1fb0e4ca333b87bf51bdcbd978262",
+          "state": "completed"
+        },
+        {
+          "request_id": "82b83067e621403b9bf232db43c34198",
+          "event_id": "c5564810ffb641e280316ecc9b9348d0",
+          "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "input_sha256": "861a7e80c8293e8b40f1d30b23b8302b3bf1fb0e4ca333b87bf51bdcbd978262",
+          "state": "completed"
+        },
+        {
+          "request_id": "c8526fee0a034cc28f8a74e40d3b0346",
+          "event_id": "c5564810ffb641e280316ecc9b9348d0",
+          "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "input_sha256": "861a7e80c8293e8b40f1d30b23b8302b3bf1fb0e4ca333b87bf51bdcbd978262",
+          "state": "completed"
+        },
+        {
+          "request_id": "597561b08d9242bea9f556466f7c09be",
+          "event_id": "c5564810ffb641e280316ecc9b9348d0",
+          "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "input_sha256": "861a7e80c8293e8b40f1d30b23b8302b3bf1fb0e4ca333b87bf51bdcbd978262",
+          "state": "completed"
+        },
+        {
+          "request_id": "77e0c4c35fe140d7833ae5a1c9f1e1ac",
+          "event_id": "c5564810ffb641e280316ecc9b9348d0",
+          "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "input_sha256": "861a7e80c8293e8b40f1d30b23b8302b3bf1fb0e4ca333b87bf51bdcbd978262",
+          "state": "completed"
+        },
+        {
+          "request_id": "410aea9816094861b5587e5dfef4d260",
+          "event_id": "c5564810ffb641e280316ecc9b9348d0",
+          "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "input_sha256": "861a7e80c8293e8b40f1d30b23b8302b3bf1fb0e4ca333b87bf51bdcbd978262",
+          "state": "completed"
+        },
+        {
+          "request_id": "e460a7975362430f992e75bc2a557141",
+          "event_id": "c5564810ffb641e280316ecc9b9348d0",
+          "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "input_sha256": "861a7e80c8293e8b40f1d30b23b8302b3bf1fb0e4ca333b87bf51bdcbd978262",
+          "state": "completed"
+        },
+        {
+          "request_id": "314798a211a54b30aa1226d402e60ccc",
+          "event_id": "c5564810ffb641e280316ecc9b9348d0",
+          "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "input_sha256": "861a7e80c8293e8b40f1d30b23b8302b3bf1fb0e4ca333b87bf51bdcbd978262",
+          "state": "completed"
+        }
+      ],
+      "steps": [
+        {
+          "kind": "engine",
+          "data": {
+            "name": "pi-agent-core",
+            "version": "1.5.0"
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 1170,
+            "model": "qwen3.7-plus",
+            "output_tokens": 50,
+            "request_id": "4388bc9f-2334-9dba-b0da-3bf67a5d07ff",
+            "seconds": 2.653668699989794
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 5332,
+            "model": "qwen3.7-plus",
+            "output_tokens": 39,
+            "request_id": "0ec5384a-2054-966f-96f8-de16ae10bd66",
+            "seconds": 1.7334062999871094
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 6789,
+            "model": "qwen3.7-plus",
+            "output_tokens": 40,
+            "request_id": "8e3bb2b2-f427-993b-96f3-d68e6753c0fb",
+            "seconds": 1.7457322999835014
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 10754,
+            "model": "qwen3.7-plus",
+            "output_tokens": 39,
+            "request_id": "c328f44d-9b1f-9f1d-a10a-ca24000c4c17",
+            "seconds": 2.032002799998736
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 12921,
+            "model": "qwen3.7-plus",
+            "output_tokens": 54,
+            "request_id": "66774154-d10b-945e-9ae0-ac2ef604ec1a",
+            "seconds": 2.10017260001041
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 15298,
+            "model": "qwen3.7-plus",
+            "output_tokens": 52,
+            "request_id": "9f67a221-b8d5-967d-9373-3bd780b1f1cf",
+            "seconds": 2.4384450999787077
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 17053,
+            "model": "qwen3.7-plus",
+            "output_tokens": 42,
+            "request_id": "8ed124e6-a853-9b26-9145-3e288a6b7c82",
+            "seconds": 1.8306596000038553
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 17128,
+            "model": "qwen3.7-plus",
+            "output_tokens": 1306,
+            "request_id": "7194d5a6-17c0-9605-b333-85843f20849f",
+            "seconds": 22.975454299972625
+          }
+        },
+        {
+          "kind": "model",
+          "data": {
+            "engine": "pi-agent-core@1.5.0",
+            "finish_reason": "tool_calls",
+            "input_tokens": 18564,
+            "model": "qwen3.7-plus",
+            "output_tokens": 190,
+            "request_id": "2493cd04-8db8-9fd3-8ad1-4e192681737e",
+            "seconds": 4.460482499998761
+          }
+        },
+        {
+          "kind": "acceptance",
+          "data": {
+            "artifact": {
+              "bytes": 3240,
+              "ref": "artifacts/c626f9778524494a95b4662316cde253/decision-brief.md",
+              "sha256": "9109d64607eb4e00adcb2a8efb0b7811e53ea3602f30d8c045f9322706ccc9aa"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "60761359a491dfc7b5b3cc6e42e6102e977638fc64203c1d4f3672518c6101c2",
+                "source": "current_plan"
+              },
+              {
+                "full_read": true,
+                "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+                "source": "legacy_handoff"
+              },
+              {
+                "full_read": true,
+                "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+                "source": "pi_core"
+              },
+              {
+                "source": "validation_log",
+                "unavailable_disclosed": true
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          }
+        }
+      ],
+      "operations": [
+        {
+          "id": "89b310ce9bc046f9b8ab5789d3eb8770",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "current_plan"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 7320,
+            "eof": true,
+            "sha256": "60761359a491dfc7b5b3cc6e42e6102e977638fc64203c1d4f3672518c6101c2",
+            "snapshot": "sources\\4f708349bedd16b6a6a48fa151ffa70f4bc05b0785b256387c7eaf1ec1cd9771.txt",
+            "source_id": "current_plan",
+            "start": 0,
+            "total": 7320
+          },
+          "created": 1793798641.157339
+        },
+        {
+          "id": "541f4b999c0043999ef42ff39a70b49d",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "decisions"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 2164,
+            "eof": true,
+            "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+            "snapshot": "sources\\3183d37be5060278b0f0b2ea1095fea98e027d276f661719821018f5511f4927.txt",
+            "source_id": "decisions",
+            "start": 0,
+            "total": 2164
+          },
+          "created": 1793798642.9003649
+        },
+        {
+          "id": "91d3c95b973649339cbe457744b1de61",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "legacy_handoff"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 7199,
+            "eof": true,
+            "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+            "snapshot": "sources\\3aed9702e287012a2b7055827aef42feb5fed5e7fb4a224d21d2932a7550f67f.txt",
+            "source_id": "legacy_handoff",
+            "start": 0,
+            "total": 7199
+          },
+          "created": 1793798644.6540785
+        },
+        {
+          "id": "56baab50b6b344bcaee5009d52b85343",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 8000,
+            "eof": false,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 0,
+            "total": 21570
+          },
+          "created": 1793798646.6960273
+        },
+        {
+          "id": "a78a31cfd30f4e5eaaf9f4f7df7496a8",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 8000,
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 16000,
+            "eof": false,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 8000,
+            "total": 21570
+          },
+          "created": 1793798650.9562411
+        },
+        {
+          "id": "e78afe79a4cb468fa77799c691c4c061",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "tool": "read_source",
+          "arguments": {
+            "offset": 16000,
+            "source_id": "pi_core"
+          },
+          "status": "succeeded",
+          "result": {
+            "end": 21570,
+            "eof": true,
+            "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+            "snapshot": "sources\\27549866980bae1351905bcbad53f26713f1699ed28d45f2aae6c81211bb0bfc.txt",
+            "source_id": "pi_core",
+            "start": 16000,
+            "total": 21570
+          },
+          "created": 1793798653.4036229
+        },
+        {
+          "id": "134aebe517f04ce89a1dd21a842ca121",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "tool": "read_source",
+          "arguments": {
+            "source_id": "validation_log"
+          },
+          "status": "failed",
+          "result": {
+            "detail": "authorized source could not be read",
+            "error": "SourceUnavailable"
+          },
+          "created": 1793798655.239512
+        },
+        {
+          "id": "c626f9778524494a95b4662316cde253",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "tool": "write_artifact",
+          "arguments": {
+            "name": "decision-brief.md",
+            "content_sha256": "9109d64607eb4e00adcb2a8efb0b7811e53ea3602f30d8c045f9322706ccc9aa"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact_ref": "artifacts/c626f9778524494a95b4662316cde253/decision-brief.md",
+            "bytes": 3240,
+            "sha256": "9109d64607eb4e00adcb2a8efb0b7811e53ea3602f30d8c045f9322706ccc9aa"
+          },
+          "created": 1793798678.2210429
+        },
+        {
+          "id": "d26cb9b86ed246d3b83cf5b246c33dd1",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "tool": "submit_result",
+          "arguments": {
+            "artifact_ref": "artifacts/c626f9778524494a95b4662316cde253/decision-brief.md",
+            "limitations": [
+              "validation_log"
+            ],
+            "summary": "已生成 decision-brief.md，回答三个问题：M0/M1/M2 当前任务划分（依据 current_plan 和 D-A 决策覆盖 legacy_handoff 旧排序）、Pi 核心循环与本项目职责划分、validation_log 读取失败披露。模型使用 qwen3.7-plus，SQLite 作为持久化存储。"
+          },
+          "status": "succeeded",
+          "result": {
+            "artifact": {
+              "bytes": 3240,
+              "ref": "artifacts/c626f9778524494a95b4662316cde253/decision-brief.md",
+              "sha256": "9109d64607eb4e00adcb2a8efb0b7811e53ea3602f30d8c045f9322706ccc9aa"
+            },
+            "checks": [
+              {
+                "full_read": true,
+                "sha256": "60761359a491dfc7b5b3cc6e42e6102e977638fc64203c1d4f3672518c6101c2",
+                "source": "current_plan"
+              },
+              {
+                "full_read": true,
+                "sha256": "7b09a1ffb1889f9cc95537e026fd2dbe8cbab3aa7f953d90a258ac864d8019ee",
+                "source": "decisions"
+              },
+              {
+                "full_read": true,
+                "sha256": "e9bb80fa76b89d3673c2c61dffad97ebe9afbe6a2cba37b85944fbfd42d975a6",
+                "source": "legacy_handoff"
+              },
+              {
+                "full_read": true,
+                "sha256": "3712499846ca83ed25fc317ad2b3fb099812c6e43b3ccbc5c287b1a6bc7da06d",
+                "source": "pi_core"
+              },
+              {
+                "source": "validation_log",
+                "unavailable_disclosed": true
+              }
+            ],
+            "errors": [],
+            "passed": true,
+            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"
+          },
+          "created": 1793798682.6937962
+        }
+      ],
+      "deliveries": [
+        {
+          "id": "bde653c14f414c04a43bff2674371a4d",
+          "task_id": "5934eae9efb64682ab545e96fbd5b520",
+          "run_id": "d1ecaa64d4ba47dc894201447d3e4c6c",
+          "room_id": "local",
+          "content": "已生成 decision-brief.md，回答三个问题：M0/M1/M2 当前任务划分（依据 current_plan 和 D-A 决策覆盖 legacy_handoff 旧排序）、Pi 核心循环与本项目职责划分、validation_log 读取失败披露。模型使用 qwen3.7-plus，SQLite 作为持久化存储。",
+          "artifact": "{\"bytes\": 3240, \"ref\": \"artifacts/c626f9778524494a95b4662316cde253/decision-brief.md\", \"sha256\": \"9109d64607eb4e00adcb2a8efb0b7811e53ea3602f30d8c045f9322706ccc9aa\"}",
+          "state": "accepted",
+          "attempts": 1,
+          "receipt": "{\"accepted\": true, \"channel\": \"local_file\", \"human_read\": \"unknown\", \"id\": \"bde653c14f414c04a43bff2674371a4d\"}",
+          "last_error": null,
+          "exported_artifact": "docs/validation/artifacts/5934eae9efb64682ab545e96fbd5b520/decision-brief.md"
+        }
+      ],
+      "content_review": {
+        "status": "passed_with_length_note",
+        "reviewer": "development_agent_source_comparison",
+        "checks": {
+          "current_M0_scope": true,
+          "current_M1_worker_and_M2_nudge_order": true,
+          "obsolete_worker_order_overridden": true,
+          "Pi_vs_host_responsibilities": true,
+          "Qwen_model_named": true,
+          "missing_upstream_log_not_product_test_claim": true,
+          "required_source_citations": true
+        },
+        "limitation": "Longer than requested concise brief; general semantic correctness remains review-based, not runtime proven."
+      },
+      "tokens": {
+        "input_tokens": 105009,
+        "output_tokens": 1812
+      }
+    }
+  ],
+  "total_usage": {
+    "input_tokens": 441584,
+    "output_tokens": 23701
+  },
+  "live_restart_dedup": {
+    "task_id": "5934eae9efb64682ab545e96fbd5b520",
+    "duplicate_receipt": {
+      "message_id": "64a6015439b849629a3b9f2b446a5ed7",
+      "task_id": "5934eae9efb64682ab545e96fbd5b520",
+      "duplicate": true
+    },
+    "counts_before": {
+      "tasks": 4,
+      "runs": 4,
+      "model_requests": 33,
+      "operations": 33,
+      "deliveries": 4
+    },
+    "counts_after": {
+      "tasks": 4,
+      "runs": 4,
+      "model_requests": 33,
+      "operations": 33,
+      "deliveries": 4
+    },
+    "model_calls_after_restart": 0,
+    "result": "passed"
+  }
+}

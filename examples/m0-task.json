@@ -1,0 +1,23 @@
+{
+  "objective": "请完整阅读两份虚构活动资料，按确认后的最新变更生成一份中文 Markdown 执行清单。说明当前时间、场地、人数、预算和志愿者安排，单独列出被新版本替代的旧安排，并列出仍需确认的事项。对来源使用 [event-v1] 与 [event-update] 引用。不要擅自解决资料未确认的问题，不要发送消息或声称活动已经落实。请写出实际文件并提交验收。",
+  "sources": [
+    {
+      "id": "event-v1",
+      "kind": "file",
+      "location": "sources/event-v1.md",
+      "required": true,
+      "description": "虚构活动初稿，仅作版本比较"
+    },
+    {
+      "id": "event-update",
+      "kind": "file",
+      "location": "sources/event-update.md",
+      "required": true,
+      "description": "较晚确认的活动变更，冲突处以此为准"
+    }
+  ],
+  "required_text": ["14:00", "16人", "1600元", "会议室B", "两名志愿者"],
+  "max_calls": 12,
+  "max_tools": 40,
+  "max_seconds": 600
+}

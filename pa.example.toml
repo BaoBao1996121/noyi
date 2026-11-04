@@ -1,0 +1,8 @@
+[model]
+name = "qwen3.7-plus"
+# Replace with your official account's regional endpoint if different.
+base_url = "https://maas.qianwenaiapi.com/compatible-mode/v1"
+api_key_env = "DASHSCOPE_API_KEY"
+timeout_seconds = 90
+max_output_tokens = 4096
+enable_thinking = false

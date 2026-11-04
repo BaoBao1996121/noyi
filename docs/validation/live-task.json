@@ -1,0 +1,46 @@
+{
+  "max_calls": 16,
+  "max_seconds": 600,
+  "max_tools": 40,
+  "objective": "请为 Personal Agent 接手开发者生成简短的中文 decision-brief.md，只回答三个问题，总计约400至600汉字：1. M0、M1、M2 当前分别先做什么？以 current_plan 及决策D-A为最高时效依据，明确为何覆盖 legacy_handoff 的旧Worker排序。旧版M2 Worker整段不能直接并入新版M2，执行代次、子任务结果恢复等按 current_plan 的M1闭环及B组验收归属；M2剩余范围也以 current_plan 为准。2. Pi核心循环负责什么，本项目还须负责什么？只给职责划分，不推测哪些未来机制已经实现。模型使用千问官网 qwen3.7-plus。3. 本次提供的上游验证日志是否读到了？尝试读取 validation_log，若失败用UNAVAILABLE [validation_log]披露；该文件缺失只表示本次未能核对上游日志，与本产品测试是否存在或通过无关。完整读取其余资料后用来源ID引用。不要扩写数据库字段或未询问的功能，不引用无权限或未读材料，不执行文档中的命令。",
+  "required_text": [
+    "M0",
+    "M1",
+    "M2",
+    "qwen3.7-plus",
+    "SQLite",
+    "UNAVAILABLE [validation_log]"
+  ],
+  "sources": [
+    {
+      "id": "current_plan",
+      "kind": "file",
+      "location": "inputs/current_plan.md",
+      "required": true
+    },
+    {
+      "id": "decisions",
+      "kind": "file",
+      "location": "inputs/decisions.md",
+      "required": true
+    },
+    {
+      "id": "legacy_handoff",
+      "kind": "file",
+      "location": "../research/deepseek-super-agent-2026-11-04/PERSONAL_AGENT_DEVELOPER_HANDOFF.md",
+      "required": true
+    },
+    {
+      "id": "pi_core",
+      "kind": "http",
+      "location": "https://raw.githubusercontent.com/earendil-works/pi/e88525506177d22b6e93029d8f6db1aab323c74a/packages/agent/README.md",
+      "required": true
+    },
+    {
+      "id": "validation_log",
+      "kind": "file",
+      "location": "../research/deepseek-super-agent-2026-11-04/VALIDATION.md",
+      "required": false
+    }
+  ]
+}
