@@ -42,6 +42,11 @@ class TaskSpec:
     max_seconds: float = 600
     max_workers: int = 4
     max_continuations: int = 12
+    enable_nudge: bool = False
+    max_nudges: int = 2
+    max_stagnant_tools: int = 20
+    review_workers: bool = False
+    max_handoffs: int = 2
 
     def validate(self) -> None:
         if not isinstance(self.objective, str) or not self.objective.strip():
@@ -55,6 +60,11 @@ class TaskSpec:
         if (type(self.max_workers) is not int or not 0 <= self.max_workers <= 8
                 or type(self.max_continuations) is not int or not 0 <= self.max_continuations <= 100):
             raise ValueError("invalid worker/continuation budget")
+        if (type(self.enable_nudge) is not bool or type(self.review_workers) is not bool
+                or type(self.max_nudges) is not int or not 0 <= self.max_nudges <= 5
+                or type(self.max_stagnant_tools) is not int or not 1 <= self.max_stagnant_tools <= 40
+                or type(self.max_handoffs) is not int or not 0 <= self.max_handoffs <= 8):
+            raise ValueError("invalid progress/review policy")
         if not isinstance(self.sources, list) or any(not isinstance(s, dict) for s in self.sources):
             raise ValueError("sources must be a list of objects")
         ids = [s.get("id") for s in self.sources]

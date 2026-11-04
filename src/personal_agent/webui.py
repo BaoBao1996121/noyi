@@ -144,7 +144,7 @@ class Console:
         if not isinstance(urls, list) or len(urls) > 6 or any(not isinstance(u, str) for u in urls):
             raise ValueError("最多提供 6 个明确的资料网址")
         sources.extend({"id": f"web{i+1}", "kind": "http", "location": url, "required": True} for i, url in enumerate(urls))
-        spec = TaskSpec(text, sources, max_calls=40, max_tools=100, max_seconds=900)
+        spec = TaskSpec(text, sources, max_calls=40, max_tools=100, max_seconds=900, enable_nudge=True, review_workers=True)
         return self.store.submit(spec, nonce=nonce, source="web", room=room)
 
     def artifact(self, delivery_id):

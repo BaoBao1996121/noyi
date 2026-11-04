@@ -95,7 +95,7 @@ def main():
                     raise ValueError("provide an objective or --spec")
                 sources = [{"id": f"source{i+1}", "kind": "file", "location": str(Path(p).resolve()), "required": True}
                            for i, p in enumerate(args.source)]
-                spec = TaskSpec(args.objective, sources)
+                spec = TaskSpec(args.objective, sources, enable_nudge=True, review_workers=True)
             print(encode(store.submit(spec, nonce=args.nonce or uuid.uuid4().hex)))
         elif args.command == "chat":
             print(encode(store.submit(None, text=args.text, nonce=args.nonce or uuid.uuid4().hex)))

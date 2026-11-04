@@ -39,4 +39,5 @@
 - M0 已验收并推送 d43bdde。
 - M1 已完成协议、故障与真实 Qwen 闭环验收，详见 [M1 报告](validation/M1_REPORT.md)。
 - UI 提前版已完成 HTTP 与浏览器实际验收，见 [UI 报告](validation/UI_EARLY_REPORT.md)。
-- M2–M5尚未完成；不能因计划存在或字段存在标通过。
+- M2 已完成协议、真实审核返工和来源失败对照；保留一份机械通过但人工质量失败的原稿，修正后重跑两组，详见 [M2 报告](validation/M2_REPORT.md)。
+- M3–M5尚未完成；不能因计划存在或字段存在标通过。

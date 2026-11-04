@@ -80,6 +80,19 @@ test('host budget halt ends Pi without extra callbacks', async () => {
   assert.deepEqual(seen, ['model']);
 });
 
+test('host ending gate can request one bounded continuation through the actual Pi loop', async () => {
+  let calls = 0;
+  await runSession(start(), async method => {
+    if (method === 'model') {
+      calls++;
+      return { message: { role: 'assistant', content: 'No tool on this turn.' }, finish_reason: 'stop' };
+    }
+    if (method === 'turn_end') return { action: calls < 2 ? 'continue' : 'end' };
+    assert.fail('unexpected callback');
+  });
+  assert.equal(calls, 2);
+});
+
 test('historical system/user/tool history round trips without dropping source references', () => {
   const history = [...start().messages, { role: 'assistant', content: '', tool_calls: [call()] },
     { role: 'tool', tool_call_id: 'call-1', content: '{"text":"材料 [source1]"}' }];

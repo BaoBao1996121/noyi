@@ -78,6 +78,17 @@ CREATE TABLE IF NOT EXISTS input_usage(
 """
 
 
+def same_submission(old_payload, new_payload):
+    """Additive TaskSpec defaults do not turn a retried old input into new work."""
+    old, new = json.loads(old_payload), json.loads(new_payload)
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return old == new
+    for payload in (old, new):
+        if isinstance(payload.get("spec"), dict):
+            payload["spec"] = asdict(TaskSpec(**payload["spec"]))
+    return old == new
+
+
 class BaseStore:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,7 +135,7 @@ class BaseStore:
             old = self.one("SELECT * FROM messages WHERE source=? AND account=? AND client_nonce=?",
                            (source, account, nonce))
             if old:
-                if old["payload"] != payload:
+                if not same_submission(old["payload"], payload):
                     raise ValueError("nonce already used for different input")
                 return {"message_id": old["id"], "task_id": old["task_id"], "duplicate": True}
             if not self.one("SELECT id FROM actors WHERE id=?", (actor,)):
@@ -292,7 +303,8 @@ class BaseStore:
 
 
 from .collaboration_store import CollaborationStore
+from .lifecycle_store import LifecycleStore
 
 
-class Store(CollaborationStore, BaseStore):
+class Store(LifecycleStore, CollaborationStore, BaseStore):
     """Durable task ledger with versioned collaboration protocols."""

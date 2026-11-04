@@ -248,10 +248,14 @@ class CollaborationStore:
                 t = self.task(tid)
                 epoch, revision = t["execution_epoch"], t["requirement_revision"]
             self.db.execute("INSERT INTO runs(id,actor_id,task_id,trigger,epoch,revision,phase,started) VALUES(?,?,?,?,?,?,?,?)", (rid, event["actor_id"], tid, event["kind"], epoch, revision, "running", time.time()))
-            selected = self.all("""SELECT e.id FROM events e WHERE e.task_id=? AND e.actor_id=? AND
+            selected = self.all("""SELECT e.id,length(m.content) AS chars FROM events e JOIN messages m ON m.id=e.message_id WHERE e.task_id=? AND e.actor_id=? AND
                 (e.state IN ('pending','background') OR EXISTS(SELECT 1 FROM followups f WHERE f.event_id=e.id AND f.owner_task=e.task_id AND f.state IN ('pending','in_progress')))
                 ORDER BY CASE WHEN e.state='background' THEN 1 ELSE 0 END,e.created,e.id LIMIT 50""", (tid, event["actor_id"])) if tid else [{"id": event["id"]}]
+            selected_chars = 0
             for e in selected:
+                if selected_chars and selected_chars + e.get("chars", 0) > 24000:
+                    break
+                selected_chars += e.get("chars", 0)
                 self.db.execute("UPDATE events SET state='claimed',claimed_by_run=? WHERE id=?", (rid, e["id"]))
                 self.db.execute("UPDATE followups SET state='in_progress' WHERE event_id=? AND state='pending'", (e["id"],))
             return self.one("SELECT * FROM runs WHERE id=?", (rid,))
@@ -360,7 +364,7 @@ class CollaborationStore:
                 self.db.execute(f"UPDATE tasks SET {column}={column}+1 WHERE id=?", (root["id"],))
         return True
 
-    def spawn_worker(self, run, *, worker_key, objective, source_ids, required_text=None, max_calls=8, required=True):
+    def spawn_worker(self, run, *, worker_key, objective, source_ids, required_text=None, max_calls=8, required=True, depends_on=None):
         with self.transaction():
             if not self.current(run):
                 raise ValueError("stale run")
@@ -373,20 +377,24 @@ class CollaborationStore:
             if not isinstance(source_ids, list) or any(s not in sources for s in source_ids) or len(set(source_ids)) != len(source_ids):
                 raise ValueError("worker source grant must be a subset")
             spec = TaskSpec(objective, [sources[s] for s in source_ids], required_text or [], max_calls=max_calls,
-                            max_tools=min(40, parent["spec"]["max_tools"]), max_seconds=parent["spec"]["max_seconds"], max_workers=0)
+                            max_tools=min(40, parent["spec"]["max_tools"]), max_seconds=parent["spec"]["max_seconds"], max_workers=0,
+                            enable_nudge=parent["spec"].get("enable_nudge", False), max_nudges=parent["spec"].get("max_nudges", 2))
             spec.validate()
-            old = self.one("SELECT id,spec,required,parent_revision FROM tasks WHERE parent_task_id=? AND worker_key=?", (parent["id"], worker_key))
+            depends_on = [] if depends_on is None else depends_on
+            self.validate_dependencies(parent, depends_on)
+            old = self.one("SELECT id,spec,required,parent_revision,dependencies FROM tasks WHERE parent_task_id=? AND worker_key=?", (parent["id"], worker_key))
             if old:
-                if old["spec"] != encode(asdict(spec)) or bool(old["required"]) != required or old["parent_revision"] != parent["requirement_revision"]:
+                if old["spec"] != encode(asdict(spec)) or bool(old["required"]) != required or old["parent_revision"] != parent["requirement_revision"] or json.loads(old["dependencies"]) != depends_on:
                     raise ValueError("worker key conflicts with existing work/version")
                 return {"task_id": old["id"], "status": self.task(old["id"])["status"], "duplicate": True}
             if self.one("SELECT COUNT(*) n FROM tasks WHERE parent_task_id=?", (parent["id"],))["n"] >= parent["spec"].get("max_workers", 4):
                 raise ValueError("worker budget exhausted")
             tid, actor = uid(), "worker-" + uid()
             self.db.execute("INSERT INTO actors(id,kind) VALUES(?,'worker')", (actor,))
-            self.db.execute("INSERT INTO tasks(id,root_task_id,parent_task_id,actor_id,room_id,spec,parent_revision,required,worker_key,created) VALUES(?,?,?,?,?,?,?,?,?,?)", (tid, parent["root_task_id"], parent["id"], actor, parent["room_id"], encode(asdict(spec)), run["revision"], int(required), worker_key, time.time()))
+            status = "ready" if self.dependencies_accepted(parent, depends_on) else "waiting_dependencies"
+            self.db.execute("INSERT INTO tasks(id,root_task_id,parent_task_id,actor_id,room_id,spec,parent_revision,required,worker_key,created,dependencies,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (tid, parent["root_task_id"], parent["id"], actor, parent["room_id"], encode(asdict(spec)), run["revision"], int(required), worker_key, time.time(), encode(depends_on), status))
             self._event(tid, "worker_start", objective)
-        return {"task_id": tid, "status": "ready", "duplicate": False}
+        return {"task_id": tid, "status": status, "duplicate": False}
 
     def worker_result(self, run, child_id):
         if not self.current(run):

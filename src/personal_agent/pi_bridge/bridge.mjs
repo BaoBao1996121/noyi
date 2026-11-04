@@ -147,7 +147,7 @@ export async function runSession(start, rpc, { signal } = {}) {
     finishTurn: async () => {
       if (halted || signal?.aborted) return { action: 'end' };
       const response = await rpc('turn_end', { finish_reason: finishReason, tool_call_count: activeCalls.length });
-      return response?.action === 'end' ? { action: 'end' } : undefined;
+      return response?.action === 'end' ? { action: 'end' } : response?.action === 'continue' ? { action: 'continue' } : undefined;
     } });
   agent.subscribe(async event => {
     if (event.type === 'tool_execution_end' && !executed.has(event.toolCallId)) {

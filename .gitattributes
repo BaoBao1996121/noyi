@@ -4,3 +4,4 @@ docs/validation/artifacts/** -text
 docs/validation/inputs/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 docs/validation/m1/** -text
 docs/validation/ui-early/** -text
+docs/validation/m2/** -text

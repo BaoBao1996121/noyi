@@ -1,7 +1,7 @@
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => [...root.querySelectorAll(q)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const labels = {ready:'排队中',running:'正在处理',waiting_children:'后台协作中',waiting_user:'等你回答',paused:'已暂停',stopped:'已停止',cancelled:'已取消',succeeded:'已完成',failed:'遇到问题',review:'待检查'};
+const labels = {ready:'排队中',running:'正在处理',waiting_children:'后台协作中',waiting_dependencies:'等待前置成果复核',waiting_user:'等你回答',paused:'已暂停',stopped:'已停止',cancelled:'已取消',succeeded:'已完成',failed:'遇到问题',review:'待检查'};
 const state = {token:'', room:'local', task:null, tab:'details', data:null, online:false, uploads:[], urls:[], sending:false, composing:false, answers:{}, draftKey:'pa.draft.local', signature:'', detailSignature:'', retry:null};
 let toastTimer;
 const timeLabel = seconds => seconds ? new Date(seconds*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
@@ -61,7 +61,7 @@ function messageView(force=false){
   const visible=t=>!t||!data.tasks.some(x=>x.id===t&&x.parent_task_id);
   const messages=data.messages.filter(m=>visible(m.task_id)&&(!state.task||m.task_id===state.task));
   const deliveries=data.deliveries.filter(d=>visible(d.task_id)&&d.kind!=='question'&&(!state.task||d.task_id===state.task));
-  const questions=data.questions.filter(q=>visible(q.task_id)&&(!state.task||q.task_id===state.task));
+  const questions=data.questions.filter(q=>!state.task||q.task_id===state.task||data.tasks.some(t=>t.id===q.task_id&&t.root_task_id===state.task));
   const sig=JSON.stringify({messages,deliveries,questions,task:task?.status,unassigned:data.unassigned,selected:state.task});
   if(!force&&sig===state.signature)return;
   state.signature=sig;

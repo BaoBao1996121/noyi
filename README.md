@@ -1,6 +1,6 @@
 # Personal Agent Core
 
-一个可恢复的个人 Agent。当前已完成 M0、M1 和提前版 WebUI：使用 Pi 循环和 Qwen 官网模型，支持明确任务、单层后台 Worker、运行中补充、停止/取消、持久问题、真实产物及恢复。SQLite 保存任务、输入责任、请求、工具和投递状态。M2–M5 正在继续开发。
+一个可恢复的个人 Agent。当前已完成 M0–M2 和提前版 WebUI：使用 Pi 循环和 Qwen 官网模型，支持明确任务、单层后台 Worker、运行中补充、停止/取消、持久问题、进展与审核返工、产物版本及恢复。SQLite 保存任务、输入责任、请求、工具和投递状态。M3–M5 正在继续开发。
 
 安装后可运行 `python -m personal_agent --data .pa/personal web`，在浏览器打开 `http://127.0.0.1:8765`。首次使用在设置中配置自己的 Qwen 官网凭据；页面支持上传文本资料、交办与补充任务、回答问题和查看成果。关闭浏览器不会停止服务，关闭启动进程会停止执行。[提前版界面验收](docs/validation/UI_EARLY_REPORT.md)。
 
