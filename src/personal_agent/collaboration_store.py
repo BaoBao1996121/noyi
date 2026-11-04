@@ -27,7 +27,7 @@ class CollaborationStore:
                           "parent_revision": "INTEGER", "required": "INTEGER NOT NULL DEFAULT 1", "worker_key": "TEXT"},
                 "runs": {"stop_requested_at": "REAL", "stop_reason": "TEXT"},
                 "messages": {"native_thread_id": "TEXT"},
-                "deliveries": {"kind": "TEXT NOT NULL DEFAULT 'result'", "attention_id": "TEXT"},
+                "deliveries": {"kind": "TEXT NOT NULL DEFAULT 'result'", "attention_id": "TEXT", "created": "REAL NOT NULL DEFAULT 0"},
             }
             for table, additions in columns.items():
                 present = {r["name"] for r in self.all(f"PRAGMA table_info({table})")}
@@ -86,8 +86,8 @@ class CollaborationStore:
 
     def _notice(self, task_id, room, content, *, kind="system", attention_id=None):
         did = uid()
-        self.db.execute("INSERT INTO deliveries(id,task_id,run_id,room_id,content,kind,attention_id) VALUES(?,?,?,?,?,?,?)",
-                        (did, task_id, "notice:" + did, room, content, kind, attention_id))
+        self.db.execute("INSERT INTO deliveries(id,task_id,run_id,room_id,content,kind,attention_id,created) VALUES(?,?,?,?,?,?,?,?)",
+                        (did, task_id, "notice:" + did, room, content, kind, attention_id, time.time()))
         return did
 
     @staticmethod
@@ -364,11 +364,15 @@ class CollaborationStore:
                 self.db.execute(f"UPDATE tasks SET {column}={column}+1 WHERE id=?", (root["id"],))
         return True
 
-    def spawn_worker(self, run, *, worker_key, objective, source_ids, required_text=None, max_calls=8, required=True, depends_on=None):
+    def spawn_worker(self, run, *, worker_key, objective, source_ids, required_text=None, max_calls=8, required=True, depends_on=None, target_actor_id=None):
         with self.transaction():
             if not self.current(run):
                 raise ValueError("stale run")
             parent = self.task(run["task_id"])
+            if target_actor_id is not None:
+                self.require_member(target_actor_id, parent["room_id"])
+                if target_actor_id == parent["actor_id"]:
+                    raise ValueError("delegate to another member or use a temporary worker")
             if parent["parent_task_id"]:
                 raise ValueError("only one worker layer is allowed")
             if not isinstance(worker_key, str) or not worker_key.strip() or len(worker_key) > 100 or type(required) is not bool:
@@ -382,15 +386,18 @@ class CollaborationStore:
             spec.validate()
             depends_on = [] if depends_on is None else depends_on
             self.validate_dependencies(parent, depends_on)
-            old = self.one("SELECT id,spec,required,parent_revision,dependencies FROM tasks WHERE parent_task_id=? AND worker_key=?", (parent["id"], worker_key))
+            old = self.one("SELECT id,spec,required,parent_revision,dependencies,actor_id FROM tasks WHERE parent_task_id=? AND worker_key=?", (parent["id"], worker_key))
             if old:
                 if old["spec"] != encode(asdict(spec)) or bool(old["required"]) != required or old["parent_revision"] != parent["requirement_revision"] or json.loads(old["dependencies"]) != depends_on:
                     raise ValueError("worker key conflicts with existing work/version")
+                if target_actor_id and target_actor_id != old["actor_id"]:
+                    raise ValueError("worker key belongs to another actor")
                 return {"task_id": old["id"], "status": self.task(old["id"])["status"], "duplicate": True}
             if self.one("SELECT COUNT(*) n FROM tasks WHERE parent_task_id=?", (parent["id"],))["n"] >= parent["spec"].get("max_workers", 4):
                 raise ValueError("worker budget exhausted")
-            tid, actor = uid(), "worker-" + uid()
-            self.db.execute("INSERT INTO actors(id,kind) VALUES(?,'worker')", (actor,))
+            tid, actor = uid(), target_actor_id or "worker-" + uid()
+            if target_actor_id is None:
+                self.db.execute("INSERT INTO actors(id,kind) VALUES(?,'worker')", (actor,))
             status = "ready" if self.dependencies_accepted(parent, depends_on) else "waiting_dependencies"
             self.db.execute("INSERT INTO tasks(id,root_task_id,parent_task_id,actor_id,room_id,spec,parent_revision,required,worker_key,created,dependencies,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", (tid, parent["root_task_id"], parent["id"], actor, parent["room_id"], encode(asdict(spec)), run["revision"], int(required), worker_key, time.time(), encode(depends_on), status))
             self._event(tid, "worker_start", objective)
@@ -492,7 +499,7 @@ class CollaborationStore:
             self.db.execute("UPDATE events SET state='consumed',consumed_by_run=? WHERE claimed_by_run=? AND id IN (SELECT event_id FROM input_usage WHERE run_id=? AND state='completed')", (run["id"], run["id"], run["id"]))
             if content:
                 room = self.one("SELECT m.room_id FROM messages m JOIN events e ON e.message_id=m.id WHERE e.claimed_by_run=?", (run["id"],))["room_id"]
-                self.db.execute("INSERT INTO deliveries(id,task_id,run_id,room_id,content,artifact) VALUES(?,?,?,?,?,?)", (uid(), run["task_id"], run["id"], room, content, encode(artifact) if artifact else None))
+                self.db.execute("INSERT INTO deliveries(id,task_id,run_id,room_id,content,artifact,created) VALUES(?,?,?,?,?,?,?)", (uid(), run["task_id"], run["id"], room, content, encode(artifact) if artifact else None, time.time()))
             self.db.execute("UPDATE events SET state=?,claimed_by_run=NULL WHERE claimed_by_run=? AND state='claimed'", ("pending" if run["task_id"] else "archived", run["id"]))
             if run["task_id"] and status in TERMINAL:
                 self._child_event(run["task_id"])

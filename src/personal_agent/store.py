@@ -18,8 +18,8 @@ def uid() -> str:
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS actors(id TEXT PRIMARY KEY, kind TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS rooms(id TEXT PRIMARY KEY, owner TEXT NOT NULL);
-INSERT OR IGNORE INTO actors VALUES('default','bot');
-INSERT OR IGNORE INTO rooms VALUES('local','local-user');
+INSERT OR IGNORE INTO actors(id,kind) VALUES('default','bot');
+INSERT OR IGNORE INTO rooms(id,owner) VALUES('local','local-user');
 CREATE TABLE IF NOT EXISTS tasks(
  id TEXT PRIMARY KEY, root_task_id TEXT NOT NULL, parent_task_id TEXT,
  actor_id TEXT NOT NULL REFERENCES actors(id), room_id TEXT NOT NULL REFERENCES rooms(id),
@@ -104,12 +104,20 @@ class BaseStore:
 
     @contextmanager
     def transaction(self):
-        self.db.execute("BEGIN IMMEDIATE")
+        # Public operations compose atomically (e.g. ingress receipt + task).
+        # Nested calls use savepoints; an inner exception cannot commit outer work.
+        nested = self.db.in_transaction
+        point = "sp_" + uid()
+        self.db.execute("SAVEPOINT " + point if nested else "BEGIN IMMEDIATE")
         try:
             yield
-            self.db.execute("COMMIT")
+            self.db.execute("RELEASE SAVEPOINT " + point if nested else "COMMIT")
         except BaseException:
-            self.db.execute("ROLLBACK")
+            if nested:
+                self.db.execute("ROLLBACK TO SAVEPOINT " + point)
+                self.db.execute("RELEASE SAVEPOINT " + point)
+            else:
+                self.db.execute("ROLLBACK")
             raise
 
     def one(self, sql, args=()):
@@ -306,5 +314,9 @@ from .collaboration_store import CollaborationStore
 from .lifecycle_store import LifecycleStore
 
 
-class Store(LifecycleStore, CollaborationStore, BaseStore):
+from .identity_store import IdentityStore
+from .memory_store import MemoryStore
+
+
+class Store(MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
     """Durable task ledger with versioned collaboration protocols."""

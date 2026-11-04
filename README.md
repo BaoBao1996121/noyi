@@ -1,10 +1,10 @@
 # Personal Agent Core
 
-一个可恢复的个人 Agent。当前已完成 M0–M2 和提前版 WebUI：使用 Pi 循环和 Qwen 官网模型，支持明确任务、单层后台 Worker、运行中补充、停止/取消、持久问题、进展与审核返工、产物版本及恢复。SQLite 保存任务、输入责任、请求、工具和投递状态。M3–M5 正在继续开发。
+一个可恢复的个人 Agent。当前已完成 M0–M3 和提前版 WebUI：使用 Pi 循环和 Qwen 官网模型，支持长期多 Bot、独立私聊与群协作、显式记忆、后台 Worker、补充/停止/取消、持久问题、审核返工及产物版本。SQLite 保存任务、输入责任、请求、工具和投递状态。M4–M5 正在继续开发。
 
 安装后可运行 `python -m personal_agent --data .pa/personal web`，在浏览器打开 `http://127.0.0.1:8765`。首次使用在设置中配置自己的 Qwen 官网凭据；页面支持上传文本资料、交办与补充任务、回答问题和查看成果。关闭浏览器不会停止服务，关闭启动进程会停止执行。[提前版界面验收](docs/validation/UI_EARLY_REPORT.md)。
 
-当前进度和真实验证结果见 [STATUS](STATUS.md)、[M1 报告](docs/validation/M1_REPORT.md)，完整后续范围见 [M1–M5 计划](docs/plan-m1-m5.md)。本页的例子是可执行的虚构活动资料，不是已经完成的真实工作报告。
+当前进度和真实验证结果见 [STATUS](STATUS.md)、[M3 报告](docs/validation/M3_REPORT.md)，完整后续范围见 [M1–M5 计划](docs/plan-m1-m5.md)。本页的例子是可执行的虚构活动资料，不是已经完成的真实工作报告。
 
 ## 安装
 
@@ -101,7 +101,7 @@ npm test --prefix .\src\personal_agent\pi_bridge
 
 ## 当前边界
 
-- 一个长期 Bot 与单层临时 Worker；并发默认 3、上限 4，同一 actor 只允许一个活动执行槽位。工具限于指定资料读取和本地产物，没有任意 shell 或对外消息发送。
+- 多个长期 Bot 与单层临时 Worker；并发默认 3、上限 4，同一 actor 只允许一个活动执行槽位。群内可以直接选择或 @ 成员；复制只带角色配置，私聊记忆不流入群聊。工具限于指定资料读取和本地产物，没有任意 shell 或对外消息发送。
 - `chat` 是无工具的普通聊天；执行工作使用 `submit`。补充用 `followup <task_id> <text>`，控制用 `control <task_id> stop_reply|stop_task|cancel`；持久问题用 `questions` 查看、`answer <question_id> <text>` 回答。停止回复保留后台 Worker，取消会禁止整项委托续接。
 - `submit_result` 检查产物完整性、资料读取覆盖、引用和用户指定文本条件。`succeeded/acceptance=passed` 表示这些明确检查通过，不证明所有语义、推理或事实都正确。真实任务仍需按根要求检查内容；文件存在或关键词出现不能取代结果质量验收。
 - 本地文件投递可按 delivery ID 重放；没有承诺第三方平台 exactly-once。未接入的渠道没有端到端验证。

@@ -17,6 +17,7 @@ ORCHESTRATION_SCHEMAS = [
          {"worker_key": {"type": "string", "minLength": 1},
           "objective": {"type": "string", "minLength": 1},
           "source_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
+          "target_actor_id": {"type": "string", "minLength": 1},
           "required_text": {"type": "array", "items": {"type": "string"}},
           "depends_on": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
           "max_calls": {"type": "integer", "minimum": 1, "maximum": 100},
@@ -54,6 +55,10 @@ ORCHESTRATION_SCHEMAS = [
          {"target_actor_id": {"type": "string"}, "reason": {"type": "string"}}, ["target_actor_id", "reason"]),
     tool("yield_task", "Persist a bounded continuation of the same task to read remaining pending input or compact context. This consumes the existing continuation budget; never use for waiting on a user or worker.",
          {"reason": {"type": "string"}}, ["reason"]),
+    tool("read_memory", "Read only this room's explicitly saved memory. Private Bot collections are never available in groups. State absent, deleted and failed have distinct meanings; memory is not permission.",
+         {"keys": {"type": "array", "items": {"type": "string"}, "maxItems": 32}}, []),
+    tool("propose_memory", "Suggest a useful persistent fact or preference based on a specific user message in this room. Requires user confirmation; this does not store active memory. Never infer permanent preferences from a one-off request or revive a deleted memory.",
+         {"key": {"type": "string"}, "value": {"type": "string"}, "purpose": {"type": "string"}, "source_ref": {"type": "string"}, "expected_version": {"type": "integer", "minimum": 0}}, ["key", "value", "purpose", "source_ref"]),
 ]
 ORCHESTRATION_NAMES = {item["function"]["name"] for item in ORCHESTRATION_SCHEMAS}
 SUSPENDING_TOOLS = {"wait_workers", "ask_user", "handoff_task", "yield_task"}
@@ -127,7 +132,7 @@ class OrchestrationTools:
             return self.worker_result(run, args["dependency_id"], dependency=True)
         if name == "adopt_worker_result":
             return self.store.adopt_worker_result(run, **args)
-        if name in {"record_investigation", "request_rework", "handoff_task", "yield_task"}:
+        if name in {"record_investigation", "request_rework", "handoff_task", "yield_task", "read_memory", "propose_memory"}:
             return getattr(self.store, name)(run, **args)
         raise ValueError("unknown orchestration tool")
 

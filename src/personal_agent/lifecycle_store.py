@@ -185,9 +185,9 @@ class LifecycleStore:
         return []
 
     def adopt_worker_result(self, run, **args):
-        result = super().adopt_worker_result(run, **args)
-        child = self.task(args["child_id"])
         with self.transaction():
+            result = super().adopt_worker_result(run, **args)
+            child = self.task(args["child_id"])
             if not self.one("SELECT id FROM worker_reviews WHERE parent_id=? AND child_id=? AND child_epoch=? AND parent_revision=? AND decision='accept'", (run["task_id"], child["id"], child["execution_epoch"], run["revision"])):
                 self.db.execute("INSERT INTO worker_reviews VALUES(?,?,?,?,?,?,?,?,?,?)", (uuid.uuid4().hex, run["task_id"], child["id"], child["execution_epoch"], run["revision"], "accept", args["rationale"], args["artifact_sha256"], run["id"], time.time()))
         self.tick_waits()
@@ -270,6 +270,12 @@ class LifecycleStore:
                 if parent["cancel_state"] == "active" and self.dependencies_accepted(parent, json.loads(child["dependencies"])):
                     self.db.execute("UPDATE tasks SET status='ready' WHERE id=?", (child["id"],))
 
+    def handoff_targets(self, task):
+        allowed = {r["actor_id"] for r in self.all("SELECT actor_id FROM tasks WHERE root_task_id=? AND room_id=?", (task["root_task_id"], task["room_id"]))}
+        if task["room_id"] == "local":
+            allowed.add("default")
+        return allowed
+
     def handoff_task(self, run, *, target_actor_id, reason):
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("handoff needs a reason")
@@ -277,9 +283,7 @@ class LifecycleStore:
             if not self.current(run):
                 raise ValueError("stale run")
             task = self.task(run["task_id"])
-            allowed = {r["actor_id"] for r in self.all("SELECT actor_id FROM tasks WHERE root_task_id=? AND room_id=?", (task["root_task_id"], task["room_id"]))}
-            if task["room_id"] == "local":
-                allowed.add("default")
+            allowed = self.handoff_targets(task)
             if target_actor_id not in allowed or target_actor_id == task["actor_id"]:
                 raise ValueError("handoff target outside current team or unchanged")
             if self.one("SELECT COUNT(*) n FROM handoffs WHERE task_id=?", (task["id"],))["n"] >= task["spec"].get("max_handoffs", 2):

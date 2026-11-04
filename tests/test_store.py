@@ -19,7 +19,7 @@ def test_duplicate_input_returns_original_task_but_changed_payload_is_rejected(s
 
 
 def test_unauthorized_room_submission_leaves_no_work(store, spec):
-    with pytest.raises(ValueError, match="room"):
+    with pytest.raises(ValueError, match="room|会话"):
         store.submit(spec, nonce="foreign", account="another-user")
     assert not store.all("SELECT * FROM tasks")
     assert not store.all("SELECT * FROM events")

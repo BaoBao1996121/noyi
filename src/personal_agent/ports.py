@@ -32,3 +32,8 @@ class SourceReader(Protocol):
 
 class DeliveryChannel(Protocol):
     async def send(self, delivery: dict) -> dict: ...
+
+
+class MemoryProvider(Protocol):
+    """Replaceable value loader; Store controls membership, IDs and versions."""
+    def load(self, collection_id: str, records: list[dict]) -> list[dict]: ...

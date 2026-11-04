@@ -1,0 +1,32 @@
+.small-link{border:0;background:transparent;color:#6b6b68;font-size:12px;cursor:pointer;padding:3px 5px;text-transform:none;letter-spacing:0}
+.small-link:hover{color:#171715;text-decoration:underline}
+.section-label .small-link:first-of-type{margin-left:auto}
+.section-label{display:flex;align-items:center;gap:2px}
+.room-list{max-height:35vh;overflow:auto}
+.room-card.selected-room{background:#ecece9}
+.room-card:not(.selected-room){background:transparent}
+.room-card:not(.selected-room):hover{background:#eeeeeb}
+.recipient-row{display:flex;gap:12px;align-items:center;padding:6px 10px 3px;font-size:12px;color:#777;flex-wrap:wrap}
+.recipient-row select{border:0;background:transparent;color:#333;font-size:12px;max-width:180px;cursor:pointer}
+.recipient-row>span{font-size:11px}
+.message-label .small-link{margin-left:4px;font-size:11px;opacity:.65}
+.message:hover .message-label .small-link{opacity:1}
+.field textarea,.field select{width:100%;font:inherit;padding:10px 12px;line-height:1.6;border:1px solid #dededb;border-radius:9px;background:#fff;resize:vertical;color:#292927}
+.field input[readonly]{background:#f5f5f2;color:#6a6a65}
+.member-options{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.member-options label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #e4e4df;border-radius:9px;font-size:13px}
+.member-options input{accent-color:#292927}
+.new-options{display:flex;gap:12px;margin:18px 0}
+.manager-list{max-height:55vh;overflow:auto}
+.manager-list .detail-card{margin:10px 0}
+.memory-note{font-size:12px;color:#777;line-height:1.8;margin:0 0 20px}
+.memory-card p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.7}
+.memory-card>small{font-size:11px;display:block;line-height:1.6}
+.memory-version{display:block;font-size:10px;color:#999;margin-top:5px}
+.memory-card .disclosure p{font-size:11px}
+.profile>p{max-height:140px;overflow:auto;white-space:pre-wrap}
+.detail-tabs{gap:2px}
+.detail-tabs button{padding-left:12px;padding-right:12px}
+.detail-heading .small-link{float:right}
+.composer-note{font-size:11px}
+@media(max-width:600px){.recipient-row>span{display:none}.keyboard-hint{display:none}.new-options{flex-direction:column}.member-options{grid-template-columns:1fr}.room-list{max-height:40vh}}

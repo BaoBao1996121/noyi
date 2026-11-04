@@ -5,6 +5,7 @@
   <title>Personal Agent · 我的助理</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23252525'/%3E%3Ctext x='17' y='46' fill='white' font-size='46' font-family='sans-serif'%3Ep%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="/assets/modules.css">
   <script type="module" src="/assets/app.js"></script>
 </head>
 <body>
@@ -12,7 +13,7 @@
   <aside class="sidebar" aria-label="会话导航">
     <div class="brand"><span class="brand-mark">p<span>·</span></span><span>Personal Agent</span><span class="local-tag">本地</span></div>
     <div class="sidebar-tools"><label class="search"><span>⌕</span><input id="search" placeholder="搜索会话与任务" aria-label="搜索会话与任务"></label><button id="new-task" class="icon" title="新任务" aria-label="新任务">＋</button></div>
-    <div class="section-label">我的助理</div>
+    <div class="section-label">我的助理 <button id="manage-bots" class="small-link">管理</button><button id="new-room" class="small-link">＋ 新建</button></div>
     <div id="rooms" class="room-list"></div>
     <div class="section-label task-section">最近任务 <span id="task-count"></span></div>
     <nav id="task-list" aria-label="最近任务"></nav>
@@ -27,6 +28,7 @@
     <div class="composer-area">
       <div id="task-focus" class="task-focus hidden"></div>
       <form id="composer-form" class="composer">
+        <div id="recipient-row" class="recipient-row"><label>发送给 <select id="recipient" aria-label="接收成员"></select></label><span id="audience-note"></span><button id="clear-reply" class="small-link hidden" type="button">取消回复</button></div>
         <div id="attachment-list" class="attachments"></div>
         <textarea id="message-input" rows="2" placeholder="交给我一件事，例如：整理这些资料，并列出下一步行动…" aria-label="输入消息"></textarea>
         <div class="composer-bottom"><div class="compose-actions"><button id="attach" class="icon" type="button" aria-label="添加资料" title="添加 UTF-8 文本资料">＋</button><button id="add-url" class="icon" type="button" aria-label="添加资料网址" title="添加资料网址">↗</button><select id="message-mode" aria-label="消息类型"><option value="task">交办任务</option><option value="followup">补充当前任务</option><option value="chat">聊一聊</option></select></div><span class="keyboard-hint">Enter 发送 · Shift Enter 换行</span><button id="send" type="submit" class="send" aria-label="发送消息">↑</button></div>
@@ -37,7 +39,7 @@
   </main>
   <div class="resizer detail-resizer" data-panel="right" role="separator" aria-label="调整详情宽度"></div>
   <aside id="details" class="details" aria-label="任务详情">
-    <div class="detail-tabs" role="tablist"><button id="tab-details" role="tab" aria-selected="true" data-tab="details">详情</button><button id="tab-library" role="tab" aria-selected="false" data-tab="library">资料库 <span id="artifact-count"></span></button></div>
+    <div class="detail-tabs" role="tablist"><button id="tab-details" role="tab" aria-selected="true" data-tab="details">详情</button><button id="tab-library" role="tab" aria-selected="false" data-tab="library">资料库 <span id="artifact-count"></span></button><button id="tab-memory" role="tab" aria-selected="false" data-tab="memory">记忆</button></div>
     <div id="detail-content" class="detail-content"></div>
   </aside>
 </div>

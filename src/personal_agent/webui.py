@@ -75,8 +75,7 @@ class Console:
         self.store.db.execute("CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY,room_id TEXT NOT NULL,account TEXT NOT NULL,name TEXT NOT NULL,path TEXT NOT NULL,sha256 TEXT NOT NULL,bytes INTEGER NOT NULL,created REAL NOT NULL)")
 
     def room(self, room_id="local"):
-        if not self.store.one("SELECT id FROM rooms WHERE id=? AND owner='local-user'", (room_id,)):
-            raise ValueError("没有这个会话的访问权限")
+        self.store.owned_room(room_id)
         return room_id
 
     def task(self, task_id):
@@ -88,8 +87,8 @@ class Console:
         # Details are fetched separately; physical paths and credentials are not UI state.
         for t in tasks:
             t["spec"]["sources"] = [{k: v for k, v in s.items() if k != "location"} for s in t["spec"]["sources"]]
-        messages = self.store.all("SELECT m.id,m.task_id,m.kind,m.content,m.status,COALESCE(MIN(e.created),f.created,0) AS created FROM messages m LEFT JOIN events e ON e.message_id=m.id LEFT JOIN followups f ON f.message_id=m.id WHERE m.room_id=? AND m.source!='runtime' GROUP BY m.id ORDER BY m.rowid DESC LIMIT 300", (room,))
-        deliveries = self.store.all("SELECT d.id,d.task_id,d.content,d.artifact,d.state,d.kind,d.attention_id,COALESCE(r.ended,a.created,0) AS created FROM deliveries d LEFT JOIN runs r ON r.id=d.run_id LEFT JOIN attentions a ON a.id=d.attention_id WHERE d.room_id=? ORDER BY d.rowid DESC LIMIT 300", (room,))
+        messages = self.store.all("SELECT m.id,m.actor_id,m.task_id,m.kind,m.content,m.status,COALESCE(p.created,f.created,MIN(e.created),0) AS created FROM messages m LEFT JOIN events e ON e.message_id=m.id LEFT JOIN followups f ON f.message_id=m.id LEFT JOIN pending_routes p ON p.message_id=m.id WHERE m.room_id=? AND m.source NOT IN ('runtime','route') GROUP BY m.id ORDER BY m.rowid DESC LIMIT 300", (room,))
+        deliveries = self.store.all("SELECT d.id,d.task_id,r.actor_id,d.content,d.artifact,d.state,d.kind,d.attention_id,COALESCE(NULLIF(d.created,0),r.ended,a.created,0) AS created FROM deliveries d LEFT JOIN runs r ON r.id=d.run_id LEFT JOIN attentions a ON a.id=d.attention_id WHERE d.room_id=? ORDER BY d.rowid DESC LIMIT 300", (room,))
         for d in deliveries:
             d["artifact"] = json.loads(d["artifact"]) if d["artifact"] else None
         questions = self.store.all("SELECT a.id,a.task_id,a.question,a.options,a.state,a.answer FROM attentions a JOIN tasks t ON t.id=a.task_id WHERE t.room_id=? AND a.account='local-user' ORDER BY a.created", (room,))
@@ -101,7 +100,12 @@ class Console:
                 "unassigned": pending, "server_time": time.time(), "ready": getattr(self.model, "ready", True),
                 "model": {"name": config.name, "base_url": config.base_url}, "service_error": self.service_error,
                 "controls": self.store.all("SELECT c.* FROM controls c JOIN tasks t ON t.id=c.task_id WHERE t.room_id=? ORDER BY c.created DESC LIMIT 50", (room,)),
-                "rooms": [{"id": "local", "name": "个人助理", "kind": "private", "description": "帮你把事情持续管好"}]}
+                "rooms": [{**r, "members": self.store.members(r["id"])} for r in self.store.all("SELECT * FROM rooms WHERE owner='local-user' ORDER BY rowid")],
+                "bots": self.store.all("SELECT * FROM bots WHERE owner='local-user' ORDER BY created,id"),
+                "team_templates": [{**t, "configuration": json.loads(t["configuration"])} for t in self.store.all("SELECT * FROM team_templates WHERE owner='local-user' ORDER BY created")],
+                "pending_routes": self.store.all("SELECT p.id,p.mode,p.actor_id,p.message_id,m.content FROM pending_routes p JOIN messages m ON m.id=p.message_id WHERE p.room_id=? AND p.state='unassigned' ORDER BY p.created", (room,)),
+                "memories": self.store.memory_items(room),
+                "memory_proposals": self.store.all("SELECT * FROM memory_proposals WHERE room_id=? AND state='pending' ORDER BY created", (room,))}
 
     def detail(self, task_id):
         task = self.task(task_id)
@@ -121,11 +125,9 @@ class Console:
             raise ValueError("无效的提交标识")
         if mode == "followup":
             tid = body.get("task_id")
-            if not tid:
-                raise ValueError("请选择要补充的任务")
-            return self.store.followup(text, task_id=tid, nonce=nonce, room=room, source="web")
+            return self.store.route_input(None, text=text, nonce=nonce, mode=mode, room=room, actor_id=body.get("actor_id"), task_id=tid, reply_to=body.get("reply_to"))
         if mode == "chat":
-            return self.store.submit(None, text=text, nonce=nonce, source="web", room=room)
+            return self.store.route_input(None, text=text, nonce=nonce, mode=mode, room=room, actor_id=body.get("actor_id"), reply_to=body.get("reply_to"))
         if mode != "task":
             raise ValueError("未知消息模式")
         ids = body.get("uploads", [])
@@ -145,7 +147,7 @@ class Console:
             raise ValueError("最多提供 6 个明确的资料网址")
         sources.extend({"id": f"web{i+1}", "kind": "http", "location": url, "required": True} for i, url in enumerate(urls))
         spec = TaskSpec(text, sources, max_calls=40, max_tools=100, max_seconds=900, enable_nudge=True, review_workers=True)
-        return self.store.submit(spec, nonce=nonce, source="web", room=room)
+        return self.store.route_input(spec, text=text, nonce=nonce, mode=mode, room=room, actor_id=body.get("actor_id"), reply_to=body.get("reply_to"))
 
     def artifact(self, delivery_id):
         d = self.store.one("SELECT * FROM deliveries WHERE id=?", (delivery_id,))
@@ -224,8 +226,42 @@ async def action(request):
         result = c.store.answer_attention(body["question_id"], body["text"], nonce=body["nonce"])
     elif name == "assign":
         result = c.store.assign_followup(body["followup_id"], body["task_id"])
+    elif name == "assign_route":
+        result = c.store.assign_route(body["route_id"], actor_id=body.get("actor_id"), task_id=body.get("task_id"))
+    elif name == "reassign":
+        result = c.store.reassign_task(body["task_id"], body["actor_id"])
     else:
         raise ValueError("未知操作")
+    return web.json_response(result)
+
+
+async def manage(request):
+    c, b, name = request.app[CONSOLE], await json_body(request), request.match_info["name"]
+    s = c.store
+    if name == "create_bot":
+        result = s.create_bot(b["name"], b["role"])
+    elif name == "update_bot":
+        result = s.update_bot(b["id"], name=b["name"], role=b["role"], expected_revision=b["revision"])
+    elif name == "copy_bot":
+        result = s.copy_bot(b["id"], name=b.get("name"))
+    elif name == "archive_bot":
+        result = s.archive_bot(b["id"], archived=b["archived"])
+    elif name == "create_group":
+        result = s.create_group(b["name"], b["members"])
+    elif name == "update_group":
+        result = s.update_group(b["id"], name=b["name"], member_ids=b["members"], expected_revision=b["revision"])
+    elif name == "save_team":
+        result = s.save_team_template(b["room"], b["name"])
+    elif name == "instantiate_team":
+        result = s.instantiate_team(b["id"], name=b["name"])
+    elif name == "save_memory":
+        result = s.save_memory(b["room"], key=b["key"], value=b["value"], purpose=b["purpose"], expected_version=b.get("version", 0), source_ref=b.get("source_ref"), restore=b.get("restore", False))
+    elif name == "delete_memory":
+        result = s.delete_memory(b["room"], b["id"], expected_version=b["version"])
+    elif name == "decide_memory":
+        result = s.decide_memory(b["id"], accept=b["accept"])
+    else:
+        raise ValueError("未知管理操作")
     return web.json_response(result)
 
 
@@ -275,7 +311,7 @@ async def settings(request):
 
 async def static(request):
     name = request.match_info.get("name", "index.html")
-    if name not in {"index.html", "app.js", "style.css"}:
+    if name not in {"index.html", "app.js", "style.css", "modules.css"}:
         raise web.HTTPNotFound()
     return web.FileResponse(WEB / name)
 
@@ -312,7 +348,8 @@ def create_app(store, data, model, *, run_service=True):
     app.add_routes([web.get("/", static), web.get("/assets/{name}", static), web.get("/api/bootstrap", boot),
                     web.get("/api/state", snapshot), web.get("/api/tasks/{task_id}", detail), web.post("/api/messages", submit),
                     web.post("/api/actions/{name}", action), web.post("/api/uploads", upload),
-                    web.get("/api/artifacts/{delivery_id}", artifact), web.post("/api/settings", settings)])
+                    web.get("/api/artifacts/{delivery_id}", artifact), web.post("/api/settings", settings),
+                    web.post("/api/manage/{name}", manage)])
     app.cleanup_ctx.append(lifecycle)
     return app
 
