@@ -2,7 +2,7 @@
 
 更新：2026-11-04。
 
-**M0 已跑通并完成本轮验收。核心循环已改为 Pi Agent，模型使用千问官网 `qwen3.7-plus`。** 这是单 Bot、明确提交任务、只读资料与本地产物的可运行切片，不表示 M1 Worker 或长期主动 Agent 已完成。
+**M0、M1 与提前版 WebUI 已完成本轮验收；完整目标为 M1–M5 全部完成。** 核心循环使用 Pi Agent，模型使用千问官网 `qwen3.7-plus`。M1 已具备后台 Worker、补充责任、停止/取消、持久问题与恢复。UI 已跑通浏览器真实任务及提问/回答；M2–M5 尚未完成。
 
 ## 接手入口
 
@@ -12,7 +12,9 @@
 4. [模型配置](docs/model-configuration.md)：Qwen 官网地址、准确型号、环境变量；不含凭据。
 5. [决策](docs/decisions.md)、[M0–M1 计划](docs/plan-m0-m1.md)、[融合方案](docs/deepseek-integration-review.md)。
 
-## 当前证据
+最新：[M1 验收报告](docs/validation/M1_REPORT.md)，149 项 Python 与 11 项 Node 测试；真实 Qwen 双 Worker、暂停/补充/重启/复核/整合闭环，全队 21 次调用，重复启动新增调用 0。后续以 [完整计划](docs/plan-m1-m5.md) 为准。
+
+## M0 历史证据
 
 | 项目 | 结果 |
 |---|---|
@@ -28,4 +30,4 @@
 
 ## 下一阶段
 
-按原顺序进入 M1-A/B/C：输入责任归属与控制、单层 Worker 闭环、持久人工等待。B01–B15、DS04–DS16 属于相应后续阶段，尚未宣称通过。当前自动验收只覆盖明确的文件/读取/引用/文本条件；一般语义质量仍需独立复核。
+推进 M2 结束门禁、进展、审核返工及产物版本，随后 M3、M4、M5。[WebUI 验收](docs/validation/UI_EARLY_REPORT.md)新增6项 HTTP 测试和两条浏览器真实 Qwen 闭环。B01–B15、DS04–DS11 已覆盖，后续阶段场景未宣称通过。一般语义质量仍需结合来源独立复核。

@@ -1,8 +1,10 @@
 # Personal Agent Core
 
-一个小型、可恢复的个人 Agent 执行内核。当前 M0 支持一个 Bot：接收明确任务，调用 Qwen 官方模型，读取指定资料，生成本地产物，检查产物并写入本地收件箱。SQLite 保存任务、输入、模型请求、工具记录和投递状态。
+一个可恢复的个人 Agent。当前已完成 M0、M1 和提前版 WebUI：使用 Pi 循环和 Qwen 官网模型，支持明确任务、单层后台 Worker、运行中补充、停止/取消、持久问题、真实产物及恢复。SQLite 保存任务、输入责任、请求、工具和投递状态。M2–M5 正在继续开发。
 
-当前进度和真实验证结果见 [STATUS](STATUS.md)，设计与后续阶段见 [M0–M1 方案](docs/plan-m0-m1.md) 和 [DeepSeek 融合方案](docs/deepseek-integration-review.md)。本页的例子是可执行的虚构活动资料，不是已经完成的真实工作报告。
+安装后可运行 `python -m personal_agent --data .pa/personal web`，在浏览器打开 `http://127.0.0.1:8765`。首次使用在设置中配置自己的 Qwen 官网凭据；页面支持上传文本资料、交办与补充任务、回答问题和查看成果。关闭浏览器不会停止服务，关闭启动进程会停止执行。[提前版界面验收](docs/validation/UI_EARLY_REPORT.md)。
+
+当前进度和真实验证结果见 [STATUS](STATUS.md)、[M1 报告](docs/validation/M1_REPORT.md)，完整后续范围见 [M1–M5 计划](docs/plan-m1-m5.md)。本页的例子是可执行的虚构活动资料，不是已经完成的真实工作报告。
 
 ## 安装
 
@@ -97,10 +99,10 @@ npm test --prefix .\src\personal_agent\pi_bridge
 
 脚本不会删除已有任务数据。Windows 测试需要能创建临时目录和初始化 asyncio 的普通本地运行环境。协议测试通过与真实模型/真实渠道验证分开报告；本地模拟结果不能冒充云端闭环。
 
-## M0 的边界
+## 当前边界
 
-- 一个 Bot、单个活动 Run，工具限于指定资料读取和任务目录中的草稿产物；没有 shell 工具、Worker、外部消息发送或系统定时器。
-- `chat` 是无工具的普通聊天入口；执行工作使用 `submit`。后续输入归属、运行中补充、细粒度停止/取消、持久问题及 Worker 闭环属于后续 M1。
+- 一个长期 Bot 与单层临时 Worker；并发默认 3、上限 4，同一 actor 只允许一个活动执行槽位。工具限于指定资料读取和本地产物，没有任意 shell 或对外消息发送。
+- `chat` 是无工具的普通聊天；执行工作使用 `submit`。补充用 `followup <task_id> <text>`，控制用 `control <task_id> stop_reply|stop_task|cancel`；持久问题用 `questions` 查看、`answer <question_id> <text>` 回答。停止回复保留后台 Worker，取消会禁止整项委托续接。
 - `submit_result` 检查产物完整性、资料读取覆盖、引用和用户指定文本条件。`succeeded/acceptance=passed` 表示这些明确检查通过，不证明所有语义、推理或事实都正确。真实任务仍需按根要求检查内容；文件存在或关键词出现不能取代结果质量验收。
 - 本地文件投递可按 delivery ID 重放；没有承诺第三方平台 exactly-once。未接入的渠道没有端到端验证。
 - 服务在当前电脑当前用户权限下运行，资料与产物保留在本地数据目录。只授权任务所需资料；读取到的文件内容是证据，不会因此获得执行权限。

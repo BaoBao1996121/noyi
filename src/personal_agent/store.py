@@ -75,11 +75,10 @@ CREATE TABLE IF NOT EXISTS input_usage(
  input_sha256 TEXT NOT NULL, state TEXT NOT NULL,
  PRIMARY KEY(request_id,event_id)
 );
-PRAGMA user_version=2;
 """
 
 
-class Store:
+class BaseStore:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path, timeout=10, isolation_level=None)
@@ -110,14 +109,17 @@ class Store:
         return [dict(r) for r in self.db.execute(sql, args).fetchall()]
 
     def submit(self, spec: TaskSpec | None, *, text: str = "", nonce: str,
-               source="cli", account="local-user", actor="default", room="local") -> dict:
+               source="cli", account="local-user", actor="default", room="local", thread=None) -> dict:
         if spec:
             spec.validate()
         content = spec.objective if spec else text
         if not content.strip() or not nonce:
             raise ValueError("message and nonce required")
-        payload = encode({"spec": asdict(spec) if spec else None, "text": content,
-                          "actor": actor, "room": room})
+        payload_data = {"spec": asdict(spec) if spec else None, "text": content,
+                        "actor": actor, "room": room}
+        if thread is not None:
+            payload_data["thread"] = thread
+        payload = encode(payload_data)
         with self.transaction():
             old = self.one("SELECT * FROM messages WHERE source=? AND account=? AND client_nonce=?",
                            (source, account, nonce))
@@ -138,6 +140,7 @@ class Store:
                             (mid, source, account, nonce, actor, room, tid, "user", content, payload))
             self.db.execute("INSERT INTO events(id,actor_id,task_id,message_id,kind,created) VALUES(?,?,?,?,?,?)",
                             (eid, actor, tid, mid, "user_task" if spec else "chat", time.time()))
+            self._submitted(mid, tid, source, account, thread or room)
         return {"message_id": mid, "task_id": tid, "duplicate": False}
 
     def claim(self) -> dict | None:
@@ -278,12 +281,18 @@ class Store:
                     # Unknown interruption time: conservatively charge elapsed time,
                     # capped at authorized remaining budget, never days of downtime.
                     task = self.task(run["task_id"])
-                    elapsed = min(max(0, time.time()-run["started"]), max(0, task["spec"]["max_seconds"]-task["active_seconds"]))
-                    self.db.execute("UPDATE tasks SET status='ready',reason='recovered',active_seconds=active_seconds+? WHERE id=? AND status='running'",
-                                    (elapsed, run["task_id"]))
+                    self._charge_elapsed(task, run)
+                    self.db.execute("UPDATE tasks SET status='ready',reason='recovered' WHERE id=? AND status='running'", (run["task_id"],))
                 self.step(run, "recovery", {"reason": "interrupted", "remote_model_billing": "unknown"})
             self.db.execute("UPDATE events SET state='pending',claimed_by_run=NULL WHERE state='claimed'")
             self.db.execute("UPDATE operations SET status='interrupted' WHERE status='running'")
             self.db.execute("UPDATE model_requests SET state='unknown',ended=? WHERE state='dispatching'", (time.time(),))
             self.db.execute("UPDATE input_usage SET state='unknown' WHERE state='dispatching'")
         return len(rows)
+
+
+from .collaboration_store import CollaborationStore
+
+
+class Store(CollaborationStore, BaseStore):
+    """Durable task ledger with versioned collaboration protocols."""

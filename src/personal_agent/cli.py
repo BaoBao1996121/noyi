@@ -36,9 +36,26 @@ def parser():
     c = sub.add_parser("chat", help="Persist a chat-only message without creating a task")
     c.add_argument("text")
     c.add_argument("--nonce", default=None)
+    s = sub.add_parser("followup", help="Attach a durable addition to an existing task")
+    s.add_argument("task_id")
+    s.add_argument("text")
+    s.add_argument("--nonce")
+    s.add_argument("--context-only", action="store_true")
+    s = sub.add_parser("control", help="Stop a reply, stop one task, or cancel the whole delegation")
+    s.add_argument("task_id")
+    s.add_argument("kind", choices=["stop_reply", "stop_task", "cancel"])
+    s.add_argument("--run-id")
+    s = sub.add_parser("answer", help="Answer a persisted question by identity")
+    s.add_argument("question_id")
+    s.add_argument("text")
+    s.add_argument("--nonce")
+    sub.add_parser("questions")
     s = sub.add_parser("serve")
     s.add_argument("--config", type=Path)
     s.add_argument("--once", action="store_true")
+    s = sub.add_parser("web", help="Start the local WebUI and background worker service")
+    s.add_argument("--config", type=Path)
+    s.add_argument("--port", type=int, default=8765)
     s = sub.add_parser("status")
     s.add_argument("task_id", nargs="?")
     s.add_argument("--detail", action="store_true")
@@ -63,6 +80,12 @@ def main():
         if args.command == "model-config":
             print(encode(asdict(ModelConfig.load(args.config))))
             return
+        if args.command == "web":
+            from .webui import serve_web
+            if not 1024 <= args.port <= 65535:
+                raise ValueError("port must be between 1024 and 65535")
+            serve_web(data, ModelConfig.load(args.config), port=args.port)
+            return
         store = Store(data / "state.sqlite")
         if args.command == "submit":
             if args.spec:
@@ -76,6 +99,14 @@ def main():
             print(encode(store.submit(spec, nonce=args.nonce or uuid.uuid4().hex)))
         elif args.command == "chat":
             print(encode(store.submit(None, text=args.text, nonce=args.nonce or uuid.uuid4().hex)))
+        elif args.command == "followup":
+            print(encode(store.followup(args.text, task_id=args.task_id, nonce=args.nonce or uuid.uuid4().hex, context=args.context_only)))
+        elif args.command == "control":
+            print(encode(store.request_control(args.task_id, args.kind, run_id=args.run_id)))
+        elif args.command == "answer":
+            print(encode(store.answer_attention(args.question_id, args.text, nonce=args.nonce or uuid.uuid4().hex)))
+        elif args.command == "questions":
+            print(encode(store.all("SELECT id,task_id,question,options,state,answer FROM attentions ORDER BY created")))
         elif args.command in {"resume", "retry"}:
             print(encode(store.resume(args.task_id, extra_calls=args.extra_calls,
                                      extra_tools=args.extra_tools, extra_seconds=args.extra_seconds)))

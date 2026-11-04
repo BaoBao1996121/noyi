@@ -4,11 +4,11 @@ from pathlib import Path
 import json
 import os
 import re
-from urllib.parse import urlparse
 
 import httpx
 
 from .contracts import digest
+from .sources import ExactSourceReader
 
 MAX_SOURCE_BYTES = 128_000
 PAGE_CHARS = 8_000
@@ -79,12 +79,13 @@ def atomic_write(path: Path, data: bytes):
 
 
 class Toolset:
-    def __init__(self, data: Path, task: dict):
+    def __init__(self, data: Path, task: dict, source_reader=None):
         self.task = task
         self.data = data.resolve()
         self.root = safe_child(self.data / "tasks", task["id"])
         self._checked(self.root)
         self.sources = {s["id"]: s for s in task["spec"]["sources"]}
+        self.source_reader = source_reader or ExactSourceReader()
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _checked(self, path: Path) -> Path:
@@ -112,27 +113,9 @@ class Toolset:
 
     async def _read_source(self, source_id, source, cache, offset):
         if not cache.exists():
-            if source["kind"] == "file":
-                path = Path(source["location"])
-                # Submission pins the resolved file path. Reject retargeted links.
-                if path.is_symlink() or str(path.resolve()) != source["location"]:
-                    raise SourceUnavailable("source path changed")
-                with path.open("rb") as f:
-                    raw = f.read(MAX_SOURCE_BYTES + 1)
-            else:
-                url = source["location"]
-                parsed = urlparse(url)
-                if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password:
-                    raise ValueError("invalid authorized HTTP source")
-                # Only exact user-supplied URLs; redirects cannot widen the grant.
-                async with httpx.AsyncClient(timeout=20, follow_redirects=False, trust_env=False) as client:
-                    async with client.stream("GET", url) as response:
-                        response.raise_for_status()
-                        raw = b""
-                        async for chunk in response.aiter_bytes():
-                            raw += chunk
-                            if len(raw) > MAX_SOURCE_BYTES:
-                                break
+            raw = await self.source_reader.read(dict(source))
+            if not isinstance(raw, bytes):
+                raise ValueError("source adapter must return bytes")
             if len(raw) > MAX_SOURCE_BYTES:
                 raise SourceUnavailable("source too large; no truncated read counted as full coverage")
             text = raw.decode("utf-8-sig")

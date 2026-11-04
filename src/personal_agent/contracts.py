@@ -40,6 +40,8 @@ class TaskSpec:
     max_calls: int = 12
     max_tools: int = 40
     max_seconds: float = 600
+    max_workers: int = 4
+    max_continuations: int = 12
 
     def validate(self) -> None:
         if not isinstance(self.objective, str) or not self.objective.strip():
@@ -50,6 +52,9 @@ class TaskSpec:
         if (type(self.max_seconds) not in (int, float) or not 1 <= self.max_seconds <= 3600
                 or not math.isfinite(self.max_seconds)):
             raise ValueError("invalid time budget")
+        if (type(self.max_workers) is not int or not 0 <= self.max_workers <= 8
+                or type(self.max_continuations) is not int or not 0 <= self.max_continuations <= 100):
+            raise ValueError("invalid worker/continuation budget")
         if not isinstance(self.sources, list) or any(not isinstance(s, dict) for s in self.sources):
             raise ValueError("sources must be a list of objects")
         ids = [s.get("id") for s in self.sources]
