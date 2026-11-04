@@ -17,6 +17,7 @@ from .model import ModelConfig, QwenModel
 from .service import Service, ServiceLock
 from .store import Store
 from .tools import Toolset, MAX_SOURCE_BYTES, atomic_write, safe_child
+from .goal_api import goal_snapshot, goal_action
 
 
 WEB = Path(__file__).with_name("web")
@@ -97,8 +98,9 @@ class Console:
         pending = self.store.all("SELECT f.id,f.state,m.content FROM followups f JOIN messages m ON m.id=f.message_id WHERE m.room_id=? AND f.owner_task IS NULL AND f.state='unassigned'", (room,))
         config = getattr(self.model, "config", ModelConfig())
         return {"tasks": tasks, "messages": list(reversed(messages)), "deliveries": list(reversed(deliveries)), "questions": questions,
+                "goals": goal_snapshot(self.store, room),
                 "unassigned": pending, "server_time": time.time(), "ready": getattr(self.model, "ready", True),
-                "model": {"name": config.name, "base_url": config.base_url}, "service_error": self.service_error,
+                "model": {"name": config.name, "base_url": config.base_url}, "service_error": self.service_error or self.service.triggers.error,
                 "controls": self.store.all("SELECT c.* FROM controls c JOIN tasks t ON t.id=c.task_id WHERE t.room_id=? ORDER BY c.created DESC LIMIT 50", (room,)),
                 "rooms": [{**r, "members": self.store.members(r["id"])} for r in self.store.all("SELECT * FROM rooms WHERE owner='local-user' ORDER BY rowid")],
                 "bots": self.store.all("SELECT * FROM bots WHERE owner='local-user' ORDER BY created,id"),
@@ -265,6 +267,14 @@ async def manage(request):
     return web.json_response(result)
 
 
+async def goal_manage(request):
+    return web.json_response(goal_action(request.app[CONSOLE].store, request.match_info["name"], await json_body(request)))
+
+
+async def policy_detail(request):
+    return web.json_response(request.app[CONSOLE].store.policy(request.match_info["policy_id"], "local-user"))
+
+
 async def upload(request):
     c = request.app[CONSOLE]
     room = c.room(request.query.get("room", "local"))
@@ -311,14 +321,14 @@ async def settings(request):
 
 async def static(request):
     name = request.match_info.get("name", "index.html")
-    if name not in {"index.html", "app.js", "style.css", "modules.css"}:
+    if name not in {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css"}:
         raise web.HTTPNotFound()
     return web.FileResponse(WEB / name)
 
 
 async def lifecycle(app):
     c = app[CONSOLE]
-    job = None
+    job = trigger_job = None
     with ServiceLock(c.data):
         c.store.recover()
         async def run():
@@ -334,12 +344,16 @@ async def lifecycle(app):
                 await asyncio.sleep(0.3)
         if c.run_service:
             job = asyncio.create_task(run())
+            trigger_job = asyncio.create_task(c.service.triggers.run())
         try:
             yield
         finally:
             if job:
                 job.cancel()
                 await asyncio.gather(job, return_exceptions=True)
+            if trigger_job:
+                trigger_job.cancel()
+                await asyncio.gather(trigger_job, return_exceptions=True)
 
 
 def create_app(store, data, model, *, run_service=True):
@@ -349,7 +363,8 @@ def create_app(store, data, model, *, run_service=True):
                     web.get("/api/state", snapshot), web.get("/api/tasks/{task_id}", detail), web.post("/api/messages", submit),
                     web.post("/api/actions/{name}", action), web.post("/api/uploads", upload),
                     web.get("/api/artifacts/{delivery_id}", artifact), web.post("/api/settings", settings),
-                    web.post("/api/manage/{name}", manage)])
+                    web.post("/api/manage/{name}", manage), web.post("/api/goals/{name}", goal_manage),
+                    web.get("/api/policies/{policy_id}", policy_detail)])
     app.cleanup_ctx.append(lifecycle)
     return app
 

@@ -114,6 +114,8 @@ class Toolset:
             raise SourceUnavailable("authorized source could not be read") from exc
 
     async def _read_source(self, source_id, source, cache, offset):
+        if source.get("observed_unavailable"):
+            raise SourceUnavailable("optional source was unavailable at observation time")
         if not cache.exists():
             raw = await self.source_reader.read(dict(source))
             if not isinstance(raw, bytes):
@@ -121,10 +123,14 @@ class Toolset:
             if len(raw) > MAX_SOURCE_BYTES:
                 raise SourceUnavailable("source too large; no truncated read counted as full coverage")
             text = raw.decode("utf-8-sig")
+            if source.get("expected_sha256") and digest(text.encode("utf-8")) != source["expected_sha256"]:
+                raise SourceUnavailable("observed source snapshot changed")
             atomic_write(cache, text.encode("utf-8"))
         if cache.stat().st_size > MAX_SOURCE_BYTES:
             raise SourceUnavailable("source snapshot too large")
         text = cache.read_text(encoding="utf-8")
+        if source.get("expected_sha256") and digest(cache.read_bytes()) != source["expected_sha256"]:
+            raise SourceUnavailable("observed source cache changed")
         if offset > len(text):
             raise ValueError("offset past end")
         end = min(offset + PAGE_CHARS, len(text))

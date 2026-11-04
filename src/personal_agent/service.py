@@ -8,6 +8,7 @@ import os
 from .contracts import encode
 from .runtime import Runtime
 from .tools import atomic_write, safe_child
+from .triggers import TriggerScheduler
 
 
 class ServiceLock:
@@ -59,7 +60,7 @@ class FileChannel:
 
 
 class Service:
-    def __init__(self, store, data, model, channel=None, *, concurrency=3, engine=None, source_reader=None):
+    def __init__(self, store, data, model, channel=None, *, concurrency=3, engine=None, source_reader=None, observer=None, clock=None):
         if type(concurrency) is not int or not 1 <= concurrency <= 4:
             raise ValueError("concurrency must be an integer from 1 to 4")
         self.store, self.data = store, data
@@ -68,6 +69,7 @@ class Service:
         self.concurrency = concurrency
         self._active = {}
         self._delivery_lock = asyncio.Lock()
+        self.triggers = TriggerScheduler(store, data, observer=observer, **({"clock": clock} if clock else {}))
 
     async def deliver(self):
         # A slow channel must not stall the scheduler's control polling, and two
@@ -153,9 +155,18 @@ class Service:
     async def serve(self, once=False):
         with ServiceLock(self.data):
             self.store.recover()
-            while True:
+            if once:
+                await self.triggers.tick()
                 await self.run_until_quiescent()
-                if once:
-                    return
-                # SQLite is authoritative; polling also picks up separate CLI processes.
-                await asyncio.sleep(0.5)
+                return
+            job = asyncio.create_task(self.triggers.run())
+            try:
+                while True:
+                    await self.run_until_quiescent()
+                    if self.triggers.error:
+                        raise RuntimeError("trigger scheduler failed: " + self.triggers.error)
+                    # SQLite also picks up separate CLI processes.
+                    await asyncio.sleep(0.5)
+            finally:
+                job.cancel()
+                await asyncio.gather(job, return_exceptions=True)

@@ -13,6 +13,12 @@ from .tools import MAX_SOURCE_BYTES, Toolset, tool
 
 
 ORCHESTRATION_SCHEMAS = [
+    tool("record_goal_progress", "For the current ongoing goal root: preserve assessed state, gaps, unknowns and next action with actual observation or tool-operation IDs. One completed task does not end ongoing responsibility.",
+         {"current_state": {"type": "string"}, "gaps": {"type": "array", "items": {"type": "string"}}, "unknowns": {"type": "array", "items": {"type": "string"}}, "next_action": {"type": "string"}, "evidence_refs": {"type": "array", "items": {"type": "string"}}}, ["current_state", "gaps", "unknowns", "next_action", "evidence_refs"]),
+    tool("propose_policy_adjustment", "Suggest a bounded timing change to an existing policy of this goal. Saves a suggestion, never registers or activates it. Does not add sources or budget. Give observation/tool evidence and expected cost; exactly one timing field.",
+         {"policy_id": {"type": "string"}, "reason": {"type": "string"}, "evidence_refs": {"type": "array", "items": {"type": "string"}}, "expected_cost": {"type": "string"}, "interval_seconds": {"type": "number", "minimum": 1}, "local_time": {"type": "string"}}, ["policy_id", "reason", "evidence_refs", "expected_cost"]),
+    tool("review_policy_proposal", "Only an explicitly authorized goal owner may review an existing bounded timing proposal. Accepted changes are registered AFTER this root task passes acceptance. Workers cannot activate their own suggestions.",
+         {"proposal_id": {"type": "string"}, "accept": {"type": "boolean"}, "reason": {"type": "string"}}, ["proposal_id", "accept", "reason"]),
     tool("spawn_worker", "Delegate one scoped task asynchronously. Returns its task_id immediately. Only the root task can spawn workers; worker_key makes retries idempotent. All workers share the root's total budget.",
          {"worker_key": {"type": "string", "minLength": 1},
           "objective": {"type": "string", "minLength": 1},
@@ -132,7 +138,7 @@ class OrchestrationTools:
             return self.worker_result(run, args["dependency_id"], dependency=True)
         if name == "adopt_worker_result":
             return self.store.adopt_worker_result(run, **args)
-        if name in {"record_investigation", "request_rework", "handoff_task", "yield_task", "read_memory", "propose_memory"}:
+        if name in {"record_goal_progress", "propose_policy_adjustment", "review_policy_proposal", "record_investigation", "request_rework", "handoff_task", "yield_task", "read_memory", "propose_memory"}:
             return getattr(self.store, name)(run, **args)
         raise ValueError("unknown orchestration tool")
 

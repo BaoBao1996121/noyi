@@ -1,3 +1,4 @@
+import {installGoals} from './goals.js';
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => [...root.querySelectorAll(q)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -123,7 +124,7 @@ async function detailView(force=false){
 }
 async function refresh(force=false){
   const requestedRoom=state.room;
-  try{const data=await api('/api/state?room='+encodeURIComponent(requestedRoom));if(state.room!==requestedRoom)return;state.data=data;state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);}
+  try{const data=await api('/api/state?room='+encodeURIComponent(requestedRoom));if(state.room!==requestedRoom)return;state.data=data;state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
   catch(e){state.online=false;$('#connection').textContent='连接中断 · 草稿已保留';$('#banner').textContent='连接暂时中断。已输入的内容会保留，恢复后可以继续。';$('#banner').classList.remove('hidden');}
 }
 function saveDraft(){localStorage.setItem(state.draftKey,JSON.stringify({text:$('#message-input').value,uploads:state.uploads,urls:state.urls,mode:$('#message-mode').value,task:state.task,retry:state.retry,recipient:state.recipient,replyTo:state.replyTo}));}
@@ -234,5 +235,6 @@ document.addEventListener('submit',async e=>{
   if(e.target.id==='budget-form'){e.preventDefault();const extra=Object.fromEntries([...new FormData(e.target)].map(([k,v])=>[k,Number(v)]));await performAction('resume',e.target.dataset.tid,extra);}
 });
 $$('.resizer').forEach(r=>r.addEventListener('pointerdown',e=>{r.setPointerCapture(e.pointerId);const move=e=>{const width=r.dataset.panel==='left'?e.clientX:innerWidth-e.clientX;document.documentElement.style.setProperty(r.dataset.panel==='left'?'--left':'--right',Math.max(220,Math.min(440,width))+'px');};r.addEventListener('pointermove',move);r.addEventListener('pointerup',()=>r.removeEventListener('pointermove',move),{once:true});}));
+const goalsUI=installGoals({state,api,modal,toast,refresh,esc,timeLabel,chooseTask});
 async function poll(){await refresh();setTimeout(poll,document.hidden?5000:1500);}
 try{const boot=await api('/api/bootstrap');state.token=boot.token;restoreDraft();await refresh(true);setTimeout(poll,1500);}catch(e){toast('无法连接本地服务，请确认启动窗口仍在运行。');}

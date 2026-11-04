@@ -37,3 +37,9 @@ class DeliveryChannel(Protocol):
 class MemoryProvider(Protocol):
     """Replaceable value loader; Store controls membership, IDs and versions."""
     def load(self, collection_id: str, records: list[dict]) -> list[dict]: ...
+
+
+class ObservationSource(Protocol):
+    """Only observes a registered descriptor; cannot register policies or work."""
+    identity: str
+    async def observe(self, source: dict) -> bytes: ...

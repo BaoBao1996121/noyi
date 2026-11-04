@@ -316,7 +316,11 @@ from .lifecycle_store import LifecycleStore
 
 from .identity_store import IdentityStore
 from .memory_store import MemoryStore
+from .goal_store import GoalStore
 
 
-class Store(MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
+from .admission_store import AdmissionStore
+
+
+class Store(AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
     """Durable task ledger with versioned collaboration protocols."""

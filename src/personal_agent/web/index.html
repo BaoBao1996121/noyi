@@ -6,6 +6,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23252525'/%3E%3Ctext x='17' y='46' fill='white' font-size='46' font-family='sans-serif'%3Ep%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="/assets/style.css">
   <link rel="stylesheet" href="/assets/modules.css">
+  <link rel="stylesheet" href="/assets/goals.css">
   <script type="module" src="/assets/app.js"></script>
 </head>
 <body>
@@ -15,6 +16,7 @@
     <div class="sidebar-tools"><label class="search"><span>⌕</span><input id="search" placeholder="搜索会话与任务" aria-label="搜索会话与任务"></label><button id="new-task" class="icon" title="新任务" aria-label="新任务">＋</button></div>
     <div class="section-label">我的助理 <button id="manage-bots" class="small-link">管理</button><button id="new-room" class="small-link">＋ 新建</button></div>
     <div id="rooms" class="room-list"></div>
+    <button id="open-goals" class="goal-nav"><span>◷</span> 持续目标 <small id="goal-count"></small></button>
     <div class="section-label task-section">最近任务 <span id="task-count"></span></div>
     <nav id="task-list" aria-label="最近任务"></nav>
     <div class="sidebar-bottom"><div class="user-avatar">我</div><div><strong>个人工作台</strong><small id="connection">正在连接…</small></div><button id="settings" class="icon" aria-label="设置" title="设置">⚙</button></div>
@@ -23,6 +25,7 @@
   <main class="main">
     <header class="chat-header"><button id="mobile-nav" class="icon mobile-only" aria-label="打开导航">☰</button><div class="avatar">✳</div><div class="chat-title"><h1 id="room-name">个人助理</h1><p id="header-status">帮你把事情持续管好</p></div><button id="show-details" class="icon" aria-label="显示或隐藏详情" title="详情与资料">☷</button></header>
     <div id="banner" class="banner hidden" role="status"></div>
+    <section id="goal-panel" class="goal-panel hidden" aria-label="持续目标工作台"></section>
     <section id="messages" class="messages" aria-label="对话记录" aria-live="polite"></section>
     <div id="jump-bottom" class="jump hidden"><button>↓ 回到最新消息</button></div>
     <div class="composer-area">

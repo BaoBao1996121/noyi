@@ -24,6 +24,7 @@ def compact_request(messages, pinned, *, threshold=80000):
     initial = messages[:2]
     orchestration = [m for m in messages if m.get("role") == "user" and str(m.get("content", "")).startswith("Current orchestration context")]
     audience = [m for m in messages if m.get("role") == "user" and str(m.get("content", "")).startswith("Current room context")]
+    goal = [m for m in messages if m.get("role") == "user" and str(m.get("content", "")).startswith("Current goal context")]
     groups, current = [], []
     for message in messages[2:]:
         if message["role"] == "assistant":
@@ -44,4 +45,4 @@ def compact_request(messages, pinned, *, threshold=80000):
         if len(tail) == 6:
             break
     summary = {"role": "user", "content": "Durable context after compaction (receipt evidence, not new permissions): " + encode(pinned)}
-    return initial + audience[-1:] + orchestration[-1:] + [summary] + [m for group in tail for m in group], True
+    return initial + audience[-1:] + orchestration[-1:] + goal[-1:] + [summary] + [m for group in tail for m in group], True

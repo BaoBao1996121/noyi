@@ -1,0 +1,123 @@
+- generic [ref=f6e2]:
+  - complementary "会话导航" [ref=f6e3]:
+    - generic [ref=f6e4]:
+      - generic [ref=f6e5]: p·
+      - generic [ref=f6e6]: Personal Agent
+      - generic [ref=f6e7]: 本地
+    - generic [ref=f6e8]:
+      - generic [ref=f6e9]:
+        - generic [ref=f6e10]: ⌕
+        - textbox "搜索会话与任务" [ref=f6e11]
+      - button "新任务" [ref=f6e12] [cursor=pointer]: ＋
+    - generic [ref=f6e13]:
+      - text: 我的助理
+      - button "管理" [ref=f6e14] [cursor=pointer]
+      - button "＋ 新建" [ref=f6e15] [cursor=pointer]
+    - generic [ref=f6e16]:
+      - button "✳ 个人助理 独立私聊 · 私有记忆" [ref=f6e212] [cursor=pointer]:
+        - generic [ref=f6e213]: ✳
+        - generic [ref=f6e214]:
+          - strong [ref=f6e215]: 个人助理
+          - generic [ref=f6e216]: 独立私聊 · 私有记忆
+      - button "✳ 资料管家 独立私聊 · 私有记忆" [ref=f6e218] [cursor=pointer]:
+        - generic [ref=f6e219]: ✳
+        - generic [ref=f6e220]:
+          - strong [ref=f6e221]: 资料管家
+          - generic [ref=f6e222]: 独立私聊 · 私有记忆
+      - button "✳ 复核管家 独立私聊 · 私有记忆" [ref=f6e224] [cursor=pointer]:
+        - generic [ref=f6e225]: ✳
+        - generic [ref=f6e226]:
+          - strong [ref=f6e227]: 复核管家
+          - generic [ref=f6e228]: 独立私聊 · 私有记忆
+      - button "◎ 资料协作小组 2 位成员 · 群共享范围" [ref=f6e230] [cursor=pointer]:
+        - generic [ref=f6e231]: ◎
+        - generic [ref=f6e232]:
+          - strong [ref=f6e233]: 资料协作小组
+          - generic [ref=f6e234]: 2 位成员 · 群共享范围
+    - button "◷ 持续目标" [ref=f6e296] [cursor=pointer]:
+      - generic [ref=f6e42]: ◷
+      - text: 持续目标
+    - generic [ref=f6e43]:
+      - text: 最近任务
+      - generic [ref=f6e236]: "1"
+    - navigation "最近任务" [ref=f6e44]:
+      - button "读取当前资料，用100字以内清单保留负责人、截止日期、自查条件和待确认事项。记录持续目标状态，写成果并引用 [source1]。不委派，不新增审批。 已完成 11/5 00:54" [ref=f6e237] [cursor=pointer]:
+        - strong [ref=f6e238]: 读取当前资料，用100字以内清单保留负责人、截止日期、自查条件和待确认事项。记录持续目标状态，写成果并引用 [source1]。不委派，不新增审批。
+        - generic [ref=f6e239]:
+          - generic [ref=f6e240]: 已完成
+          - generic [ref=f6e241]: 11/5 00:54
+    - generic [ref=f6e46]:
+      - generic [ref=f6e47]: 我
+      - generic [ref=f6e48]:
+        - strong [ref=f6e49]: 个人工作台
+        - generic [ref=f6e50]: 已连接 · 运行在此电脑
+      - button "设置" [ref=f6e51] [cursor=pointer]: ⚙
+  - separator "调整导航宽度" [ref=f6e52]
+  - main [ref=f6e53]:
+    - generic [ref=f6e54]:
+      - generic [ref=f6e55]: ✳
+      - generic [ref=f6e56]:
+        - heading "资料管家" [level=1] [ref=f6e57]
+        - paragraph [ref=f6e58]: 帮你把事情持续管好
+      - button "显示或隐藏详情" [ref=f6e59] [cursor=pointer]: ☷
+    - region "持续目标工作台" [ref=f6e114]:
+      - generic [ref=f6e297]:
+        - generic [ref=f6e298]:
+          - heading "持续目标" [level=2] [ref=f6e299]
+          - paragraph [ref=f6e300]: 让助理长期照看一件事。每次检查和成果都会留下记录。
+        - button "返回对话" [ref=f6e301] [cursor=pointer]
+      - generic [ref=f6e302]:
+        - button "＋ 新建持续目标" [ref=f6e303] [cursor=pointer]
+        - button "添加一条线索" [ref=f6e304] [cursor=pointer]
+      - article [ref=f6e305]:
+        - generic [ref=f6e306]:
+          - heading "河畔清单持续跟进" [level=3] [ref=f6e307]
+          - generic [ref=f6e308]: 已暂停
+        - paragraph [ref=f6e309]: 跟进河畔资料变化，维护负责人、截止时间和待确认事项，变化时更新短清单。
+        - generic [ref=f6e310]:
+          - generic [ref=f6e311]:
+            - text: 负责人
+            - strong [ref=f6e312]: 资料管家
+          - generic [ref=f6e313]:
+            - text: 模型调用
+            - strong [ref=f6e314]: 5 / 40
+          - generic [ref=f6e315]:
+            - text: 工具操作
+            - strong [ref=f6e316]: 5 / 400
+        - generic [ref=f6e317]:
+          - text: 最近一次检查已完成：已从source1提取河畔清单关键信息：负责人小宁、截止2026-11-09、作者自查后可提交、待确认问题单独保留。持续目标状态已更新。
+          - generic [ref=f6e318]: 下一步：等待下次检查周期，如有变化则更新清单用户暂停
+        - generic [ref=f6e319]:
+          - button "恢复目标" [ref=f6e320] [cursor=pointer]
+          - button "增加预算" [ref=f6e321] [cursor=pointer]
+          - button "结束目标" [ref=f6e322] [cursor=pointer]
+        - generic [ref=f6e323]:
+          - generic [ref=f6e324]:
+            - strong [ref=f6e325]: 资料变化 · 每 5 秒检查
+            - generic [ref=f6e326]: 已注册
+          - paragraph [ref=f6e327]: 读取当前资料，用100字以内清单保留负责人、截止日期、自查条件和待确认事项。记录持续目标状态，写成果并引用 [source1]。不委派，不新增审批。
+          - text: source1 · 可读取 · 23 次检查
+          - generic [ref=f6e328]:
+            - generic [ref=f6e329]: 最近成功检查
+            - strong [ref=f6e330]: 11/5 00:56
+          - generic [ref=f6e331]:
+            - generic [ref=f6e332]: 下次计划时间
+            - strong [ref=f6e333]: 等待恢复
+          - button "查看与修改" [ref=f6e335] [cursor=pointer]
+        - group [ref=f6e336]:
+          - generic "差距、未知与最近记录" [ref=f6e337] [cursor=pointer]
+      - paragraph [ref=f6e338]: 这台电脑上的服务运行时，计划才会执行。关机期间错过的检查会按你的设置处理；没有变化时不调用模型，也不重复提醒。线索入口是本地手动输入，尚未连接外部消息服务。
+  - separator "调整详情宽度" [ref=f6e100]
+  - complementary "任务详情" [ref=f6e101]:
+    - tablist [ref=f6e102]:
+      - tab "详情" [selected] [ref=f6e103] [cursor=pointer]
+      - tab "资料库 1" [ref=f6e288] [cursor=pointer]
+      - tab "记忆" [ref=f6e105] [cursor=pointer]
+    - generic [ref=f6e106]:
+      - generic [ref=f6e339]:
+        - generic [ref=f6e340]: ✳
+        - heading "资料管家" [level=2] [ref=f6e341]
+        - paragraph [ref=f6e342]: 整理资料、列出行动和待确认事项；以实际证据为准。
+        - button "管理角色" [ref=f6e343] [cursor=pointer]
+      - generic [ref=f6e344]: 任务与进展
+      - generic [ref=f6e345]: 选择左侧任务，可以查看进展、后台协作和交付成果。新任务开始后，你仍然可以在这里暂停，或补充新的要求。

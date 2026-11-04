@@ -1,10 +1,10 @@
 # Personal Agent Core
 
-一个可恢复的个人 Agent。当前已完成 M0–M3 和提前版 WebUI：使用 Pi 循环和 Qwen 官网模型，支持长期多 Bot、独立私聊与群协作、显式记忆、后台 Worker、补充/停止/取消、持久问题、审核返工及产物版本。SQLite 保存任务、输入责任、请求、工具和投递状态。M4–M5 正在继续开发。
+一个可恢复的个人 Agent。当前已完成 M0–M4 与 WebUI：使用 Pi 循环和 Qwen 官网模型，支持长期多 Bot、私聊与群协作、显式记忆、后台 Worker、审核返工、持续目标、周期/资料变化检查和有界的新工作准入。SQLite 保存任务、输入责任、请求、工具、调度与投递状态。M5 的证据复盘、实验与自用调优正在继续开发。
 
 安装后可运行 `python -m personal_agent --data .pa/personal web`，在浏览器打开 `http://127.0.0.1:8765`。首次使用在设置中配置自己的 Qwen 官网凭据；页面支持上传文本资料、交办与补充任务、回答问题和查看成果。关闭浏览器不会停止服务，关闭启动进程会停止执行。[提前版界面验收](docs/validation/UI_EARLY_REPORT.md)。
 
-当前进度和真实验证结果见 [STATUS](STATUS.md)、[M3 报告](docs/validation/M3_REPORT.md)，完整后续范围见 [M1–M5 计划](docs/plan-m1-m5.md)。本页的例子是可执行的虚构活动资料，不是已经完成的真实工作报告。
+持续使用入口见 [持续目标说明](docs/ongoing-goals.md)。当前进度和真实验证结果见 [STATUS](STATUS.md)、[M4 报告](docs/validation/M4_REPORT.md)，完整范围见 [M1–M5 计划](docs/plan-m1-m5.md)。本页的例子是可执行的虚构活动资料，不是已经完成的真实工作报告。
 
 ## 安装
 
