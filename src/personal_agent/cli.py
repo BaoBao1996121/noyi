@@ -10,6 +10,7 @@ import uuid
 
 from .contracts import TaskSpec, encode
 from .model import ModelConfig, QwenModel
+from .plugins import configured_plugins
 from .service import Service, ServiceLock
 from .store import Store
 
@@ -101,7 +102,7 @@ def main():
             from .webui import serve_web
             if not 1024 <= args.port <= 65535:
                 raise ValueError("port must be between 1024 and 65535")
-            serve_web(data, ModelConfig.load(args.config), port=args.port)
+            serve_web(data, ModelConfig.load(args.config), port=args.port, plugins=configured_plugins(args.config))
             return
         store = Store(data / "state.sqlite")
         if args.command == "submit":
@@ -132,7 +133,7 @@ def main():
             model = QwenModel(config)
             async def run():
                 try:
-                    await Service(store, data, model).serve(args.once)
+                    await Service(store, data, model, plugins=configured_plugins(args.config)).serve(args.once)
                 finally:
                     await model.close()
             print("服务开始执行；退出本进程将停止执行，已接收的任务会保留。", flush=True)

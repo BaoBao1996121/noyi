@@ -60,11 +60,11 @@ class FileChannel:
 
 
 class Service:
-    def __init__(self, store, data, model, channel=None, *, concurrency=3, engine=None, source_reader=None, observer=None, clock=None):
+    def __init__(self, store, data, model, channel=None, *, concurrency=3, engine=None, source_reader=None, observer=None, clock=None, plugins=None):
         if type(concurrency) is not int or not 1 <= concurrency <= 4:
             raise ValueError("concurrency must be an integer from 1 to 4")
         self.store, self.data = store, data
-        self.runtime = Runtime(store, data, model, engine=engine, source_reader=source_reader)
+        self.runtime = Runtime(store, data, model, engine=engine, source_reader=source_reader, plugins=plugins)
         self.channel = channel or FileChannel(data)
         self.concurrency = concurrency
         self._active = {}

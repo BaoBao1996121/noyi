@@ -6,3 +6,7 @@ api_key_env = "DASHSCOPE_API_KEY"
 timeout_seconds = 90
 max_output_tokens = 4096
 enable_thinking = false
+
+# Optional capability plugins: Python modules exposing plugin(). See docs/module-interfaces.md.
+# [plugins]
+# modules = ["my_notes"]

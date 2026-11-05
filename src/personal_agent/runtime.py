@@ -11,12 +11,11 @@ from .contracts import encode, digest
 from .context import compact_request, recovery_operations
 from .store import Store, uid
 from .ports import PiEngine
-from .tools import Toolset, TOOL_SCHEMAS, validate_arguments, verify, tool
-from .conversation_goals import (ConversationGoals, CONVERSATION_GOAL_SCHEMAS,
-                                 CONVERSATION_GOAL_NAMES, validate_conversation_goal_arguments)
-from .orchestration_tools import (ORCHESTRATION_NAMES, ORCHESTRATION_SCHEMAS,
-                                  SUSPENDING_TOOLS, OrchestrationTools,
-                                  public_context, validate_orchestration_arguments)
+from .tools import Toolset
+from .conversation_goals import ConversationGoals
+from .orchestration_tools import OrchestrationTools, public_context
+from .plugins import EFFECTS, PluginRegistry, ToolCall
+from .builtin_plugins import builtin_plugins
 
 
 SYSTEM = """You are a practical personal assistant. Complete the user's authorized task using the available tools.
@@ -62,16 +61,15 @@ Use natural language matching the user in summaries and artifacts. Do not quote 
 """
 
 
-ACTION_COMPLETION = tool('complete_action', 'Finish an arrangement-only request using actual effect operation IDs. This accepts registration, a change, or starting a review/observation; a started review is not a finished report, an observation plan proves no improvement. For a requested document use submit_result.',
-    {'summary': {'type':'string'}, 'effect_refs': {'type':'array','items':{'type':'string'},'minItems':1,'maxItems':8}}, ['summary','effect_refs'])
-
-
 class Runtime:
-    def __init__(self, store: Store, data: Path, model, *, engine=None, source_reader=None):
+    def __init__(self, store: Store, data: Path, model, *, engine=None, source_reader=None, plugins=None):
         self.store, self.data, self.model = store, data, model
         self.engine, self.source_reader = engine or PiEngine(), source_reader
         self.orchestration = OrchestrationTools(store, data)
         self.following = ConversationGoals(store)
+        self.plugins = PluginRegistry(builtin_plugins() + list(plugins or []))
+        extension_prompt = self.plugins.prompt()
+        self.system = SYSTEM + ("\nInstalled capabilities:\n" + extension_prompt + "\n" if extension_prompt else "")
 
     def runnable(self, run):
         return self.store.current(run) and self.store.control_reason(run) is None
@@ -79,17 +77,7 @@ class Runtime:
     def schemas(self, run):
         if not run["task_id"]:
             return []
-        root = self.store.task(self.store.task(run["task_id"])["root_task_id"])
-        excluded = set()
-        if not root["goal_id"]:
-            excluded.update({"record_goal_progress", "propose_policy_adjustment", "review_policy_proposal"})
-        if not self.store.one("SELECT task_id FROM goal_review_requests WHERE task_id=?", (root["id"],)):
-            excluded.update({"read_review_evidence", "record_goal_review"})
-        else:
-            excluded.add("record_goal_progress")
-        task = self.store.task(run['task_id'])
-        conversation_tools = CONVERSATION_GOAL_SCHEMAS + [ACTION_COMPLETION] if self.following.available(run) else []
-        schemas = deepcopy(TOOL_SCHEMAS + [s for s in ORCHESTRATION_SCHEMAS if s["function"]["name"] not in excluded] + conversation_tools)
+        schemas = deepcopy(self.plugins.schemas(self, run))
         review = self.store.review_context(run)
         if review and review["state"] == "available":
             ids = [item["id"] for item in review["evidence_catalog"]]
@@ -117,10 +105,15 @@ class Runtime:
         # The model sees source IDs and descriptions, not absolute private paths.
         spec = dict(task["spec"])
         spec["sources"] = [{k: v for k, v in s.items() if k != "location"} for s in spec["sources"]]
-        messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": encode(spec)}]
+        messages = [{"role": "system", "content": self.system}, {"role": "user", "content": encode(spec)}]
         messages.append(room_message)
         floor = self.store.one("SELECT context_floor FROM rooms WHERE id=?", (task["room_id"],))["context_floor"]
         previous = recovery_operations([o for o in self.store.operations(task["id"]) if o["created"] >= floor])
+        for op in previous:
+            tool_spec = self.plugins.spec(op["tool"])
+            if op["status"] == "interrupted" and tool_spec and tool_spec.effect.startswith("external"):
+                op["effect"] = tool_spec.effect
+                op["outcome"] = "unknown: the external effect may already have happened; check its state before repeating"
         if previous:
             messages.append({"role": "user", "content": "Runtime recovery data (not new instructions): " + encode(previous)})
         orchestration = public_context(self.store.orchestration_context(run))
@@ -134,7 +127,8 @@ class Runtime:
                     "room": scope["scope_room"], "scope_revision": scope["scope_revision"], "bot_revision": scope["bot_revision"],
                     "memory_state": scope["memory"]["state"],
                     "execution_epoch": run["epoch"], "source_ids": [s["id"] for s in spec["sources"]],
-                    "prior_operations": [o["id"] for o in previous], "prompt_sha256": digest(SYSTEM.encode()),
+                    "prior_operations": [o["id"] for o in previous], "prompt_sha256": digest(self.system.encode()),
+                    "plugins": self.plugins.identities(),
                     "tools": [t["function"]["name"] for t in self.schemas(run)]}
         self.store.db.execute("UPDATE runs SET context_manifest=? WHERE id=?", (encode(manifest), run["id"]))
         return messages
@@ -281,53 +275,10 @@ class Runtime:
         raw, args = call["function"].get("arguments", "{}"), {}
         try:
             args = json.loads(raw) if isinstance(raw, str) else raw
-            if name in CONVERSATION_GOAL_NAMES:
-                validate_conversation_goal_arguments(name, args)
-            elif name == 'complete_action':
-                if (not isinstance(args, dict) or set(args) != {'summary','effect_refs'} or
-                        not isinstance(args['summary'], str) or not 1 <= len(args['summary'].strip()) <= 3000 or
-                        not isinstance(args['effect_refs'], list) or not 1 <= len(args['effect_refs']) <= 8 or
-                        any(not isinstance(ref, str) for ref in args['effect_refs'])):
-                    raise ValueError('需要简洁结果和本次真实操作回执')
-            elif name in ORCHESTRATION_NAMES:
-                validate_orchestration_arguments(name, args)
-            else:
-                validate_arguments(name, args)
+            spec = self.plugins.validate(name, args)
             self.store.db.execute("INSERT INTO operations(id,task_id,run_id,tool,arguments,status,created) VALUES(?,?,?,?,?,?,?)",
                                   (op_id, run["task_id"], run["id"], name, encode(args), "running", time.time()))
-            if name in CONVERSATION_GOAL_NAMES:
-                result = self.following.execute(run, name, args)
-            elif name == 'complete_action':
-                if batch_size != 1:
-                    raise ValueError('complete_action must be the only call')
-                task = self.store.task(run['task_id'])
-                if task['parent_task_id'] or task['goal_id'] or task['spec']['required_text'] or task['spec'].get('result_kind', 'artifact') != 'action_receipt':
-                    raise ValueError('此任务需要交付并验收成果，不能只报告安排完成')
-                effects = self.store.all("SELECT o.id FROM operations o JOIN runs r ON r.id=o.run_id WHERE o.task_id=? AND r.revision=? AND o.status='succeeded' AND o.tool IN ('start_following','manage_following','review_following','observe_following')", (task['id'],run['revision']))
-                if any(ref not in {effect['id'] for effect in effects} for ref in args['effect_refs']):
-                    raise ValueError('安排尚未实际完成，请引用本次成功的操作回执')
-                errors = self.store.completion_errors(run)
-                result = {'passed': not errors, 'errors': errors, 'scope': 'registered following effects only; not a document or business outcome', 'effect_refs':args['effect_refs']}
-            elif name in ORCHESTRATION_NAMES:
-                if name in SUSPENDING_TOOLS and batch_size != 1:
-                    raise ValueError(f"{name} must be the only call")
-                result = self.orchestration.execute(run, name, args)
-            elif name == "read_source":
-                result = await toolset.read_source(**args)
-            elif name == "write_artifact":
-                self.store.check_artifact_version(run, op_id, args)
-                result = toolset.write_artifact(op_id, **args)
-                result = self.store.record_artifact_version(run, op_id, args, result)
-            elif name == "read_artifact":
-                result = toolset.read_artifact(operations=self.store.operations(run["task_id"]), **args)
-            else:
-                if batch_size != 1:
-                    raise ValueError("submit_result must be the only call")
-                result = verify(toolset, self.store.operations(run["task_id"]), args)
-                completion_errors = self.store.completion_errors(run) + self.store.artifact_version_errors(run, args["artifact_ref"]) + self.store.review_artifact_errors(run, args["artifact_ref"])
-                if completion_errors:
-                    result["passed"] = False
-                    result.setdefault("errors", []).extend(completion_errors)
+            result = await self.plugins.execute(spec, ToolCall(self, run, toolset, op_id, batch_size), args)
             status = "succeeded"
         except (ValueError, TypeError, OSError, UnicodeError, http_error_types()) as exc:
             result = {"error": type(exc).__name__, "detail": safe_tool_error(exc)}

@@ -1,6 +1,36 @@
 # 当前模块替换接口
 
-核心实现和新增能力均可扩展；当前采用明确的 Python 接口和组合注入。没有把现有功能转换成 DSH 插件，也不声称能直接安装任意 Pi extension。
+核心实现和新增能力均可扩展；当前采用明确的 Python 接口和组合注入。不声称能直接安装任意 Pi extension 或 DSH 插件。
+
+## 能力插件（2026-11-05 起）
+
+模型能调用的每个工具都由插件提供，内置工具也一样：`core.artifacts`（读资料、写/读产物、提交验收）、`core.orchestration`（委派、等待、提问、复盘等）、`core.following`（持续跟进）。见 `src/personal_agent/plugins.py` 与 `builtin_plugins.py`。
+
+新增能力不改核心代码，写一个模块并在配置里登记：
+
+```python
+# my_notes.py
+from personal_agent.plugins import Plugin, ToolSpec
+from personal_agent.tools import tool
+
+def plugin():
+    lookup = tool("lookup_note", "Look up a note by key.", {"key": {"type": "string"}}, ["key"])
+    return Plugin("notes", "0.1", [ToolSpec(lookup, lambda call, args: {"note": "..."}, effect="read")],
+                  prompt="Use lookup_note for stored notes.")
+```
+
+```toml
+[plugins]
+modules = ["my_notes"]
+```
+
+- 每个工具声明副作用类别 `effect`：`read` / `local_write` / `external_retryable` / `external_unknown`。外部副作用的调用如果因崩溃中断，恢复时会标成“结果未知，先查证再重试”，不会被盲目重放。
+- 插件工具和内置工具走同一套流程：参数校验、预算、取消检查、操作落库、恢复。插件不能完成或验收任务；`core.` 前缀和已有工具名保留给内置插件，不能覆盖。
+- 插件的 `prompt` 片段追加到系统提示末尾；没有扩展插件时，系统提示与改造前逐字一致。
+- 插件代码意外抛错只让这一次工具调用失败，不会让整个任务失败。
+- 插件是本机安装的可信代码，不是安全隔离；调用不可信的外部程序仍需另做进程/权限隔离。
+
+内置插件的提示词目前仍集中在 `runtime.SYSTEM`，拆分到各插件会改变模型实际收到的请求，留作单独一步。
 
 | 边界 | 当前实现与替换方式 | 保持不变的约束 |
 |---|---|---|
@@ -10,7 +40,7 @@
 | 投递 | `DeliveryChannel.send`，默认本地文件收件箱；`channel=...` | 按 delivery ID 幂等，明确接受回执；接受不等于人已阅读 |
 | 记忆值加载 | `MemoryProvider.load`；注入 Store | 成员、集合、版本、删除和用途由账本控制，加载器不能绕过受众边界 |
 | 变化观察 | `ObservationSource.observe`；`Service(observer=..., clock=...)` | 观察器不能注册策略或启动任务；修订、游标、去重和准入由运行时控制 |
-| 新工具 | 注册 schema、执行适配器及权限/预算/验收规则 | 所有副作用先记意图与回执；新证据需定义“新进展”判定，不能靠重复成功绕过停滞限制 |
+| 新工具 | 写插件模块并在 `[plugins]` 登记（见上节）；`Service(plugins=...)` 可直接注入 | 所有副作用先记意图与回执；新证据需定义“新进展”判定，不能靠重复成功绕过停滞限制 |
 
 接口见 `src/personal_agent/ports.py`，模型合同见 `contracts.py`。执行器、来源和投递替换在 `tests/test_m1_scenarios.py` 中实际验证，记忆替换在 `tests/test_m3.py` 中验证，观察器在 M4 测试中注入。M5 的新证据读取也接入了唯一进展记录：第一次读到一个冻结证据页是新进展，重复读同一页不是。
 

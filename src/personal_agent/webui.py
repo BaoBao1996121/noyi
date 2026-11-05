@@ -68,7 +68,7 @@ class LocalModel:
 
 
 class Console:
-    def __init__(self, store, data, model, *, run_service=True, shutdown_event=None):
+    def __init__(self, store, data, model, *, run_service=True, shutdown_event=None, plugins=None):
         self.store, self.data, self.model = store, Path(data).resolve(), model
         self.store.db.execute("CREATE TABLE IF NOT EXISTS local_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
         self.store.db.execute("INSERT OR IGNORE INTO local_metadata VALUES('workspace_id',?)", (uuid.uuid4().hex,))
@@ -76,7 +76,7 @@ class Console:
         self.token = secrets.token_urlsafe(32)
         self.instance_id = uuid.uuid4().hex
         self.shutdown_event = shutdown_event
-        self.service = Service(store, self.data, model)
+        self.service = Service(store, self.data, model, plugins=plugins)
         self.run_service = run_service
         self.service_error = None
         self.store.db.execute("CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY,room_id TEXT NOT NULL,account TEXT NOT NULL,name TEXT NOT NULL,path TEXT NOT NULL,sha256 TEXT NOT NULL,bytes INTEGER NOT NULL,created REAL NOT NULL)")
@@ -413,9 +413,9 @@ async def lifecycle(app):
                 await asyncio.gather(trigger_job, return_exceptions=True)
 
 
-def create_app(store, data, model, *, run_service=True, shutdown_event=None):
+def create_app(store, data, model, *, run_service=True, shutdown_event=None, plugins=None):
     app = web.Application(middlewares=[security], client_max_size=MAX_SOURCE_BYTES + 20000)
-    app[CONSOLE] = Console(store, data, model, run_service=run_service, shutdown_event=shutdown_event)
+    app[CONSOLE] = Console(store, data, model, run_service=run_service, shutdown_event=shutdown_event, plugins=plugins)
     app.add_routes([web.get("/", static), web.get("/assets/{name}", static), web.get("/api/bootstrap", boot),
                     web.get("/api/state", snapshot), web.get("/api/tasks/{task_id}", detail), web.post("/api/messages", submit),
                     web.post("/api/actions/{name}", action), web.post("/api/uploads", upload),
@@ -429,13 +429,13 @@ def create_app(store, data, model, *, run_service=True, shutdown_event=None):
     return app
 
 
-def serve_web(data, config=None, port=8765):
+def serve_web(data, config=None, port=8765, plugins=None):
     data = Path(data).resolve()
     store = Store(data / "state.sqlite")
     model = LocalModel(data, config or ModelConfig.load())
     async def run():
         stopping = asyncio.Event()
-        app = create_app(store, data, model, shutdown_event=stopping)
+        app = create_app(store, data, model, shutdown_event=stopping, plugins=plugins)
         runner = web.AppRunner(app, access_log=None, shutdown_timeout=10)
         try:
             await runner.setup()
