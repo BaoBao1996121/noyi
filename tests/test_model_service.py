@@ -124,6 +124,43 @@ async def test_rate_limit_has_no_hidden_sdk_retry(monkeypatch):
     assert count == 1
 
 
+@pytest.mark.parametrize("names,forced", [
+    (["resolve_conversation"], True),
+    (["read_source"], False),
+    (["read_source", "write_artifact"], False),
+    (["resolve_conversation", "read_source"], False),
+    ([], False),
+])
+async def test_only_single_conversation_protocol_tool_is_forced_on_actual_http_payload(monkeypatch, names, forced):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "unit-test-only")
+    model = QwenModel(ModelConfig())
+    await model.close()
+    requests = []
+
+    def respond(request):
+        requests.append(json.loads(request.content))
+        message = {"role": "assistant", "content": "正常业务回复"}
+        if forced:
+            message.update(content=None, tool_calls=[{"id": "intake-1", "type": "function", "function": {"name": "resolve_conversation", "arguments": '{"action":"new_task"}'}}])
+        return httpx.Response(200, json={"id": "choice-test", "object": "chat.completion", "created": 1,
+            "model": "qwen3.7-plus", "choices": [{"index": 0, "finish_reason": "tool_calls" if forced else "stop", "message": message}]})
+
+    model.client = AsyncOpenAI(api_key="unit-test-only", base_url=model.config.base_url,
+        max_retries=0, http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)))
+    tools = [{"type": "function", "function": {"name": name, "parameters": {"type": "object"}}} for name in names]
+    try:
+        result = await model.complete([{"role": "user", "content": "帮我回顾这件事"}], tools)
+    finally:
+        await model.close()
+    assert len(requests) == 1
+    if forced:
+        assert requests[0]["tool_choice"] == {"type": "function", "function": {"name": "resolve_conversation"}}
+        assert result.message["tool_calls"][0]["function"]["name"] == "resolve_conversation"
+    else:
+        assert "tool_choice" not in requests[0]
+    assert requests[0].get("tools", []) == tools
+
+
 async def test_file_receipt_replay_and_payload_mismatch(tmp_path):
     channel = FileChannel(tmp_path)
     delivery = {"id": "delivery-1", "task_id": "task-1", "room_id": "local", "content": "result", "artifact": None}

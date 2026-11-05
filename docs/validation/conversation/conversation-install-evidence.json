@@ -1,0 +1,160 @@
+{
+  "version": "0.6.0",
+  "python": "3.13.2",
+  "node": "v24.14.1",
+  "installed_wheel": "[WORKSPACE]\\outputs\\personal-agent-core\\.pa\\conversation-release\\personal_agent_core-0.6.0-py3-none-any.whl",
+  "wheel_sha256": "329ec7e4e26ecd7bf15ad40add36b997e7beebbe43abb602011557506327b610",
+  "imported_package": "[WORKSPACE]\\outputs\\personal-agent-core\\.pa\\conversation-install-check\\Lib\\site-packages\\personal_agent",
+  "noneditable_site_packages_import": true,
+  "wheel_matches_current_source": true,
+  "bundled_files_checked": [
+    "personal_agent/__init__.py",
+    "personal_agent/__main__.py",
+    "personal_agent/admission_store.py",
+    "personal_agent/backup.py",
+    "personal_agent/cli.py",
+    "personal_agent/collaboration_store.py",
+    "personal_agent/context.py",
+    "personal_agent/contracts.py",
+    "personal_agent/conversation.py",
+    "personal_agent/conversation_goals.py",
+    "personal_agent/goal_api.py",
+    "personal_agent/goal_store.py",
+    "personal_agent/identity_store.py",
+    "personal_agent/lifecycle_store.py",
+    "personal_agent/memory_store.py",
+    "personal_agent/model.py",
+    "personal_agent/orchestration_tools.py",
+    "personal_agent/pi_bridge/bridge.mjs",
+    "personal_agent/pi_bridge/bridge.test.mjs",
+    "personal_agent/pi_bridge/package-lock.json",
+    "personal_agent/pi_bridge/package.json",
+    "personal_agent/pi_client.py",
+    "personal_agent/ports.py",
+    "personal_agent/review_store.py",
+    "personal_agent/runtime.py",
+    "personal_agent/schedule.py",
+    "personal_agent/service.py",
+    "personal_agent/sources.py",
+    "personal_agent/store.py",
+    "personal_agent/tools.py",
+    "personal_agent/triggers.py",
+    "personal_agent/web/app.js",
+    "personal_agent/web/goals.css",
+    "personal_agent/web/goals.js",
+    "personal_agent/web/index.html",
+    "personal_agent/web/modules.css",
+    "personal_agent/web/reviews.js",
+    "personal_agent/web/style.css",
+    "personal_agent/webui.py"
+  ],
+  "dependencies": {
+    "environment": "[WORKSPACE]\\outputs\\personal-agent-core\\.pa\\conversation-install-check",
+    "dependency_method": "Copied exact locked installed distribution files from local .venv; no editable paths or product package copied",
+    "dependencies": [
+      "aiohappyeyeballs==2.7.1",
+      "aiohttp==3.14.5",
+      "aiosignal==1.4.0",
+      "annotated-types==0.8.0",
+      "anyio==4.16.0",
+      "attrs==26.1.0",
+      "certifi==2026.10.23",
+      "colorama==0.4.6",
+      "distro==1.9.0",
+      "frozenlist==1.8.0",
+      "h11==0.16.0",
+      "httpcore==1.0.9",
+      "httpx==0.28.1",
+      "idna==3.20",
+      "iniconfig==2.3.1",
+      "jiter==0.18.0",
+      "multidict==7.2.1",
+      "openai==2.54.0",
+      "packaging==26.3",
+      "pluggy==1.7.0",
+      "propcache==0.5.4",
+      "pydantic==2.14.2",
+      "pydantic_core==2.50.2",
+      "Pygments==2.21.0",
+      "pytest==9.2.0",
+      "pytest-asyncio==1.4.1.post1",
+      "sniffio==1.3.1",
+      "tqdm==4.70.1",
+      "typing-inspection==0.4.4",
+      "typing_extensions==4.16.0",
+      "tzdata==2026.6",
+      "yarl==1.25.1"
+    ]
+  },
+  "pip_check": "No broken requirements found.",
+  "pi_dependencies": {
+    "@earendil-works/pi-agent-core": {
+      "version": "1.5.0",
+      "resolved": "https://registry.npmmirror.com/@earendil-works/pi-agent-core/-/pi-agent-core-1.5.0.tgz",
+      "overridden": false
+    },
+    "@earendil-works/pi-ai": {
+      "version": "1.5.0",
+      "resolved": "https://registry.npmmirror.com/@earendil-works/pi-ai/-/pi-ai-1.5.0.tgz",
+      "overridden": false
+    }
+  },
+  "default_conversation": {
+    "entry": "Console.submit with no mode field (default auto)",
+    "original_user_message_count": 1,
+    "task_id": "422a4c366e4b4321a2adadd93f0908a6",
+    "status": "succeeded",
+    "acceptance": "passed",
+    "actual_pi_engines": [
+      {
+        "identity": "pi-agent-core@1.5.0",
+        "purpose": "conversation_intake"
+      },
+      {
+        "identity": "pi-agent-core@1.5.0"
+      }
+    ],
+    "protocol_model_calls": 4,
+    "intake_model_calls": 1,
+    "business_model_calls": 3,
+    "tools": [
+      "read_source",
+      "write_artifact",
+      "submit_result"
+    ],
+    "artifact": {
+      "name": "conversation-check.md",
+      "sha256": "a1971fb538cd4974c732cd26807a868737e9389af1ef652978813397b2ed9739",
+      "bytes": 72
+    },
+    "delivery_count": 2,
+    "delivery_state": "accepted",
+    "reopened_extra_calls": 0,
+    "reopened_duplicate_work": false,
+    "durable_counts": {
+      "requests": 4,
+      "tasks": 1,
+      "deliveries": 2,
+      "operations": 3
+    }
+  },
+  "desktop": {
+    "port": 8767,
+    "port_unused_before_start": true,
+    "bootstrap_version": "0.6.0",
+    "first_start": "Personal Agent 已就绪：http://127.0.0.1:8767",
+    "repeated_start": "Personal Agent 已就绪：http://127.0.0.1:8767",
+    "same_process_and_instance": true,
+    "graceful_stop": "服务已停止。下次启动继续处理已接收的工作。",
+    "service_process_exited": true,
+    "port_released": true,
+    "service_lock_released": true,
+    "web_assets_served_from_install": true,
+    "model_credentials_disabled": true,
+    "model_requests": 0
+  },
+  "cloud_model_calls": 0,
+  "data_directory": "[WORKSPACE]\\outputs\\personal-agent-core\\.pa\\conversation-installed-proof-1793841504947237900",
+  "complete_source_file_inventory_matches_wheel": true,
+  "source_files_checked": 39
+}

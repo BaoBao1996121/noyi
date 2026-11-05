@@ -1,0 +1,77 @@
+{
+  "cohorts": [
+    {
+      "cohort": "conversation-live-1793839464",
+      "status": "failed",
+      "calls": 23,
+      "failures": [
+        {
+          "type": "AssertionError",
+          "message": ""
+        }
+      ]
+    },
+    {
+      "cohort": "conversation-live-1793839994",
+      "status": "failed",
+      "calls": 24,
+      "failures": [
+        {
+          "type": "AssertionError",
+          "message": ""
+        }
+      ]
+    },
+    {
+      "cohort": "conversation-live-1793840303",
+      "status": "passed",
+      "calls": 57,
+      "failures": [
+        {
+          "type": "AssertionError",
+          "message": ""
+        }
+      ]
+    }
+  ],
+  "all_cohort_model_requests": 104,
+  "product_source_sha256": {
+    "src/personal_agent/admission_store.py": "30721e476cf7fb556dd21607417f6df6735abbf1cba942c453e0874e6d883ec0",
+    "src/personal_agent/backup.py": "1ffeebafca873c896be8e7d1a47827140db15fef4c94f917c7354b3d3af40ea2",
+    "src/personal_agent/cli.py": "f2e60f0e9b54865a4eb4f8a467e8b15673b8b289a657d20e011b7f75d4dad6e1",
+    "src/personal_agent/collaboration_store.py": "f585f0e8519e0237a5c71782718f1c3d92d354a93c0b1dbaeea3a5aeaa28a555",
+    "src/personal_agent/context.py": "fafa99b43ee59c67699a4c853e197f41237fa5ad51b9e9c0e710ba0e7c64184b",
+    "src/personal_agent/contracts.py": "f0beee764f2125917e28962a6bb9e670e27dc7a0253dce02719d4e0f84334322",
+    "src/personal_agent/conversation.py": "cd0391e3c42d507816621e533ea702a73623fcdc0d89df96cdd2e80fd637e62c",
+    "src/personal_agent/conversation_goals.py": "8be19ff272bc6c20b210adb495392f5f9c18b71b80c5d0096fe5e652002e55bb",
+    "src/personal_agent/goal_api.py": "9014bd1e2984b170a116d94fdabba98d6ff4f2afb20bb35c4c915fab6fc3ee8c",
+    "src/personal_agent/goal_store.py": "38a99c1096d6e2a114aee16088421415e8f939b79b3429b1e400f834b5c6986e",
+    "src/personal_agent/identity_store.py": "75a5b955a928fa2a991779c129733cba4bc3cd9665e5b243f12b22da4544adfe",
+    "src/personal_agent/lifecycle_store.py": "0f6ffd1d2759e2392b0672c88ea5d352a58030708f7d257c7d70d04c0dde0bc7",
+    "src/personal_agent/memory_store.py": "8e78c5fcc8de48736a6ed72c266879723c579a1561d455aa904ff5efa751aaaf",
+    "src/personal_agent/model.py": "e97f0e05f89a844a25597d6def38f8c546642d2007fbef7becc598d4a431627c",
+    "src/personal_agent/orchestration_tools.py": "750aacc022c07015dd02a7fdbd1f717a46a5fcb06ca557c984dbd3573c253b35",
+    "src/personal_agent/pi_client.py": "dfab58de33b90c7c1ee2ca9c7f0ebd98478526c6e071688bf40d0235dae56b5c",
+    "src/personal_agent/ports.py": "04260cfe454025d7253eea87b5d92250726792a6326ef83a673f66e616440f5b",
+    "src/personal_agent/review_store.py": "01c43822b2cc469776e903c5f859cbd4c8acd20188d7b6b11d01d504801c26b7",
+    "src/personal_agent/runtime.py": "d8d9d8619eef21026085aae74a6b1c62fcdc6dc41215846711d8f39f377f2238",
+    "src/personal_agent/schedule.py": "ad58c1ba99ec5c957e80451aa403a981562c48e204e6948d8e2cc0a19d8d29c1",
+    "src/personal_agent/service.py": "53722e54c683ddeb593532e1fbfb2244b44c04767d807acbd8a6e136fcdef4c0",
+    "src/personal_agent/sources.py": "2068109f1173b920b608febdca837384231005fa92ef89cc2eadaf7865f3f5c2",
+    "src/personal_agent/store.py": "9ba776feb042a9c5a1681c6f81d2665344171fb86c96eeb470e3e9201e43c46a",
+    "src/personal_agent/tools.py": "8822b6e054504f3a9e47c3894b113fd45948815fa879d655e5fb22036e750f53",
+    "src/personal_agent/triggers.py": "4e497ce6305e4af2864156ebd664cc89a8e97f86c34e3c796a4a2c2767f6012e",
+    "src/personal_agent/webui.py": "8704217893e66c41b43ef314fd74dd77fc3839ce1cc56545d3c430ced3cc7f42",
+    "src/personal_agent/__init__.py": "158348337844011e181b02868b2a4460d1a4e3f31459db773ab7d8caf54234ed",
+    "src/personal_agent/__main__.py": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+    "src/personal_agent/pi_bridge/bridge.mjs": "bffdff36f16c5af96696a9bdddbf556b54852b1dd1f6fe68afdcdddaade27747",
+    "src/personal_agent/pi_bridge/bridge.test.mjs": "a1aae64b51910af06b8b1e6064308533fafb4e1cb9e2ee5ee72af506520342ff",
+    "src/personal_agent/web/app.js": "3bf949cacb9d08da5eb6befde6f5605f19889812f50db75b79a6c7a9bb54015e",
+    "src/personal_agent/web/goals.css": "e4262e75f6cedb32a097d9c23dd9c8972600840cdbf99f31869692ab69d5fae2",
+    "src/personal_agent/web/goals.js": "4f933e899420b22733bb1d650cc9e7544e323a4e615795a86e630ea32dc2eb98",
+    "src/personal_agent/web/index.html": "af19385f75a9b5a6ed431472d399468885d3cfbe2f8916664c5ae191dd8abb38",
+    "src/personal_agent/web/modules.css": "8572cf08191e387203634c61770edd5b30a37b114cc51607184da3bd59b98ef9",
+    "src/personal_agent/web/reviews.js": "5428586aea4c6baea599f2121fbe6619e567d652508bc937631faf77e9939c19",
+    "src/personal_agent/web/style.css": "9a75312fb1569c1fc98d8f7fd1e393518b93a44ae65f432ba207577be1c52504"
+  }
+}

@@ -49,6 +49,21 @@ class ReviewStore:
         row["policy_versions"] = json.loads(row["policy_versions"])
         return row
 
+    def experiment_context(self, experiment_id):
+        """Keep registered facts without reviving erased derived assumptions.
+
+        Changing an experiment's state or reminder time does not reconfirm its
+        original hypothesis, so use its creation time rather than updated time.
+        The full audit remains available to the owner outside model context.
+        """
+        plan = self.experiment(experiment_id)
+        room = self.goal(plan["goal_id"])["room_id"]
+        floor = self.one("SELECT context_floor FROM rooms WHERE id=?", (room,))["context_floor"]
+        if plan["created"] >= floor:
+            return plan
+        return {**{key: plan[key] for key in ("id", "goal_id", "state", "version", "window_start", "window_end", "next_check", "created", "updated", "policy_versions")},
+                "context_note": "记忆已更新，此前观察假设与判断不再作为当前依据；只保留已经登记的时间和状态。"}
+
     def create_experiment(self, goal_id, *, title, hypothesis, metric, baseline, variant, success_criteria, window_start, window_end, next_check, account="local-user"):
         goal = self.goal(goal_id, account)
         values = [short_text(v, label) for v, label in [(title, "实验名称"), (hypothesis, "假设"), (metric, "衡量指标"), (baseline, "原方案"), (variant, "待观察变化"), (success_criteria, "检验条件")]]
@@ -119,6 +134,7 @@ class ReviewStore:
         deliveries = self.all("SELECT d.id,d.task_id,d.content,d.artifact,d.created FROM deliveries d JOIN tasks t ON t.id=d.task_id WHERE t.goal_id=? AND d.artifact IS NOT NULL AND d.created BETWEEN ? AND ? AND NOT EXISTS(SELECT 1 FROM goal_review_requests rr WHERE rr.task_id=t.id) ORDER BY d.created DESC LIMIT 16", (goal_id, start, end))
         inputs = self.one("SELECT COUNT(DISTINCT f.id) n FROM followups f JOIN tasks t ON t.id=f.owner_task JOIN tasks root ON root.id=t.root_task_id WHERE root.goal_id=? AND f.state!='context' AND f.created BETWEEN ? AND ?", (goal_id, start, end))["n"]
         metrics = {"window_start": start, "window_end": end, "root_tasks_created": sum(not t["parent_task_id"] for t in tasks), "worker_tasks_created": sum(bool(t["parent_task_id"]) for t in tasks), "tasks_currently_accepted": sum(t["acceptance"] == "passed" for t in tasks), "model_calls_with_response": len(usage), "input_tokens": sum(u["input_tokens"] for u in usage), "output_tokens": sum(u["output_tokens"] for u in usage), "failed_tool_operations": failed, "user_followups": inputs, "user_feedback_count": len(feedback), "reported_management_seconds": sum(f["management_seconds"] for f in feedback if f["management_seconds"] is not None) if any(f["management_seconds"] is not None for f in feedback) else None, "domain_outcome": None, "invoice_currency_cost": None, "cautions": ["Task acceptance is a structural check, not evidence of real-world improvement.", "No domain adoption, revenue, publication or growth metric was connected.", "Unknown human time and invoice cost are missing, not zero.", "Unchanged watch polls update lifetime health counters; this evidence catalog is a bounded set of retained observations."]}
+        metrics["model_usage_scope"] = "Only execution of tasks associated with this goal. Taskless conversational intake and other unassociated requests are excluded; this is not the complete invoice."
         evidence = {"metrics": {"kind": "ledger_metrics", "data": metrics}}
         evidence["goal_state"] = {"kind": "state_at_snapshot", "data": {"created": time.time(), "current_state": goal["current_state"] if goal["assessment_at"] >= room["context_floor"] else "需要重新评估", "gaps": goal["gaps"] if goal["assessment_at"] >= room["context_floor"] else [], "unknowns": goal["unknowns"] if goal["assessment_at"] >= room["context_floor"] else ["此前评估已因记忆纠正失效"], "next_action": goal["next_action"] if goal["assessment_at"] >= room["context_floor"] else "重新检查", "health": self.all("SELECT h.source_id,h.state,h.checks,h.failures AS consecutive_failures,h.checked_at FROM source_health h JOIN routine_policies p ON p.id=h.policy_id WHERE p.goal_id=?", (goal_id,)), "scope": "Current state and lifetime health counters at snapshot time, not measurements restricted to this experiment window."}}
         for item in observations:
@@ -138,8 +154,9 @@ class ReviewStore:
         with self.transaction():
             goal = self.goal(goal_id, account)
             self.require_member(goal["actor_id"], goal["room_id"])
-            if goal["status"] != "active":
-                raise ValueError("复盘会调用模型，请先恢复目标")
+            # A fresh explicit historical review is independent of whether
+            # future business work is paused or ended. Its task keeps this
+            # goal revision and budget, without reactivating any policy.
             intent = encode({"goal_id": goal_id, "experiment_id": experiment_id, "days": days})
             old = self.one("SELECT t.id,r.intent FROM tasks t JOIN messages m ON m.task_id=t.id JOIN goal_review_requests r ON r.task_id=t.id WHERE m.source='goal_review' AND m.account=? AND m.client_nonce=?", (account, nonce))
             if old:
@@ -180,7 +197,7 @@ class ReviewStore:
         if snapshot["created"] < floor:
             return {"state": "stale_after_memory_correction", "action": "Cancel this review and request a fresh one; older derived evidence is not automatically reloaded."}
         payload = json.loads(snapshot["payload"])
-        experiment = self.experiment(request["experiment_id"]) if request["experiment_id"] else None
+        experiment = self.experiment_context(request["experiment_id"]) if request["experiment_id"] else None
         return {"state": "available", "review_type": "experiment_review" if experiment else "historical_snapshot", "experiment_phase": experiment["state"] if experiment else "not_applicable", "snapshot_window_closed": True, "snapshot_id": snapshot["id"], "window": payload["effective_window"], "requested_window": payload["requested_window"], "metrics": payload["metrics"], "evidence_catalog": [{"id": k, "kind": v["kind"], "created": v["data"].get("created")} for k, v in payload["evidence"].items()], "experiment": experiment, "experiment_version_at_request": request["experiment_version"], "suggested_next_check_unix_seconds": time.time() + 86400, "suggested_next_check_beijing": datetime.fromtimestamp(time.time() + 86400, ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M 北京时间"), "trust": "Frozen operational receipts; user reports and model interpretations do not prove domain improvement. Read cited evidence with read_review_evidence before record_goal_review."}
 
     def goal_context(self, run):
@@ -279,7 +296,8 @@ class ReviewStore:
                  f"窗口内创建 {metrics['root_tasks_created']} 项根任务（包含工作和复盘），另有 {metrics['worker_tasks_created']} 项后台协作者任务。",
                  f"上述任务中当前通过结构检查的共 {metrics['tasks_currently_accepted']} 项；结构检查不等于内容无误或现实效果提升。",
                  f"本次证据目录收录文档回执 {len(documents)} 份（最多收录最近 16 份），后台协作者数不代表成果数。",
-                 f"窗口内收到模型响应 {metrics['model_calls_with_response']} 次，输入 {metrics['input_tokens']} token，输出 {metrics['output_tokens']} token；失败工具操作 {metrics['failed_tool_operations']} 次。",
+                 f"窗口内关联任务执行的模型响应 {metrics['model_calls_with_response']} 次，输入 {metrics['input_tokens']} token，输出 {metrics['output_tokens']} token；失败工具操作 {metrics['failed_tool_operations']} 次。",
+                 "这一项只包含关联到本事项的任务执行；对话接待等未归入本事项的调用不在此列，不能据此当作全部收费或实际账单。",
                  f"窗口内有 {metrics['user_feedback_count']} 条用户反馈，{metrics['user_followups']} 条任务补充；反馈内容是用户报告。",
                  "人工管理耗时未填写，保持未知。" if metrics['reported_management_seconds'] is None else f"已填写反馈中的人工耗时合计 {metrics['reported_management_seconds']:g} 秒；未填写的投入不包含在内。",
                  "未接入业务效果测量和实际账单金额，不能据此证明采纳率、满意度或节省时间。"]

@@ -175,6 +175,14 @@ async def test_handoff_preserves_requirements_followup_generation_and_negative_e
     context = runtime.context(new)
     assert "Original route unavailable" in str(context)
     assert "Keep the action list" in str(context)
+    # A valid one-task handoff must remain executable without granting the
+    # temporary worker ongoing room-management authority.
+    assert runtime.following.context(new)["available"] is False
+    names = {schema["function"]["name"] for schema in runtime.schemas(new)}
+    assert "read_source" in names
+    assert not names.intersection({"list_following", "start_following", "manage_following", "review_following", "observe_following", "complete_action"})
+    with pytest.raises(ValueError):
+        runtime.following.execute(new, "list_following", {})
     assert store.one("SELECT generation FROM followups")["generation"] == 2
     assert len(store.all("SELECT * FROM handoffs")) == 1
 

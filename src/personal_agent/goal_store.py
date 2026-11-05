@@ -68,7 +68,7 @@ class GoalStore:
             raise ValueError("无效目标累计预算")
         goal_id, now = gid(), time.time()
         with self.transaction():
-            self.db.execute("INSERT INTO goals(id,owner,room_id,actor_id,title,objective,status,revision,current_state,gaps,unknowns,next_action,wait_reason,evidence,calls_limit,tools_limit,allow_policy_adjustments,created,updated) VALUES(?,?,?,?,?,?,'active',1,?,?,?,?,?,?,?,?,?,?,?)", (goal_id, account, room, actor_id, title.strip(), objective.strip(), "尚未开展首次检查", encode(["尚无已验收成果"]), encode([]), "注册检查计划或明确开始首次工作", "尚未注册检查计划", encode([]), calls_limit, tools_limit, int(allow_policy_adjustments), now, now))
+            self.db.execute("INSERT INTO goals(id,owner,room_id,actor_id,title,objective,status,revision,current_state,gaps,unknowns,next_action,wait_reason,evidence,calls_limit,tools_limit,allow_policy_adjustments,created,updated) VALUES(?,?,?,?,?,?,'active',1,?,?,?,?,?,?,?,?,?,?,?)", (goal_id, account, room, actor_id, title.strip(), objective.strip(), "还没有首次跟进结果", encode(["尚无已验收成果"]), encode([]), "根据你的要求安排后续跟进", "正在确定下一步", encode([]), calls_limit, tools_limit, int(allow_policy_adjustments), now, now))
             self.goal_event(goal_id, "user_authorized", {"actor_id": actor_id, "calls_limit": calls_limit, "tools_limit": tools_limit, "authority": "explicit_local_user"})
         return self.goal(goal_id, account)
 
@@ -97,7 +97,7 @@ class GoalStore:
             readback = self.policy(policy_id, account)
             if readback["registration_receipt"]["registration_id"] != receipt["registration_id"] or readback["state"] != "active":
                 raise RuntimeError("policy registration readback failed")
-            self.db.execute("UPDATE goals SET next_action=?,wait_reason=?,updated=? WHERE id=?", ("等待下一次资料检查", "检查计划已注册；等待到期或来源变化", now, goal_id))
+            self.db.execute("UPDATE goals SET next_action=?,wait_reason=?,updated=? WHERE id=?", ("按约定继续跟进，有新情况时交付结果", "已安排后续跟进，等待约定时间或资料变化", now, goal_id))
         return readback
 
     def _stop_goal_tasks(self, goal_id, reason, policy_id=None):
@@ -115,7 +115,12 @@ class GoalStore:
             if goal["revision"] != expected_revision:
                 raise ValueError("目标已更新，请刷新")
             if status == goal["status"]:
-                return goal
+                # A fresh "stop" also revokes reviews explicitly requested
+                # after the matter was paused/ended. Ordinary same-state
+                # retries with no newer review remain a no-op.
+                reviews = [t for t in self.all("SELECT * FROM tasks WHERE goal_id=? AND parent_task_id IS NULL AND status NOT IN ('succeeded','cancelled')", (goal_id,)) if hasattr(self, "explicit_goal_task_granted") and self.explicit_goal_task_granted(t) and t["goal_revision"] == goal["revision"]]
+                if status == "active" or not reviews:
+                    return goal
             if goal["status"] in {"achieved", "retired"} and status == "active":
                 raise ValueError("已结束目标请创建新的明确委托")
             if status == "active":
@@ -123,7 +128,7 @@ class GoalStore:
                 if goal["calls_used"] >= goal["calls_limit"] or goal["tools_used"] >= goal["tools_limit"]:
                     raise ValueError("目标累计预算已用完，请先增加额度")
             revision = goal["revision"] + 1
-            self.db.execute("UPDATE goals SET status=?,revision=?,wait_reason=?,updated=? WHERE id=?", (status, revision, "用户暂停" if status == "paused" else "等待已注册计划" if status == "active" else "目标已结束", time.time(), goal_id))
+            self.db.execute("UPDATE goals SET status=?,revision=?,wait_reason=?,updated=? WHERE id=?", (status, revision, "已按你的要求暂停" if status == "paused" else "已继续跟进，等待约定时间或新情况" if status == "active" else "这件事已结束跟进", time.time(), goal_id))
             if status != "active":
                 self._stop_goal_tasks(goal_id, "goal_" + status)
             else:
@@ -193,7 +198,8 @@ class GoalStore:
         if not root["goal_id"]:
             return None
         goal = self.goal(root["goal_id"])
-        if goal["status"] != "active":
+        review_grant = hasattr(self, "explicit_goal_task_granted") and self.explicit_goal_task_granted(root)
+        if goal["status"] != "active" and not review_grant:
             return "goal_" + goal["status"]
         if root["goal_revision"] != goal["revision"]:
             return "goal_revision_changed"
@@ -248,10 +254,11 @@ class GoalStore:
             goal = self.goal(root["goal_id"]) if root["goal_id"] else None
             column, limit = ("calls_used", "calls_limit") if kind == "model" else ("tools_used", "tools_limit")
             if goal and goal[column] >= goal[limit]:
-                self.db.execute("UPDATE goals SET status='needs_attention',wait_reason='累计预算已用完',updated=? WHERE id=?", (time.time(), goal["id"]))
+                if goal["status"] == "active":
+                    self.db.execute("UPDATE goals SET status='needs_attention',wait_reason='本次可用的执行额度已用完，已有结果保留',updated=? WHERE id=?", (time.time(), goal["id"]))
                 self.goal_event(goal["id"], "budget_exhausted", {"kind": kind, "used": goal[column], "limit": goal[limit]}, run["id"])
                 self._stop_goal_tasks(goal["id"], "goal_budget")
-                self._notice(None, goal["room_id"], f"持续目标「{goal['title']}」的累计预算已用完，进度已保存。可以增加预算后继续。")
+                self._notice(None, goal["room_id"], f"「{goal['title']}」本次可用的执行额度已用完，进度已保存。你可以直接说继续；已暂停或结束的安排不会因此自动恢复。")
                 return False
             accepted = super().reserve(run, kind)
             if accepted and goal:
@@ -266,7 +273,8 @@ class GoalStore:
                 if task["goal_id"] and task["parent_task_id"] is None:
                     goal = self.goal(task["goal_id"])
                     self.goal_event(goal["id"], "task_" + kwargs["status"], {"task_id": task["id"], "reason": kwargs["reason"], "acceptance": kwargs.get("acceptance", "pending"), "artifact": kwargs.get("artifact")}, run["id"])
-                    if kwargs["status"] == "succeeded":
+                    review_grant = hasattr(self, "explicit_goal_task_granted") and self.explicit_goal_task_granted(task)
+                    if kwargs["status"] == "succeeded" and not review_grant:
                         self.db.execute("UPDATE goals SET current_state=?,wait_reason='本次成果已交付，持续职责仍保留',assessment_at=?,updated=? WHERE id=?", ("最近一次检查已完成：" + kwargs["content"][:500], time.time(), time.time(), goal["id"]))
                         self.db.execute("UPDATE policy_occurrences SET status='completed',reason='task_accepted' WHERE task_id=?", (task["id"],))
                         for proposal in self.all("SELECT id FROM policy_proposals WHERE goal_id=? AND state='approved'", (goal["id"],)):
@@ -290,11 +298,14 @@ class GoalStore:
             return None
         goal = self.goal(root["goal_id"])
         floor = self.one("SELECT context_floor FROM rooms WHERE id=?", (goal["room_id"],))["context_floor"]
-        if goal["assessment_at"] < floor:
-            goal.update(current_state="记忆已更新，旧判断需重新验证", gaps=[], unknowns=[], evidence=[], next_action="基于当前授权资料重新检查")
+        if max(goal["created"], goal["assessment_at"]) < floor:
+            goal.update(current_state="记忆已更新，旧判断需重新验证", gaps=[], unknowns=[], evidence=[], next_action="基于当前授权资料重新检查", wait_reason="等待基于当前资料的新判断")
         policies = [self.policy(p["id"]) for p in self.all("SELECT id FROM routine_policies WHERE goal_id=?", (goal["id"],))]
         for policy in policies:
             policy["template"]["sources"] = [{k: v for k, v in s.items() if k != "location"} for s in policy["template"]["sources"]]
+            if policy["created"] < floor:
+                policy["template"]["objective"] = goal["objective"]
+                policy["template"]["sources"] = [{**s, "description": s["id"]} for s in policy["template"]["sources"]]
         return {"goal": goal, "source_policy_id": root["policy_id"], "policies": policies,
                 "observations": self.all("SELECT id,state,fingerprint,created FROM observations WHERE policy_id IN (SELECT id FROM routine_policies WHERE goal_id=?) ORDER BY created DESC LIMIT 8", (goal["id"],)),
                 "recent_outcomes": [{**r, "data": json.loads(r["data"])} for r in self.all("SELECT kind,data,created FROM goal_history WHERE goal_id=? AND kind LIKE 'task_%' AND created>=? ORDER BY created DESC LIMIT 4", (goal["id"], floor))],
@@ -305,6 +316,8 @@ class GoalStore:
         if not self.current(run):
             raise ValueError("stale goal work")
         task = self.task(run["task_id"])
+        if hasattr(self, "explicit_goal_task_granted") and self.explicit_goal_task_granted(task):
+            raise ValueError("历史回顾只能保存复盘结论，不能改写正在跟进的业务状态")
         if not task["goal_id"] or task["parent_task_id"]:
             raise ValueError("只有持续目标的当前根任务可以更新目标进展")
         if any(not isinstance(s, str) or not 1 <= len(s.strip()) <= 1500 for s in (current_state, next_action)):
@@ -411,6 +424,8 @@ class GoalStore:
         if not self.current(run):
             raise ValueError("stale policy proposal")
         root = self.task(self.task(run["task_id"])["root_task_id"])
+        if hasattr(self, "explicit_goal_task_granted") and self.explicit_goal_task_granted(root):
+            raise ValueError("历史回顾的建议保存在复盘中，不能建立待启用的业务变更")
         policy = self.policy(policy_id)
         if not root["goal_id"] or root["goal_id"] != policy["goal_id"]:
             raise ValueError("不能建议修改其他目标的检查计划")
@@ -442,6 +457,8 @@ class GoalStore:
         if not self.current(run):
             raise ValueError("stale policy review")
         task = self.task(run["task_id"])
+        if hasattr(self, "explicit_goal_task_granted") and self.explicit_goal_task_granted(task):
+            raise ValueError("历史回顾不能批准或启用业务安排变更")
         proposal = self.one("SELECT * FROM policy_proposals WHERE id=?", (proposal_id,))
         if not proposal or task["parent_task_id"] or proposal["goal_id"] != task["goal_id"]:
             raise ValueError("只有当前持续目标根任务的负责人可审核")

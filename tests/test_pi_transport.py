@@ -72,3 +72,60 @@ async def test_actual_pi_child_is_reaped_after_host_cancellation_and_receives_no
         ], [], "offline-transport-test", cancel_when_model_requested), timeout=10)
     assert len(children) == 1
     assert children[0].returncode is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["creation", "cleanup"])
+async def test_actual_pi_repeated_cancellation_waits_for_child_and_pipe_cleanup(monkeypatch, phase):
+    from personal_agent import pi_client
+
+    real_spawn, real_close = asyncio.create_subprocess_exec, pi_client.close_pi
+    entered, release = asyncio.Event(), asyncio.Event()
+    children = []
+
+    async def delayed_spawn(*args, **kwargs):
+        child = await real_spawn(*args, **kwargs)
+        children.append(child)
+        if phase == "creation":
+            entered.set()
+            await release.wait()
+        return child
+
+    async def delayed_close(child):
+        if phase == "cleanup":
+            entered.set()
+            await release.wait()
+        await real_close(child)
+
+    async def handle(method, params):
+        if method == "model":
+            return asdict(ModelReply({"role": "assistant", "content": "Done."}, finish_reason="stop"))
+        assert method == "turn_end"
+        return {"action": "end"}
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", delayed_spawn)
+    monkeypatch.setattr(pi_client, "close_pi", delayed_close)
+    job = asyncio.create_task(run_pi([{"role": "user", "content": "Offline cleanup probe"}], [], "offline-transport-test", handle))
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=10)
+        job.cancel()  # A user stop.
+        await asyncio.sleep(0)
+        job.cancel()  # A service shutdown before the first stop finishes.
+        await asyncio.sleep(0)
+        assert not job.done(), "A stop must not return before owning and reaping its child"
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(job, timeout=10)
+        assert len(children) == 1
+        child = children[0]
+        assert child.returncode is not None
+        assert child._transport.is_closing()
+        assert child.stdin.is_closing()
+        assert child.stdout.at_eof()
+    finally:
+        release.set()
+        if not job.done():
+            job.cancel()
+        await asyncio.gather(job, return_exceptions=True)
+        for child in children:
+            await real_close(child)

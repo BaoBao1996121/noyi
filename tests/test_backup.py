@@ -29,6 +29,7 @@ async def test_backup_roundtrip_preserves_evidence_and_pauses_unfinished_work(st
     await Service(store, data, ScriptedModel([tool_reply('write_artifact', {'name': 'result.md', 'content': 'Verified result'}), submit_written_artifact])).serve(once=True)
     pending = store.submit(spec, nonce='pending')['task_id']
     store.submit(None, text='queued chat', nonce='queued-chat')
+    incoming = store.accept_conversation(spec, text='继续整理这份资料', nonce='queued-natural')
     store._notice(pending, 'local', 'pending notice')
     from personal_agent.webui import Console
     original_workspace = Console(store, data, ScriptedModel([])).workspace_id
@@ -49,6 +50,13 @@ async def test_backup_roundtrip_preserves_evidence_and_pauses_unfinished_work(st
         assert restored.one('SELECT mode FROM admission_rules')['mode'] == 'off'
         assert restored.task(pending)['spec']['sources'][0]['location'] == str(destination / 'uploads/notes.txt')
         assert restored.policy(policy['id'])['template']['sources'][0]['location'] == str(destination / 'uploads/notes.txt')
+        restored_incoming = restored.one('SELECT * FROM conversation_inputs WHERE id=?', (incoming['conversation_id'],))
+        assert restored_incoming['state'] == 'held_after_restore'
+        assert json.loads(restored_incoming['spec'])['sources'][0]['location'] == str(destination / 'uploads/notes.txt')
+        assert json.loads(restored_incoming['receipt'])['state'] == 'held_after_restore'
+        retry = restored.accept_conversation(spec, text='继续整理这份资料', nonce='queued-natural')
+        assert retry['state'] == 'held_after_restore' and retry['duplicate'] is True
+        assert restored.claim_conversation() is None
         assert restored.memory_items('local')[0]['value'] == '简洁'
         assert restored.one("SELECT * FROM deliveries WHERE content='pending notice'")['state'] == 'held_after_restore'
         model = ScriptedModel([])

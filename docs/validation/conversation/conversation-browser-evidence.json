@@ -1,0 +1,635 @@
+{
+  "server": "http://127.0.0.1:8768/",
+  "mock": false,
+  "actual_qwen_server": true,
+  "created_at": "2026-11-05T01:11:17.010544+00:00",
+  "read_only_ui_checks": {
+    "layout": {
+      "server": "http://127.0.0.1:8768/",
+      "mock": false,
+      "read_only": true,
+      "checked_at": "2026-11-05T01:08:04.982Z",
+      "provenance": {
+        "ledger_internal_requests": 4,
+        "ledger_internal_sources": [
+          "routine"
+        ],
+        "rendered_internal_user_bubbles": 0,
+        "ledger_explicit_requests": 10,
+        "rendered_user_bubbles": 10,
+        "all_user_bubbles_have_explicit_ingress": true,
+        "deliveries_in_ledger": 19,
+        "artifact_deliveries": 7
+      },
+      "desktop": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "composer": {
+          "top": 821,
+          "bottom": 1000
+        },
+        "message_scroll": {
+          "height": 740,
+          "content_height": 3971
+        },
+        "horizontal_overflow": false,
+        "message_inputs": 1,
+        "mode_selector": false,
+        "forms": [
+          "composer-form"
+        ],
+        "visible_selects": [],
+        "artifact_buttons": 7,
+        "model": "qwen3.7-plus · Qwen 官网"
+      },
+      "mobile": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "composer": {
+          "top": 673,
+          "bottom": 844
+        },
+        "message_scroll": {
+          "height": 603,
+          "content_height": 4661
+        },
+        "horizontal_overflow": false,
+        "message_inputs": 1,
+        "mode_selector": false,
+        "forms": [
+          "composer-form"
+        ],
+        "visible_selects": [],
+        "artifact_buttons": 7,
+        "model": "qwen3.7-plus · Qwen 官网"
+      },
+      "page_errors": [],
+      "write_requests": []
+    },
+    "following": {
+      "server": "http://127.0.0.1:8768/",
+      "mock": false,
+      "read_only": true,
+      "checked_at": "2026-11-05T01:14:19.455Z",
+      "following": {
+        "text": "正在跟进的事情\n\n你交代过的事情、最新进展和接下来的安排。\n\n返回对话\n监控项目资料变化\n已结束\n由 个人助理 跟进\n当前安排\n已结束，不再自动检查。\n每10分钟查看资料，仅在变化时处理 · 已停用\n上次处理 · 11/5 09:06\n最近一次检查已完成：已根据最新项目资料文件更新河畔读书会执行清单，包含负责人小许、截止日期2026年11月15日及待确认事项。系统将持续每5秒监控源文件变化，仅在内容变化时自动更新清单，无需每次询问用户。\n当时记录的下一步：根据新观察更新资料成果\n继续沟通\n查看跟进记录\n技术详情\n\n本机服务运行时会继续处理。需要调整安排或停止跟进，直接在对话里说就好。",
+        "forms": 0,
+        "inputs": 0,
+        "cards": 1,
+        "technical_details_collapsed": true
+      },
+      "current": {
+        "ledger_goal_status": "retired",
+        "ledger_schedules": [
+          {
+            "state": "active",
+            "schedule": {
+              "grace_seconds": 60,
+              "interval_seconds": 600,
+              "kind": "watch",
+              "missed": "coalesce",
+              "timezone": "Asia/Shanghai"
+            },
+            "next_due": 1793841386.945107
+          }
+        ],
+        "ledger_assessment_at": 1793840804.3040588,
+        "arrangement": "当前安排\n已结束，不再自动检查。\n每10分钟查看资料，仅在变化时处理 · 已停用",
+        "history": "上次处理 · 11/5 09:06\n最近一次检查已完成：已根据最新项目资料文件更新河畔读书会执行清单，包含负责人小许、截止日期2026年11月15日及待确认事项。系统将持续每5秒监控源文件变化，仅在内容变化时自动更新清单，无需每次询问用户。\n当时记录的下一步：根据新观察更新资料成果",
+        "history_preserved": true
+      },
+      "mobile": {
+        "width": 390,
+        "content_width": 390,
+        "height": 844,
+        "panel_scroll_height": 774
+      },
+      "page_errors": [],
+      "write_requests": []
+    },
+    "artifact_preview": {
+      "file": "reading_club_welcome.md",
+      "real_rendered_content": true,
+      "three_welcome_sentences": true,
+      "download_link_present": true
+    },
+    "following_before_display_fix": {
+      "server": "http://127.0.0.1:8768/",
+      "mock": false,
+      "read_only": true,
+      "checked_at": "2026-11-05T01:07:01.065Z",
+      "following": {
+        "text": "正在跟进的事情\n\n你交代过的事情、最新进展和接下来的安排。\n\n返回对话\n监控项目资料变化\n已结束\n\n每5秒检查授权的项目资料文件，仅在内容变化时自动更新执行清单，无需每次询问用户\n\n由 个人助理 跟进\n最近一次检查已完成：已根据最新项目资料文件更新河畔读书会执行清单，包含负责人小许、截止日期2026年11月15日及待确认事项。系统将持续每5秒监控源文件变化，仅在内容变化时自动更新清单，无需每次询问用户。\n下一步：根据新观察更新资料成果\n这件事已结束跟进\n继续沟通\n查看跟进记录\n技术详情\n\n本机服务运行时会继续处理。需要调整安排或停止跟进，直接在对话里说就好。",
+        "forms": 0,
+        "inputs": 0,
+        "cards": 1,
+        "technical_details_collapsed": true
+      },
+      "mobile": {
+        "width": 390,
+        "content_width": 390,
+        "height": 844,
+        "panel_scroll_height": 774
+      },
+      "page_errors": [],
+      "write_requests": []
+    }
+  },
+  "frontend_fix": {
+    "file": "src/personal_agent/web/app.js",
+    "description": "Only explicit web/cli/conversation ingress renders as user bubbles; internal requests retained in ledger, delivery results unchanged.",
+    "syntax_check": "passed",
+    "diff_check": "passed",
+    "http_snapshot_changed": false,
+    "files": [
+      "src/personal_agent/web/app.js",
+      "src/personal_agent/web/goals.js"
+    ],
+    "following_display": "Current schedule/state and next due are read from actual registration separately; prior assessment retains original text with assessment time, ended responsibility clearly says no automatic checks."
+  },
+  "browser_submissions": [
+    {
+      "submit": {
+        "server": "http://127.0.0.1:8768/",
+        "mock": false,
+        "submitted_by": "normal browser composer",
+        "text": "请帮我回顾一下刚才项目资料的跟进情况，按实际执行记录说话，没有测量的业务效果保持未知。",
+        "baseline": {
+          "server_time": 1793840960.6092422,
+          "task_ids": [
+            "70b6ef897c8f47d8822cd1bf486f3dec",
+            "eca56776184a4236b677caef8eb49bcd",
+            "855f82096cc84b67a4c43b1b2d8d2e84",
+            "6dca48cd68234115bca8296fc5c8e463",
+            "cf9e9c8f8ccd4b97bc2745de72113785",
+            "be7a9fcdc0f54665952c2dd6ccd41712",
+            "f677252126e745af9ef1655808003e03",
+            "60c2e70aa9bf4b339f39e07111c05445",
+            "aeae7f9d301c48ae9d597355e0b7c01b"
+          ],
+          "delivery_ids": [
+            "6a8a83cb1f994fd68023563cf147399e",
+            "5a71c9894309444fb1876193d282d8c1",
+            "baa8221897994d31b5879c4c4ab74cba",
+            "0414dab2a2cf4493951a37be6a5ce966",
+            "ced98b9ef34d48a39f1862c9a84c0b53",
+            "ef39802f1e034ef6a95447919e559a0f",
+            "4f57a0d5e0e54333996983793abb2e1a",
+            "a8fedc4069174159984f9c38cb1c6ef3",
+            "f2613aa31a254a5094cb1df7c8cbfd86",
+            "68e3936bf479446699408875e02e0ce0",
+            "c866889a31bc4720ab1b90b223a65059",
+            "1f1d73fd99ca49669a041d2a32a17901",
+            "169694e6e15e492e9dc37694a9d9e8b9",
+            "ba4b867dd94942d7b3ffc7edb9288539",
+            "4f6fa186752a4672bc0927630030a834",
+            "7ac30943648347579a5b51ad42ca1197",
+            "b778d9ed916a46cba2e3bfadf5cabed9",
+            "b2f1be9083c5476380e78205f92f6af1",
+            "c6aadef29c0d4f52ae1a459026f332ed"
+          ],
+          "user_messages": 10,
+          "task_model_calls": 33
+        },
+        "submission": {
+          "body": {
+            "text": "请帮我回顾一下刚才项目资料的跟进情况，按实际执行记录说话，没有测量的业务效果保持未知。",
+            "mode": "auto",
+            "room": "local",
+            "actor_id": null,
+            "reply_to": null,
+            "task_id": null,
+            "uploads": [],
+            "urls": [],
+            "nonce": "13a0ae5f-73da-4f9e-9104-19d57f55015a"
+          },
+          "status": 200,
+          "receipt": {
+            "message_id": "f5d5e4ea924b41199f44cf5e77b063e9",
+            "conversation_id": "f5d5e4ea924b41199f44cf5e77b063e9",
+            "task_id": null,
+            "state": "received",
+            "duplicate": false
+          }
+        },
+        "submitted_at": "2026-11-05T01:09:20.675Z",
+        "user_bubbles_for_submitted_text": 1
+      },
+      "review": {
+        "checked_at": "2026-11-05T01:10:49.461Z",
+        "submission": {
+          "body": {
+            "text": "请帮我回顾一下刚才项目资料的跟进情况，按实际执行记录说话，没有测量的业务效果保持未知。",
+            "mode": "auto",
+            "room": "local",
+            "actor_id": null,
+            "reply_to": null,
+            "task_id": null,
+            "uploads": [],
+            "urls": [],
+            "nonce": "13a0ae5f-73da-4f9e-9104-19d57f55015a"
+          },
+          "status": 200,
+          "receipt": {
+            "message_id": "f5d5e4ea924b41199f44cf5e77b063e9",
+            "conversation_id": "f5d5e4ea924b41199f44cf5e77b063e9",
+            "task_id": null,
+            "state": "received",
+            "duplicate": false
+          }
+        },
+        "outcome": {
+          "api_task_model_delta": 0,
+          "new_tasks": [],
+          "new_deliveries": [
+            {
+              "id": "7a45e72d6c564f49a56b4a61994636cb",
+              "task_id": null,
+              "kind": "result",
+              "artifact": false,
+              "content": "这条消息的意思还没有可靠确认，我已停下尝试。请换一种说法或补充你指的是哪件事。"
+            }
+          ],
+          "questions": []
+        },
+        "user_bubbles_for_submitted_text": 1,
+        "result": "failed_intake_no_registered_review",
+        "retries": 0,
+        "usage": {
+          "api_business_task_model_delta": 0,
+          "sqlite_total_before": 45,
+          "sqlite_total_after": 49,
+          "sqlite_total_delta": 4,
+          "sqlite_intake": {
+            "state": "failed",
+            "calls_used": 4
+          },
+          "limit_new_model_requests": 20
+        },
+        "failure": "Qwen returned plain assistant text four times without resolve_conversation; no business task or report was registered."
+      },
+      "attempt": 1
+    },
+    {
+      "attempt": 2,
+      "submit": {
+        "server": "http://127.0.0.1:8768/",
+        "mock": false,
+        "submitted_by": "normal browser composer",
+        "text": "请帮我回顾一下刚才项目资料的跟进情况，按实际执行记录说话，没有测量的业务效果保持未知。",
+        "baseline": {
+          "server_time": 1793841421.2585452,
+          "task_ids": [
+            "70b6ef897c8f47d8822cd1bf486f3dec",
+            "eca56776184a4236b677caef8eb49bcd",
+            "855f82096cc84b67a4c43b1b2d8d2e84",
+            "6dca48cd68234115bca8296fc5c8e463",
+            "cf9e9c8f8ccd4b97bc2745de72113785",
+            "be7a9fcdc0f54665952c2dd6ccd41712",
+            "f677252126e745af9ef1655808003e03",
+            "60c2e70aa9bf4b339f39e07111c05445",
+            "aeae7f9d301c48ae9d597355e0b7c01b"
+          ],
+          "delivery_ids": [
+            "6a8a83cb1f994fd68023563cf147399e",
+            "5a71c9894309444fb1876193d282d8c1",
+            "baa8221897994d31b5879c4c4ab74cba",
+            "0414dab2a2cf4493951a37be6a5ce966",
+            "ced98b9ef34d48a39f1862c9a84c0b53",
+            "ef39802f1e034ef6a95447919e559a0f",
+            "4f57a0d5e0e54333996983793abb2e1a",
+            "a8fedc4069174159984f9c38cb1c6ef3",
+            "f2613aa31a254a5094cb1df7c8cbfd86",
+            "68e3936bf479446699408875e02e0ce0",
+            "c866889a31bc4720ab1b90b223a65059",
+            "1f1d73fd99ca49669a041d2a32a17901",
+            "169694e6e15e492e9dc37694a9d9e8b9",
+            "ba4b867dd94942d7b3ffc7edb9288539",
+            "4f6fa186752a4672bc0927630030a834",
+            "7ac30943648347579a5b51ad42ca1197",
+            "b778d9ed916a46cba2e3bfadf5cabed9",
+            "b2f1be9083c5476380e78205f92f6af1",
+            "c6aadef29c0d4f52ae1a459026f332ed",
+            "7a45e72d6c564f49a56b4a61994636cb"
+          ],
+          "same_text_bubbles": 1,
+          "user_messages": 11,
+          "task_model_calls": 33
+        },
+        "submission": {
+          "body": {
+            "text": "请帮我回顾一下刚才项目资料的跟进情况，按实际执行记录说话，没有测量的业务效果保持未知。",
+            "mode": "auto",
+            "room": "local",
+            "actor_id": null,
+            "reply_to": null,
+            "task_id": null,
+            "uploads": [],
+            "urls": [],
+            "nonce": "af2ae6ed-04da-4493-9e61-6c31bdf47ac8"
+          },
+          "status": 200,
+          "receipt": {
+            "message_id": "30ac40543c8e44fbb789d94623b1ec82",
+            "conversation_id": "30ac40543c8e44fbb789d94623b1ec82",
+            "task_id": null,
+            "state": "received",
+            "duplicate": false
+          }
+        },
+        "submitted_at": "2026-11-05T01:17:01.331Z",
+        "user_bubbles_for_submitted_text": 2,
+        "new_user_bubbles_for_this_submission": 1,
+        "prior_identical_user_bubbles": 1
+      },
+      "review": {
+        "checked_at": "2026-11-05T01:17:37.804Z",
+        "submission": {
+          "body": {
+            "text": "请帮我回顾一下刚才项目资料的跟进情况，按实际执行记录说话，没有测量的业务效果保持未知。",
+            "mode": "auto",
+            "room": "local",
+            "actor_id": null,
+            "reply_to": null,
+            "task_id": null,
+            "uploads": [],
+            "urls": [],
+            "nonce": "af2ae6ed-04da-4493-9e61-6c31bdf47ac8"
+          },
+          "status": 200,
+          "receipt": {
+            "message_id": "30ac40543c8e44fbb789d94623b1ec82",
+            "conversation_id": "30ac40543c8e44fbb789d94623b1ec82",
+            "task_id": null,
+            "state": "received",
+            "duplicate": false
+          }
+        },
+        "outcome": {
+          "api_task_model_delta": 7,
+          "new_tasks": [
+            {
+              "id": "98fb05bbcabb438fa8ff90a8ad562737",
+              "status": "succeeded",
+              "calls_used": 7,
+              "reason": "accepted",
+              "acceptance": "passed",
+              "goal_id": "9296c893fb0e4284852cd4b608a4dfb4",
+              "review_report_id": "4d17038ccd68490eb85fff82a43f846b",
+              "objective": "复盘持续目标「监控项目资料变化」。读取当前复盘证据，区分观测、解释、假设和未知。检查成果与用户反馈，说明保留、停止或修改现有做法的理由。没有连接的业务效果数据不要编造，没有反馈不代表满意。使用 record_goal_review 保存有证据的结论、下次检验时间与条件，然后写一份简洁中文复盘报告并提交。策略决定是建议，不在本次自动改变计划或权限。 本次是历史记录复盘，没有关联实验。观察范围在请求时已经截取结束；不能称为实验，也不能声称观察期尚未结束。 把字段转成中文说明，例如 domain_outcome=null 写成‘尚未接入业务效果测量’，useful 写成‘有用’，不要照抄代码字段。 若证据目录里有工作成果，必须实际读取并引用至少一份，不能只看数量。只有本次明确关联实验时才判断该实验阶段；没有关联时只是历史工作复盘，不继承旧报告的实验状态或结论。健康记录中的失败数是连续失败数，不是所有历史失败总数。报告使用自然中文；日期和下次检验时间写为北京时间的年月日时分，不展示 Unix 时间戳、英文内部字段名或状态代码。逐项引用实际证据；当前目标状态与累计检查计数须读取 goal_state，不能当作观察窗口内的指标。\n本次用户的实际要求：请帮我回顾一下刚才项目资料的跟进情况，按实际执行记录说话，没有测量的业务效果保持未知。"
+            }
+          ],
+          "new_deliveries": [
+            {
+              "id": "73206d05bac14518962b960266132e65",
+              "task_id": null,
+              "kind": "result",
+              "artifact": false,
+              "content": "已开始回顾这件事的实际执行记录，整理好报告后发给你；没有测量的效果会明确保留为未知。"
+            },
+            {
+              "id": "a5b0eeb31d144a408fc62b409ded4f0d",
+              "task_id": "98fb05bbcabb438fa8ff90a8ad562737",
+              "kind": "result",
+              "artifact": true,
+              "content": "已完成项目资料监控的复盘报告。系统运行正常，成功监测到源文件变化并自动更新执行清单，连续失败数为0，4个任务全部被接受。未收到用户反馈，业务效果尚未测量。建议保留当前做法，下次检验时间为2026年11月06日 09:17 北京时间。"
+            }
+          ],
+          "questions": [],
+          "goals": [
+            {
+              "id": "9296c893fb0e4284852cd4b608a4dfb4",
+              "status": "retired",
+              "policies": [
+                {
+                  "id": "bac1f4d7632c4193a344d15e7457c16e",
+                  "state": "active",
+                  "schedule": {
+                    "grace_seconds": 60,
+                    "interval_seconds": 600,
+                    "kind": "watch",
+                    "missed": "coalesce",
+                    "timezone": "Asia/Shanghai"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "new_user_bubbles_for_this_submission": 1,
+        "result": "passed_formal_review_delivered",
+        "usage": {
+          "api_business_task_model_delta": 7,
+          "api_review_model_responses": 7,
+          "sqlite_total_before": 49,
+          "sqlite_total_after": 57,
+          "sqlite_total_delta": 8,
+          "sqlite_intake": {
+            "state": "resolved",
+            "calls_used": 1
+          },
+          "limit_new_model_requests": 20
+        }
+      },
+      "api_proof": {
+        "source": "real HTTP API GET /api/state, /api/tasks/{id}, /api/reviews/{id}",
+        "new_task_count": 1,
+        "task_id": "98fb05bbcabb438fa8ff90a8ad562737",
+        "review_report_id": "4d17038ccd68490eb85fff82a43f846b",
+        "task_status": "succeeded",
+        "acceptance": "passed",
+        "api_task_model_delta": 7,
+        "api_review_model_responses": 7,
+        "models": [
+          "qwen3.7-plus"
+        ],
+        "runs": [
+          {
+            "id": "a548edbedcaa4c1797553dbb4bf7c730",
+            "trigger": "user_task",
+            "epoch": 1,
+            "revision": 1,
+            "phase": "ended",
+            "end_reason": "accepted",
+            "started": 1793841427.4184673,
+            "ended": 1793841457.7280378,
+            "stop_reason": null
+          }
+        ],
+        "operations": [
+          {
+            "tool": "read_review_evidence",
+            "status": "succeeded"
+          },
+          {
+            "tool": "read_review_evidence",
+            "status": "succeeded"
+          },
+          {
+            "tool": "read_review_evidence",
+            "status": "succeeded"
+          },
+          {
+            "tool": "read_review_evidence",
+            "status": "succeeded"
+          },
+          {
+            "tool": "record_goal_review",
+            "status": "succeeded"
+          },
+          {
+            "tool": "write_artifact",
+            "status": "succeeded"
+          },
+          {
+            "tool": "submit_result",
+            "status": "succeeded"
+          }
+        ],
+        "formal_report_facts": [
+          "截取范围：2026年11月05日 09:04 至 2026年11月05日 09:17（北京时间）。",
+          "本次为历史记录复盘，没有关联实验。",
+          "窗口内创建 4 项根任务（包含工作和复盘），另有 0 项后台协作者任务。",
+          "上述任务中当前通过结构检查的共 4 项；结构检查不等于内容无误或现实效果提升。",
+          "本次证据目录收录文档回执 4 份（最多收录最近 16 份），后台协作者数不代表成果数。",
+          "窗口内关联任务执行的模型响应 14 次，输入 142801 token，输出 2426 token；失败工具操作 0 次。",
+          "这一项只包含关联到本事项的任务执行；对话接待等未归入本事项的调用不在此列，不能据此当作全部收费或实际账单。",
+          "窗口内有 0 条用户反馈，0 条任务补充；反馈内容是用户报告。",
+          "人工管理耗时未填写，保持未知。",
+          "未接入业务效果测量和实际账单金额，不能据此证明采纳率、满意度或节省时间。",
+          "来源 user_source1：累计登记检查 23 次，快照时连续失败 0 次；连续失败数不是全部历史失败总数。"
+        ],
+        "goals": [
+          {
+            "id": "9296c893fb0e4284852cd4b608a4dfb4",
+            "status": "retired"
+          }
+        ],
+        "internal_user_bubbles": 0
+      },
+      "formal_report_download": {
+        "server": "http://127.0.0.1:8768/",
+        "mock": false,
+        "checked_at": "2026-11-05T01:18:55.089Z",
+        "opened_through": "following page > 查看回顾报告",
+        "downloaded_through": "下载回顾报告 link",
+        "download_url": "/api/reviews/4d17038ccd68490eb85fff82a43f846b?download=1",
+        "suggested_filename": "goal-review.md",
+        "saved_path": "screenshots/conversation-live-review-report.md",
+        "download_error": null,
+        "facts_heading": true,
+        "model_suggestions_separated": true,
+        "business_outcome_explicitly_unknown": true,
+        "report_text": "回顾报告\n×\n监控项目资料变化 · 复盘记录\n\n账本事实\n\n- 截取范围：2026年11月05日 09:04 至 2026年11月05日 09:17（北京时间）。\n\n- 本次为历史记录复盘，没有关联实验。\n\n- 窗口内创建 4 项根任务（包含工作和复盘），另有 0 项后台协作者任务。\n\n- 上述任务中当前通过结构检查的共 4 项；结构检查不等于内容无误或现实效果提升。\n\n- 本次证据目录收录文档回执 4 份（最多收录最近 16 份），后台协作者数不代表成果数。\n\n- 窗口内关联任务执行的模型响应 14 次，输入 142801 token，输出 2426 token；失败工具操作 0 次。\n\n- 这一项只包含关联到本事项的任务执行；对话接待等未归入本事项的调用不在此列，不能据此当作全部收费或实际账单。\n\n- 窗口内有 0 条用户反馈，0 条任务补充；反馈内容是用户报告。\n\n- 人工管理耗时未填写，保持未知。\n\n- 未接入业务效果测量和实际账单金额，不能据此证明采纳率、满意度或节省时间。\n\n- 来源 user_source1：累计登记检查 23 次，快照时连续失败 0 次；连续失败数不是全部历史失败总数。\n\n模型建议（需要核对）\n\n建议：保留。\n\n系统运行正常，成功监测到源文件变化并自动更新执行清单。虽然未收到用户反馈，但任务全部被接受且无失败记录。建议保留当前做法，继续监控系统运行情况。\n\n以上是模型解释，可能过度推断；次数、状态和测量范围以账本事实为准。\n\n假设：\n\n- 系统按预期工作：监控源文件变化后自动更新执行清单\n\n- 没有用户反馈不代表满意，只是尚未收到反馈\n\n尚不确定：\n\n- 用户实际满意度未知\n\n- 人力时间和发票成本未知\n\n- 业务效果尚未测量\n\n下一次检验\n\n建议时间：2026年11月06日 09:17（北京时间）。\n\n检验条件：2026-11-06 09:17 北京时间\n\n建议不会自动修改检查计划、权限或提醒时间。\n\n证据引用：goal_state、metrics、delivery:7ac30943648347579a5b51ad42ca1197、observation:6129e05ee2c44801a72fff919a455d55\n\n查看原始记录\n下载回顾报告",
+        "scroll": [
+          {
+            "id": "modal",
+            "className": "",
+            "height": 848,
+            "content": 975
+          },
+          {
+            "id": "modal-content",
+            "className": "",
+            "height": 873,
+            "content": 873
+          },
+          {
+            "id": "",
+            "className": "artifact-preview",
+            "height": 815,
+            "content": 815
+          }
+        ],
+        "sha256": "4c80b1f005db5fea0c2eada4e2a012e3f7814af327372b39a0bce7d018e2f9c0",
+        "bytes": 2151,
+        "downloaded_text_checked": true
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "screenshots/conversation-live-desktop.png",
+      "sha256": "6f5de265c6e414083299c87895fd7fa1539671a664742594ea617bfd2eb2b92d",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-mobile.png",
+      "sha256": "e1d559e7f4afa75a1db381c0f54354c07d3cadc663050dc5042d56447fcd701e",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-following.png",
+      "sha256": "8b03ad98079cb17587e3d2d5f8d2fd2a4ba242b1ad2541478e2318e41fe117ff",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-following-mobile.png",
+      "sha256": "61472df38f883f9ffe28ec05b8fa303b0000084d0b06aca501e1cf7512a55578",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-artifact.png",
+      "sha256": "fe53c6febbe0e978c959c7dfad48d3ebb2fcd54826b42c6e6b06400a7019eedb",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-review-submitted.png",
+      "sha256": "fcc148a86ae5af684702d99bd45aea6652ef906dd323b3d6447e74d36c8169c6",
+      "visually_reviewed": false
+    },
+    {
+      "path": "screenshots/conversation-live-review-failed.png",
+      "sha256": "7e681e8826d5ce214dca43f9c0c73b1df81a2b088a75b2b98dd09a994df2111c",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-following-before.png",
+      "sha256": "8baabd28f3e1020ca493cc9548a4842125b843c2189081108d27e9517fba7c66",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-following-mobile-before.png",
+      "sha256": "a45601250aa604e963d5aaeb2dfc6ac1ef51a9422f2624b912ac583c0c174af3",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-review-retry-submitted.png",
+      "sha256": "48fcb0f1ff487d891492b08359f321d58ec14f771e8c0cfc42dfe3994d747779",
+      "visually_reviewed": false
+    },
+    {
+      "path": "screenshots/conversation-live-review-completed.png",
+      "sha256": "5d5f214ceac6b406383972f3726d88387cb8879ffc21a26951573b0bd87c802b",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-review-report.png",
+      "sha256": "70f1d23917ab70b999976fa79e7d78d2691dd1ed3516e63d041b2d616695067f",
+      "visually_reviewed": true
+    },
+    {
+      "path": "screenshots/conversation-live-review-report-unknowns.png",
+      "sha256": "7cb96350e15b390c4654aec0672f49051bda5dfda8a0a72185ec0347f1e2d83d",
+      "visually_reviewed": true
+    }
+  ],
+  "notes": [
+    "Read-only UI checks generated no write requests.",
+    "One subsequent normal-composer submission was explicitly authorized; mode auto and one user bubble were observed on the real HTTP request/DOM.",
+    "Attempt 1 failed and is retained. Attempt 2 used the same real user text after the router/protocol fix and delivered a formal report; no mock or fabricated report replaces either result.",
+    "Following page was observed changing under the parent agent live API validation; viewing did not pause/resume/end the responsibility."
+  ],
+  "final_result": "passed_after_recorded_first_attempt_failure",
+  "updated_at": "2026-11-05T01:20:06.153182+00:00",
+  "console_review": {
+    "current_page_errors": 0,
+    "current_page_warnings": 0,
+    "historical_network_errors": 2,
+    "historical_error_context": "GET state/bootstrap connection refused during parent-authorized graceful server restart; current-page console clean after reload."
+  }
+}

@@ -1,0 +1,149 @@
+{
+  "conversation": {
+    "mode_auto": true,
+    "selected_task_only_hint": true,
+    "subsequent_message_has_no_task_hint": true,
+    "returned_to_full_conversation": true,
+    "retry_same_nonce": true,
+    "draft_preserved_after_lost_response": true,
+    "continue_uses_conversation": true,
+    "no_budget_form": true,
+    "page_errors": [],
+    "cloud_model_calls": 0,
+    "request_count": 5
+  },
+  "following": {
+    "manual_goal_policy_rule_budget_forms_absent": true,
+    "ongoing_continue_uses_auto": true,
+    "explicit_reply_context_retained": true,
+    "existing_draft_not_overwritten": true,
+    "discuss_uses_ordinary_language": true,
+    "mobile_horizontal_overflow": false,
+    "cloud_model_calls": 0
+  },
+  "layout": {
+    "desktop": {
+      "viewport": 1000,
+      "composer_bottom": 1000,
+      "scrollable_messages": true
+    },
+    "mobile": {
+      "viewport": 844,
+      "composer_bottom": 844,
+      "horizontal_overflow": false
+    },
+    "page_errors": []
+  },
+  "fixture_requests": {
+    "requests": [
+      {
+        "path": "/api/messages",
+        "body": {
+          "text": "再帮我做一件无关的新事：整理明天的出行清单。",
+          "mode": "auto",
+          "room": "local",
+          "actor_id": "assistant",
+          "reply_to": null,
+          "task_id": "task1",
+          "uploads": [],
+          "urls": [],
+          "nonce": "816c1115-fdaa-429e-8beb-bc3698e4a6b4"
+        }
+      },
+      {
+        "path": "/api/messages",
+        "body": {
+          "text": "还有一件事，帮我想一个报告标题。",
+          "mode": "auto",
+          "room": "local",
+          "actor_id": "assistant",
+          "reply_to": null,
+          "task_id": null,
+          "uploads": [],
+          "urls": [],
+          "nonce": "cde04536-ac6e-4333-91f3-3a969fba4b9d"
+        }
+      },
+      {
+        "path": "/api/messages",
+        "body": {
+          "text": "响应丢失后请保留这条消息。",
+          "mode": "auto",
+          "room": "local",
+          "actor_id": "assistant",
+          "reply_to": null,
+          "task_id": null,
+          "uploads": [],
+          "urls": [],
+          "nonce": "2df339a5-2778-47a5-85a2-8a1fc0139e01"
+        }
+      },
+      {
+        "path": "/api/messages",
+        "body": {
+          "text": "响应丢失后请保留这条消息。",
+          "mode": "auto",
+          "room": "local",
+          "actor_id": "assistant",
+          "reply_to": null,
+          "task_id": null,
+          "uploads": [],
+          "urls": [],
+          "nonce": "2df339a5-2778-47a5-85a2-8a1fc0139e01"
+        }
+      },
+      {
+        "path": "/api/messages",
+        "body": {
+          "text": "请继续处理「整理活动资料」，保留已经完成的进度。",
+          "mode": "auto",
+          "room": "local",
+          "actor_id": "assistant",
+          "task_id": "task1",
+          "reply_to": null,
+          "uploads": [],
+          "urls": [],
+          "nonce": "d5cd4616-3a34-4d6d-a378-e68a39165a81"
+        }
+      },
+      {
+        "path": "/api/messages",
+        "body": {
+          "text": "请继续跟进「项目资料跟进」，沿用已确定的安排和资料。",
+          "mode": "auto",
+          "room": "local",
+          "actor_id": "assistant",
+          "task_id": null,
+          "reply_to": null,
+          "uploads": [],
+          "urls": [],
+          "nonce": "1338266f-7a4f-463b-94b8-8534fa5bcf16"
+        }
+      },
+      {
+        "path": "/api/messages",
+        "body": {
+          "text": "这份活动资料的截止日期改到周五。",
+          "mode": "auto",
+          "room": "local",
+          "actor_id": "assistant",
+          "reply_to": "m1",
+          "task_id": "task1",
+          "uploads": [],
+          "urls": [],
+          "nonce": "792ec5d6-bb5a-4e40-bcaa-9008b4ddb329"
+        }
+      }
+    ],
+    "unique_messages": 6,
+    "cloud_model_calls": 0
+  },
+  "scope": "Real browser against current production static assets and an isolated synthetic HTTP fixture; verifies UI behavior and payloads, not model intent recognition or backend execution.",
+  "expected_http_failure": "One deliberate 503 after accepting a message, followed by retry with identical nonce. No page JavaScript errors.",
+  "screenshots_visually_inspected": [
+    "conversation-ui-start.png",
+    "conversation-ui-following.png",
+    "conversation-ui-final.png",
+    "conversation-ui-mobile.png"
+  ]
+}

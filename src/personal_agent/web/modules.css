@@ -29,5 +29,12 @@
 .detail-tabs button{padding-left:12px;padding-right:12px}
 .detail-heading .small-link{float:right}
 .composer-note{font-size:11px}
+.recipient-row.private-recipient{display:none}
+.goal-owner{font-size:11px;color:#888;margin-top:8px}
+.review-summary>strong{font-size:12px;font-weight:500;margin-right:10px}
+.conversation-progress{display:flex;flex-direction:column;gap:7px;margin:14px 0;color:#888;font-size:11px}
+.conversation-progress button{text-align:left;padding:8px 11px;border-radius:8px;background:#f7f8f6;line-height:1.7;overflow-wrap:anywhere}
+.app{grid-template-rows:minmax(0,1fr)}
+.main{min-height:0}
 @media(max-width:600px){.recipient-row>span{display:none}.keyboard-hint{display:none}.new-options{flex-direction:column}.member-options{grid-template-columns:1fr}.room-list{max-height:40vh}}
 .table-scroll{overflow-x:auto;margin:14px 0}.table-scroll table{border-collapse:collapse;width:100%;font-size:12px;line-height:1.7}.table-scroll th,.table-scroll td{text-align:left;border:1px solid #e5e5e5;padding:9px 12px;min-width:100px}.table-scroll th{background:#f7f7f7;font-weight:500}

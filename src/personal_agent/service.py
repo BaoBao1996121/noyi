@@ -122,8 +122,14 @@ class Service:
                     del self._active[run_id]
                     stopping.pop(run_id, None)
                     delivery_needed = True
-                while len(self._active) < self.concurrency:
-                    run = self.store.claim(exclude_actor_ids={r["actor_id"] for r, _ in self._active.values()})
+                # One bounded intake slot remains available even while every
+                # business slot is busy, so a spoken stop or correction is heard.
+                if not any(r["trigger"] == "conversation" for r, _ in self._active.values()):
+                    incoming = self.store.claim_conversation()
+                    if incoming:
+                        self._active[incoming["id"]] = (incoming, asyncio.create_task(self.runtime.execute(incoming)))
+                while sum(r["trigger"] != "conversation" for r, _ in self._active.values()) < self.concurrency:
+                    run = self.store.claim(exclude_actor_ids={r["actor_id"] for r, _ in self._active.values() if r["trigger"] != "conversation"})
                     if run is None:
                         break
                     self._active[run["id"]] = (run, asyncio.create_task(self.runtime.execute(run)))

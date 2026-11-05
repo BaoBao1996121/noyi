@@ -30,13 +30,59 @@ async def test_desktop_shutdown_requires_token_and_signals_only_its_own_instance
     app = create_app(store, tmp_path / 'data', ScriptedModel([]), run_service=False, shutdown_event=event)
     async with TestClient(TestServer(app)) as client:
         boot = await (await client.get('/api/bootstrap')).json()
-        assert boot['version'] == '0.5.0' and boot['instance_id']
+        assert boot['version'] == '0.6.0' and boot['instance_id']
         denied = await client.post('/api/shutdown')
         assert denied.status == 403 and not event.is_set()
         response = await client.post('/api/shutdown', headers={'X-PA-Token': boot['token']})
         result = await response.json()
         assert result['instance_id'] == boot['instance_id']
         await asyncio.wait_for(event.wait(), timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_unified_message_replies_without_task_and_retry_does_not_rebill(store, tmp_path):
+    model = ScriptedModel([tool_reply('resolve_conversation', {'action':'reply','text':'你好，有什么事情需要我帮忙？'})])
+    async with client_for(store, tmp_path, model, run_service=True) as client:
+        payload = {'text':'你好','nonce':'ordinary-conversation'}
+        first = await (await client.post('/api/messages', json=payload)).json()
+        assert first['task_id'] is None and first['conversation_id']
+        async with asyncio.timeout(5):
+            while store.one('SELECT state FROM conversation_inputs WHERE id=?',(first['conversation_id'],))['state'] == 'pending':
+                await asyncio.sleep(.03)
+        duplicate = await (await client.post('/api/messages', json=payload)).json()
+        assert duplicate['duplicate'] and duplicate['state'] == 'resolved'
+        assert len(model.requests) == 1 and not store.all('SELECT * FROM tasks')
+        state = await (await client.get('/api/state')).json()
+        assert len(state['messages']) == 1
+        assert state['deliveries'][0]['actor_id'] == 'default'
+        assert state['deliveries'][0]['content'] == '你好，有什么事情需要我帮忙？'
+        assert (await client.post('/api/messages',json={**payload,'text':'改成另一个请求'})).status == 400
+
+
+@pytest.mark.asyncio
+async def test_unified_file_request_runs_real_pi_without_selecting_a_mode(store, tmp_path):
+    document = tmp_path / '资料 版本.md'
+    document.write_text('负责人小李，周五提交。',encoding='utf-8')
+    model = ScriptedModel([
+        tool_reply('resolve_conversation',{'action':'new_task'}),
+        tool_reply('read_source',{'source_id':'user_source1'}),
+        tool_reply('write_artifact',{'name':'result.md','content':'小李在周五提交。[user_source1]'}),
+        submit_written_artifact,
+    ])
+    async with client_for(store, tmp_path, model, run_service=True) as client:
+        first = await (await client.post('/api/messages',json={'text':f'请整理这份资料：`{document}`','nonce':'ordinary-file'})).json()
+        async with asyncio.timeout(8):
+            while True:
+                task = store.one('SELECT id,status FROM tasks')
+                if task and task['status'] == 'succeeded':
+                    break
+                await asyncio.sleep(.03)
+        assert len(model.requests) == 4
+        assert store.task(task['id'])['spec']['sources'][0]['location'] == str(document)
+        state = await (await client.get('/api/state')).json()
+        assert len(state['messages']) == 1 and state['messages'][0]['id'] == first['message_id']
+        assert str(document) not in json.dumps(state['tasks'])
+        assert any(d['artifact'] for d in state['deliveries'])
 
 
 def test_workspace_id_is_persistent_but_service_instance_and_tokens_change(store, tmp_path):
@@ -103,7 +149,7 @@ async def test_web_question_control_and_true_completion_with_background_service(
     model = ScriptedModel([tool_reply("ask_user", {"question": "Choose a direction", "options": ["A", "B"]}),
                            tool_reply("write_artifact", {"name": "result.md", "content": "Choice B"}), submit_written_artifact])
     async with client_for(store, tmp_path, model, run_service=True) as client:
-        receipt = await (await client.post("/api/messages", json={"text": "Need a choice", "nonce": "web-question"})).json()
+        receipt = await (await client.post("/api/messages", json={"text": "Need a choice", "nonce": "web-question", "mode": "task"})).json()
         async with asyncio.timeout(5):
             while store.task(receipt["task_id"])["status"] != "waiting_user":
                 await asyncio.sleep(.05)

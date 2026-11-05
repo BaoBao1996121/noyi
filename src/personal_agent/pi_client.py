@@ -39,6 +39,13 @@ async def close_pi(proc):
         await proc.stdout.read()
 
 
+async def _reap_created(creation):
+    # Process creation owns OS resources before it returns a Process instance.
+    # Keep ownership even when cancellation arrives during that interval.
+    proc = await creation
+    await close_pi(proc)
+
+
 async def run_pi(messages, tools, model_name, handle):
     node = shutil.which("node")
     if not node or not BRIDGE.is_file():
@@ -55,13 +62,6 @@ async def run_pi(messages, tools, model_name, handle):
         cwd=str(BRIDGE.parent), env=env, limit=8 * 1024 * 1024))
     try:
         proc = await asyncio.shield(creation)
-    except asyncio.CancelledError:
-        # Cancelling halfway through Windows process creation must still take
-        # ownership of the resulting child and release its pipe transports.
-        proc = await creation
-        await close_pi(proc)
-        raise
-    try:
         proc.stdin.write((encode({"type": "start", "messages": messages,
                                   "tools": tools, "model": model_name}) + "\n").encode())
         await proc.stdin.drain()
@@ -79,4 +79,16 @@ async def run_pi(messages, tools, model_name, handle):
                 raise RuntimeError("invalid Pi transport event")
         raise RuntimeError("Pi process exited before finishing")
     finally:
-        await close_pi(proc)
+        # A service stop can cancel a run already being stopped by the user.
+        # Shielding without awaiting again would leave cleanup running after
+        # the event loop closes. Drain it fully before acknowledging either stop.
+        cleanup = asyncio.create_task(_reap_created(creation))
+        cancelled = False
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                cancelled = True
+        cleanup.result()
+        if cancelled:
+            raise asyncio.CancelledError

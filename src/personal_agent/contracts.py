@@ -47,8 +47,11 @@ class TaskSpec:
     max_stagnant_tools: int = 20
     review_workers: bool = False
     max_handoffs: int = 2
+    result_kind: str = 'artifact'
 
     def validate(self) -> None:
+        if self.result_kind not in {'artifact', 'action_receipt'}:
+            raise ValueError('invalid result contract')
         if not isinstance(self.objective, str) or not self.objective.strip():
             raise ValueError("objective must not be empty")
         if (type(self.max_calls) is not int or type(self.max_tools) is not int

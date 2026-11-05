@@ -13,19 +13,19 @@
 <div id="app" class="app">
   <aside class="sidebar" aria-label="会话导航">
     <div class="brand"><span class="brand-mark">p<span>·</span></span><span>Personal Agent</span><span class="local-tag">本地</span></div>
-    <div class="sidebar-tools"><label class="search"><span>⌕</span><input id="search" placeholder="搜索会话与任务" aria-label="搜索会话与任务"></label><button id="new-task" class="icon" title="新任务" aria-label="新任务">＋</button></div>
+    <div class="sidebar-tools"><label class="search"><span>⌕</span><input id="search" placeholder="搜索会话与事情" aria-label="搜索会话与事情"></label><button id="new-task" class="icon" title="说一件新事情" aria-label="说一件新事情">＋</button></div>
     <div class="section-label">我的助理 <button id="manage-bots" class="small-link">管理</button><button id="new-room" class="small-link">＋ 新建</button></div>
     <div id="rooms" class="room-list"></div>
-    <button id="open-goals" class="goal-nav"><span>◷</span> 持续目标 <small id="goal-count"></small></button>
-    <div class="section-label task-section">最近任务 <span id="task-count"></span></div>
-    <nav id="task-list" aria-label="最近任务"></nav>
+    <button id="open-goals" class="goal-nav"><span>◷</span> 正在跟进 <small id="goal-count"></small></button>
+    <div class="section-label task-section">最近的事情 <span id="task-count"></span></div>
+    <nav id="task-list" aria-label="最近的事情"></nav>
     <div class="sidebar-bottom"><div class="user-avatar">我</div><div><strong>个人工作台</strong><small id="connection">正在连接…</small></div><button id="settings" class="icon" aria-label="设置" title="设置">⚙</button></div>
   </aside>
   <div class="resizer" data-panel="left" role="separator" aria-label="调整导航宽度"></div>
   <main class="main">
     <header class="chat-header"><button id="mobile-nav" class="icon mobile-only" aria-label="打开导航">☰</button><div class="avatar">✳</div><div class="chat-title"><h1 id="room-name">个人助理</h1><p id="header-status">帮你把事情持续管好</p></div><button id="show-details" class="icon" aria-label="显示或隐藏详情" title="详情与资料">☷</button></header>
     <div id="banner" class="banner hidden" role="status"></div>
-    <section id="goal-panel" class="goal-panel hidden" aria-label="持续目标工作台"></section>
+    <section id="goal-panel" class="goal-panel hidden" aria-label="正在跟进的事情"></section>
     <section id="messages" class="messages" aria-label="对话记录" aria-live="polite"></section>
     <div id="jump-bottom" class="jump hidden"><button>↓ 回到最新消息</button></div>
     <div class="composer-area">
@@ -33,10 +33,10 @@
       <form id="composer-form" class="composer">
         <div id="recipient-row" class="recipient-row"><label>发送给 <select id="recipient" aria-label="接收成员"></select></label><span id="audience-note"></span><button id="clear-reply" class="small-link hidden" type="button">取消回复</button></div>
         <div id="attachment-list" class="attachments"></div>
-        <textarea id="message-input" rows="2" placeholder="交给我一件事，例如：整理这些资料，并列出下一步行动…" aria-label="输入消息"></textarea>
-        <div class="composer-bottom"><div class="compose-actions"><button id="attach" class="icon" type="button" aria-label="添加资料" title="添加 UTF-8 文本资料">＋</button><button id="add-url" class="icon" type="button" aria-label="添加资料网址" title="添加资料网址">↗</button><select id="message-mode" aria-label="消息类型"><option value="task">交办任务</option><option value="followup">补充当前任务</option><option value="chat">聊一聊</option></select></div><span class="keyboard-hint">Enter 发送 · Shift Enter 换行</span><button id="send" type="submit" class="send" aria-label="发送消息">↑</button></div>
+        <textarea id="message-input" rows="2" placeholder="直接说你想做什么，也可以补充、提问，或让我继续跟进…" aria-label="输入消息"></textarea>
+        <div class="composer-bottom"><div class="compose-actions"><button id="attach" class="icon" type="button" aria-label="添加资料" title="添加 UTF-8 文本资料">＋</button><button id="add-url" class="icon" type="button" aria-label="添加资料网址" title="添加资料网址">↗</button></div><span class="keyboard-hint">Enter 发送 · Shift Enter 换行</span><button id="send" type="submit" class="send" aria-label="发送消息">↑</button></div>
       </form>
-      <div class="composer-note"><span id="model-label">Qwen 官网</span><span>执行结果以任务与产物记录为准</span></div>
+      <div class="composer-note"><span id="model-label">Qwen 官网</span><span>进展和成果会留在这里</span></div>
       <input id="file-input" type="file" accept=".txt,.md,.json,.csv,.log" multiple hidden>
     </div>
   </main>

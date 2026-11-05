@@ -69,6 +69,8 @@ class LifecycleStore:
                     self.db.execute("INSERT OR REPLACE INTO dependency_reads VALUES(?,?,?,?,?,?,?)", (run["task_id"], run["revision"], child_id, result["task"]["execution_epoch"], parent_revision, result["delivery"]["artifact"]["sha256"], operation_id))
             elif tool in {"adopt_worker_result", "request_rework", "resolve_followup", "handback_followup"} and not failed:
                 kind, fingerprint, summary = "responsibility", encode(result), encode(result)
+            elif tool in {'start_following', 'manage_following', 'review_following', 'observe_following'} and not failed and result.get('authority_receipt'):
+                kind, fingerprint, summary = 'following_registered', result['authority_receipt'], encode({'action':result['action'],'goal_id':result['goal']['id']})
             elif tool == "submit_result" and result.get("passed"):
                 kind, fingerprint, summary = "accepted_artifact", result["artifact"]["sha256"], encode(result["artifact"])
             progress = False

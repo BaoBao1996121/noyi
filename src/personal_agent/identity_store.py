@@ -206,7 +206,7 @@ class IdentityStore:
     def claim(self, exclude_actor_ids=()):
         # Prevent archived/removed Bot chat events from being dispatched at all.
         with self.transaction():
-            for e in self.all("SELECT e.id,e.actor_id,e.task_id,m.room_id FROM events e JOIN messages m ON m.id=e.message_id WHERE e.state='pending'"):
+            for e in self.all("SELECT e.id,e.actor_id,e.task_id,m.room_id FROM events e JOIN messages m ON m.id=e.message_id WHERE e.state='pending' AND e.kind!='conversation'"):
                 if not self.actor_can_work(e["actor_id"], e["room_id"], e["task_id"]):
                     if e["task_id"]:
                         self.db.execute("UPDATE tasks SET status='paused',auto_continue='paused',reason='member_unavailable' WHERE id=? AND status NOT IN ('succeeded','cancelled')", (e["task_id"],))

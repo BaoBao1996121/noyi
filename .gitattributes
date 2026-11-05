@@ -8,4 +8,5 @@ docs/validation/m2/** -text
 docs/validation/m3/** -text
 docs/validation/m4/** -text whitespace=-blank-at-eol
 docs/validation/m5/** -text whitespace=-blank-at-eol
+docs/validation/conversation/** -text whitespace=-blank-at-eol
 *.cmd text eol=crlf

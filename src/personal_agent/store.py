@@ -321,7 +321,8 @@ from .goal_store import GoalStore
 
 from .admission_store import AdmissionStore
 from .review_store import ReviewStore
+from .conversation import ConversationStore
 
 
-class Store(ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
+class Store(ConversationStore, ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
     """Durable task ledger with versioned collaboration protocols."""

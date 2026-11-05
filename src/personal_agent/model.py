@@ -95,6 +95,12 @@ class QwenModel:
                       extra_body={"enable_thinking": self.config.enable_thinking})
         if tools:
             kwargs["tools"] = tools
+            # Intake has one protocol exit: record its scoped decision. A
+            # prose-only acknowledgement cannot create or route real work.
+            # Business turns retain the provider's normal automatic choice.
+            if (len(tools) == 1 and tools[0].get("type") == "function"
+                    and tools[0].get("function", {}).get("name") == "resolve_conversation"):
+                kwargs["tool_choice"] = {"type": "function", "function": {"name": "resolve_conversation"}}
         result = await self.client.chat.completions.create(**kwargs)
         msg = result.choices[0].message
         # Keep only public answer and tool calls, never reasoning or credentials.

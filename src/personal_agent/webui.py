@@ -5,6 +5,7 @@ import asyncio
 from dataclasses import asdict
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import time
@@ -104,6 +105,10 @@ class Console:
         deliveries = self.store.all("SELECT d.id,d.task_id,r.actor_id,d.content,d.artifact,d.state,d.kind,d.attention_id,COALESCE(NULLIF(d.created,0),r.ended,a.created,0) AS created FROM deliveries d LEFT JOIN runs r ON r.id=d.run_id LEFT JOIN attentions a ON a.id=d.attention_id WHERE d.room_id=? ORDER BY d.rowid DESC LIMIT 300", (room,))
         for d in deliveries:
             d["artifact"] = json.loads(d["artifact"]) if d["artifact"] else None
+            if d['actor_id'] and d['actor_id'].startswith('conversation:'):
+                speaker = self.store.one("SELECT c.actor_id FROM conversation_inputs c JOIN events e ON e.message_id=c.message_id JOIN deliveries d ON d.run_id=e.claimed_by_run WHERE d.id=? AND e.kind='conversation'", (d['id'],))
+                if speaker:
+                    d['actor_id'] = speaker['actor_id']
         questions = self.store.all("SELECT a.id,a.task_id,a.question,a.options,a.state,a.answer FROM attentions a JOIN tasks t ON t.id=a.task_id WHERE t.room_id=? AND a.account='local-user' ORDER BY a.created", (room,))
         for q in questions:
             q["options"] = json.loads(q["options"])
@@ -131,7 +136,7 @@ class Console:
 
     def submit(self, body):
         room = self.room(body.get("room", "local"))
-        mode, nonce = body.get("mode", "task"), body["nonce"]
+        mode, nonce = body.get("mode", "auto"), body["nonce"]
         text = body["text"]
         if not isinstance(text, str) or not text.strip() or len(text) > 20000:
             raise ValueError("请输入 1–20000 字的内容")
@@ -142,7 +147,7 @@ class Console:
             return self.store.route_input(None, text=text, nonce=nonce, mode=mode, room=room, actor_id=body.get("actor_id"), task_id=tid, reply_to=body.get("reply_to"))
         if mode == "chat":
             return self.store.route_input(None, text=text, nonce=nonce, mode=mode, room=room, actor_id=body.get("actor_id"), reply_to=body.get("reply_to"))
-        if mode != "task":
+        if mode not in {"task", "auto"}:
             raise ValueError("未知消息模式")
         ids = body.get("uploads", [])
         if not isinstance(ids, list) or len(ids) > 12 or len(ids) != len(set(ids)):
@@ -160,7 +165,22 @@ class Console:
         if not isinstance(urls, list) or len(urls) > 6 or any(not isinstance(u, str) for u in urls):
             raise ValueError("最多提供 6 个明确的资料网址")
         sources.extend({"id": f"web{i+1}", "kind": "http", "location": url, "required": True} for i, url in enumerate(urls))
+        if mode == "auto":
+            # Only literal locations in this user's message add a grant. Model
+            # output, source contents and old conversation text never do.
+            inline_urls = [u.rstrip('，。；！）)]') for u in re.findall(r'https?://[^\s<>"`]+', text)]
+            inline_files = re.findall(r'[A-Za-z]:[\\/][^\r\n"<>|`]*?\.(?:txt|md|markdown|json|csv|log|yaml|yml)(?=$|[\s`"，。；）)])', text, re.IGNORECASE)
+            seen = {s['location'] for s in sources}
+            for kind, values in [('http', inline_urls), ('file', inline_files)]:
+                for location in values:
+                    if location not in seen:
+                        sources.append({'id': 'user_source' + str(len(sources)+1), 'kind': kind, 'location': location, 'required': True})
+                        seen.add(location)
+            if len(sources) > 18:
+                raise ValueError('一次最多处理 18 份明确资料，请分批发送')
         spec = TaskSpec(text, sources, max_calls=40, max_tools=100, max_seconds=900, enable_nudge=True, review_workers=True)
+        if mode == "auto":
+            return self.store.accept_conversation(spec, text=text, nonce=nonce, room=room, actor_id=body.get('actor_id'), task_id=body.get('task_id'), reply_to=body.get('reply_to'))
         return self.store.route_input(spec, text=text, nonce=nonce, mode=mode, room=room, actor_id=body.get("actor_id"), reply_to=body.get("reply_to"))
 
     def artifact(self, delivery_id):
@@ -214,7 +234,7 @@ async def json_body(request):
 
 async def boot(request):
     c = request.app[CONSOLE]
-    return web.json_response({"token": c.token, "instance_id": c.instance_id, "workspace_id": c.workspace_id, "version": "0.5.0", "title": "Personal Agent"})
+    return web.json_response({"token": c.token, "instance_id": c.instance_id, "workspace_id": c.workspace_id, "version": "0.6.0", "title": "Personal Agent"})
 
 
 async def snapshot(request):

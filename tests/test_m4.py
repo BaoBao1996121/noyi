@@ -358,7 +358,7 @@ def test_t28_plan_text_has_no_registration_and_failed_readback_rolls_back(store,
     receipt = store.submit(TaskSpec("每周三复盘，请写计划"), nonce="plan")
     run = store.claim()
     context = encode(Runtime(store, tmp_path / "data", ScriptedModel([])).context(run))
-    assert "No schedule registered for this task" in context
+    assert "No schedule is registered for this task" in context
     assert not store.all("SELECT * FROM routine_policies")
     goal = store.create_goal(room="local", actor_id="default", title="weekly", objective="Weekly review")
     def failed_readback(*args, **kwargs):

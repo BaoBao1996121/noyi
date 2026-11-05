@@ -55,10 +55,10 @@ function roomView(){
   const search=$('#search').value.toLowerCase();
   $('#rooms').innerHTML=state.data.rooms.filter(r=>(r.members.length||r.id===state.room)&&(!search||r.name.toLowerCase().includes(search))).map(r=>`<button class="room-card ${r.id===state.room?'selected-room':''}" data-room="${esc(r.id)}"><span class="avatar">${r.kind==='group'?'◎':'✳'}</span><span class="room-copy"><strong>${esc(r.name)}</strong><small>${r.kind==='group'?r.members.length+' 位成员 · 群共享范围':'独立私聊 · 私有记忆'}</small></span><span class="dot"></span></button>`).join('');
   const room=currentRoom();$('#room-name').textContent=room?.name||'会话';
-  const task=selected();if(task)state.recipient=task.actor_id;
+  const task=selected();
   $('#recipient').innerHTML=(room?.kind==='group'?'<option value="">指定成员或 @姓名</option>':'')+(room?.members||[]).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');
   $('#recipient').value=state.recipient||room?.kind==='private'&&room?.members[0]?.id||'';
-  $('#recipient').disabled=Boolean(task);
+  $('#recipient').disabled=false;$('#recipient-row').classList.toggle('private-recipient',room?.kind==='private'&&!state.replyTo);
   $('#audience-note').textContent=state.replyTo?'正在回复选中的消息':room?.kind==='group'?'群成员共享这里的消息与记忆':'只在此私聊使用资料与记忆';
   $('#clear-reply').classList.toggle('hidden',!state.replyTo);
   const tasks=roots().filter(t=>t.spec.objective.toLowerCase().includes(search));
@@ -83,7 +83,9 @@ function messageView(force=false){
   const data=state.data, task=selected();
   const visible=id=>!id||!data.tasks.some(x=>x.id===id&&x.parent_task_id&&!data.bots.some(b=>b.id===x.actor_id));
   const focused=id=>!state.task||id===state.task||data.tasks.some(t=>t.id===id&&t.root_task_id===state.task);
-  const messages=data.messages.filter(m=>visible(m.task_id)&&focused(m.task_id));
+  // Only explicit user ingress belongs in a user bubble. Scheduled work and
+  // internal assignments stay in the ledger; their progress/results render below.
+  const messages=data.messages.filter(m=>['web','cli','conversation'].includes(m.source)&&visible(m.task_id)&&focused(m.task_id));
   const deliveries=data.deliveries.filter(d=>visible(d.task_id)&&!['question','clarification'].includes(d.kind)&&focused(d.task_id));
   const questions=data.questions.filter(q=>!state.task||q.task_id===state.task||data.tasks.some(t=>t.id===q.task_id&&t.root_task_id===state.task));
   const sig=JSON.stringify({messages,deliveries,questions,task:task?.status,unassigned:data.unassigned,routes:data.pending_routes,selected:state.task,room:state.room});
@@ -98,9 +100,9 @@ function messageView(force=false){
     if(task&&['ready','running','waiting_children'].includes(task.status))box.insertAdjacentHTML('beforeend',`<article class="message system"><div class="bubble">${esc(labels[task.status])} <i class="spinner-dot"></i><i class="spinner-dot"></i><i class="spinner-dot"></i></div></article>`);
   }
   if(bottom||force)box.scrollTop=box.scrollHeight;else box.scrollTop=oldScroll;
+  if(!task){const ongoing=roots().filter(t=>['ready','running','waiting_children'].includes(t.status));if(ongoing.length)box.insertAdjacentHTML('beforeend',`<div class="conversation-progress">${ongoing.slice(0,3).map(t=>`<button data-task="${t.id}">${esc(labels[t.status])}：${esc(taskTitle(t))}</button>`).join('')}</div>`);}
   $('#task-focus').classList.toggle('hidden',!task);
-  $('#task-focus').innerHTML=task?`<span>当前任务：${esc(taskTitle(task))}</span><button data-clear-task title="查看全部对话">×</button>`:'';
-  $('#message-mode option[value="followup"]').disabled=!task&&currentRoom()?.kind!=='group';
+  $('#task-focus').innerHTML=task?`<span>正在查看：${esc(taskTitle(task))}</span><button data-clear-task title="查看全部对话">×</button>`:'';
 }
 async function detailView(force=false){
   const task=selected(), data=state.data, artifacts=data.deliveries.filter(d=>d.artifact);
@@ -116,22 +118,22 @@ async function detailView(force=false){
   }
   const room=currentRoom();
   let html=`<div class="profile"><div class="avatar">${room.kind==='group'?'◎':'✳'}</div><h2>${esc(room.name)}</h2><p>${room.kind==='group'?room.members.map(b=>esc(b.name)).join(' · '):esc(room.members[0]?.role||'已归档')}</p><button class="button" data-edit-room>管理${room.kind==='group'?'群成员':'角色'}</button></div>`;
-  if(!task){box.innerHTML=html+'<div class="detail-heading">任务与进展</div><div class="detail-card muted">选择左侧任务，可以查看进展、后台协作和交付成果。<br><br>新任务开始后，你仍然可以在这里暂停，或补充新的要求。</div>';return;}
+  if(!task){box.innerHTML=html+'<div class="detail-heading">事情与进展</div><div class="detail-card muted">直接在对话里交代需求，或从左侧查看事情的进展和成果。<br><br>需要调整时，继续说就好；也可以随时暂停或取消。</div>';return;}
   const cancelled=task.cancel_state==='cancelled', done=task.status==='succeeded';
   const children=data.tasks.filter(t=>t.parent_task_id===task.id);
   const stopping=data.controls.some(c=>c.task_id===task.id&&c.state==='requested');
-  html+=`<div class="detail-heading">当前任务</div><div class="detail-card">${stopping?'<span class="pill">正在停止…</span>':pill(task.status)}<h3>${esc(taskTitle(task))}</h3><div class="detail-row"><span>开始时间</span><strong>${esc(timeLabel(task.created))}</strong></div><div class="detail-row"><span>资料</span><strong>${task.spec.sources.length} 份</strong></div><div class="detail-row"><span>成果检查</span><strong>${task.acceptance==='passed'?'已通过':task.acceptance==='needs_review'?'需要复核':'尚未通过'}</strong></div><div class="task-buttons">`;
+  html+=`<div class="detail-heading">这件事的进展</div><div class="detail-card">${stopping?'<span class="pill">正在停止…</span>':pill(task.status)}<h3>${esc(taskTitle(task))}</h3><div class="detail-row"><span>开始时间</span><strong>${esc(timeLabel(task.created))}</strong></div><div class="detail-row"><span>资料</span><strong>${task.spec.sources.length} 份</strong></div><div class="task-buttons">`;
   if(!done&&!cancelled){
     html+='<button class="button" data-compose-followup>补充要求</button>';
-    if(['paused','failed','review','stopped'].includes(task.status))html+=`<button class="button" data-action="resume" data-tid="${task.id}">继续任务</button>`;
-    else html+=`<button class="button" data-action="stop_reply" data-tid="${task.id}">暂停回复</button>`;
+    if(['paused','failed','review','stopped'].includes(task.status))html+=`<button class="button" data-action="resume" data-tid="${task.id}">继续处理</button>`;
+    else html+=`<button class="button" data-action="stop_task" data-tid="${task.id}">暂停这件事</button>`;
     html+=`<button class="button danger" data-action="cancel" data-tid="${task.id}">取消委托</button>`;
-  }else if(done)html+='<button class="button" data-compose-followup>基于成果追加任务</button>';
+  }else if(done)html+='<button class="button" data-compose-followup>继续说说这件事</button>';
   html+='</div></div>';
   if(task.reason==='member_unavailable')html+=`<div class="detail-card"><p>原成员已不可用。任务、补充要求和预算均已保留。</p><button class="button" data-reassign="${task.id}">选择成员接手</button></div>`;
   if(children.length)html+='<div class="detail-heading">后台协作</div>'+children.map(c=>`<div class="worker"><strong>${esc(taskTitle(c))}</strong>${pill(c.status)} ${!['succeeded','cancelled','stopped'].includes(c.status)?`<button class="button" data-action="stop_task" data-tid="${c.id}">停止这项</button>`:''}</div>`).join('');
   if(task.spec.sources.length)html+='<div class="detail-heading">本任务资料</div>'+task.spec.sources.map(s=>`<div class="detail-row"><span>${esc(s.description||s.id)}</span><strong>${s.required===false?'可选':'必读'}</strong></div>`).join('');
-  html+=`<details class="disclosure"><summary>执行记录与预算</summary><div class="detail-row"><span>模型调用（含后台）</span><strong>${task.calls_used} / ${task.spec.max_calls}</strong></div><div class="detail-row"><span>工具操作（含后台）</span><strong>${task.tools_used} / ${task.spec.max_tools}</strong></div><div id="operation-list"></div></details>`;
+  html+=`<details class="disclosure"><summary>技术详情</summary><div class="detail-row"><span>结构检查</span><strong>${task.acceptance==='passed'?'已通过（不等于内容无误）':task.acceptance==='needs_review'?'需要复核':'尚未通过'}</strong></div><div class="detail-row"><span>模型调用（含后台）</span><strong>${task.calls_used} / ${task.spec.max_calls}</strong></div><div class="detail-row"><span>工具操作（含后台）</span><strong>${task.tools_used} / ${task.spec.max_tools}</strong></div><div id="operation-list"></div></details>`;
   box.innerHTML=html;
   try{const detail=await api('/api/tasks/'+task.id);if(state.task!==task.id||state.tab!=='details')return;$('#operation-list').innerHTML=detail.operations.map(o=>`<div class="log-row"><span>${esc(o.tool)}</span><span>${esc(o.status)}</span></div>`).join('')||'<p class="muted">还没有工具操作记录</p>';}catch(e){toast(e.message);}
 }
@@ -140,22 +142,25 @@ async function refresh(force=false){
   try{const data=await api('/api/state?room='+encodeURIComponent(requestedRoom));if(state.room!==requestedRoom)return;if(data.workspace_id!==state.workspace){switchWorkspace(await api('/api/bootstrap'));await refresh(true);return;}state.data=data;state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
   catch(e){try{const boot=await api('/api/bootstrap');if(boot.workspace_id!==state.workspace){switchWorkspace(boot);await refresh(true);return;}}catch{}state.online=false;$('#connection').textContent='连接中断 · 草稿已保留';$('#banner').textContent='连接暂时中断。已输入的内容会保留，恢复后可以继续。';$('#banner').classList.remove('hidden');}
 }
-function saveDraft(){localStorage.setItem(state.draftKey,JSON.stringify({text:$('#message-input').value,uploads:state.uploads,urls:state.urls,mode:$('#message-mode').value,task:state.task,retry:state.retry,recipient:state.recipient,replyTo:state.replyTo}));}
-function restoreDraft(){state.draftKey=state.storagePrefix+'draft.'+state.room;try{const saved=JSON.parse(localStorage.getItem(state.draftKey)||'{}');$('#message-input').value=saved.text||'';state.uploads=saved.uploads||[];state.urls=saved.urls||[];state.task=saved.task||null;state.retry=saved.retry||null;state.recipient=saved.recipient||'';state.replyTo=saved.replyTo||null;$('#message-mode').value=saved.mode||'task';}catch{}renderAttachments();}
+function saveDraft(){localStorage.setItem(state.draftKey,JSON.stringify({text:$('#message-input').value,uploads:state.uploads,urls:state.urls,task:state.task,retry:state.retry,recipient:state.recipient,replyTo:state.replyTo}));}
+function restoreDraft(){state.draftKey=state.storagePrefix+'draft.'+state.room;try{const saved=JSON.parse(localStorage.getItem(state.draftKey)||'{}');$('#message-input').value=saved.text||'';state.uploads=saved.uploads||[];state.urls=saved.urls||[];state.task=saved.task||null;state.retry=saved.retry||null;state.recipient=saved.recipient||'';state.replyTo=saved.replyTo||null;}catch{}renderAttachments();}
 function renderAttachments(){ $('#attachment-list').innerHTML=[...state.uploads.map((u,i)=>`<div class="attachment"><span>▤ ${esc(u.name)}</span><button type="button" data-remove-upload="${i}" aria-label="移除资料">×</button></div>`),...state.urls.map((u,i)=>`<div class="attachment"><span>↗ ${esc(u)}</span><button type="button" data-remove-url="${i}" aria-label="移除网址">×</button></div>`)].join('');}
-function chooseTask(id){goalsUI.show(false);state.task=id;state.replyTo=null;state.recipient=id?selected()?.actor_id||'':state.recipient;$('#message-mode').value=id?'followup':'task';state.signature='';state.detailSignature='';saveDraft();roomView();messageView(true);detailView(true);$('#app').classList.remove('show-nav');}
+function chooseTask(id){goalsUI.show(false);state.task=id;state.replyTo=null;state.recipient=id?selected()?.actor_id||'':state.recipient;state.signature='';state.detailSignature='';saveDraft();roomView();messageView(true);detailView(true);$('#app').classList.remove('show-nav');}
+function composeAbout(text,actorId=null){
+  goalsUI.show(false);state.task=null;state.replyTo=null;state.recipient=actorId||state.recipient;state.signature='';state.detailSignature='';state.retry=null;
+  const input=$('#message-input');if(!input.value.trim())input.value=text;else toast('已有草稿已保留，你可以接着补充');saveDraft();roomView();messageView(true);detailView(true);input.focus();
+}
 async function chooseRoom(id){if(state.sending)return;goalsUI.show(false);saveDraft();state.room=id;localStorage.setItem(state.storagePrefix+'room',id);state.signature='';state.detailSignature='';state.sideSignature='';restoreDraft();await refresh(true);$('#app').classList.remove('show-nav');}
 async function send(event){
   event.preventDefault();if(state.sending||state.composing)return;
   const text=$('#message-input').value.trim();if(!text)return;
-  const mode=$('#message-mode').value;
+  const mode='auto';
   if(!state.data?.ready){openSettings();return;}
-  if(mode!=='task'&&(state.uploads.length||state.urls.length)){toast('新增资料请使用“交办任务”，以建立明确的资料范围');return;}
   const payload={text,mode,room:state.room,actor_id:state.recipient||null,reply_to:state.replyTo,task_id:state.task,uploads:state.uploads.map(u=>u.id),urls:state.urls};
   const fingerprint=JSON.stringify(payload);
   const nonce=state.retry?.fingerprint===fingerprint?state.retry.nonce:crypto.randomUUID();
   state.retry={fingerprint,nonce};saveDraft();state.sending=true;$('#send').disabled=true;
-  try{const receipt=await api('/api/messages',{...payload,nonce});$('#message-input').value='';state.uploads=[];state.urls=[];state.retry=null;state.replyTo=null;renderAttachments();if(receipt.task_id){state.task=receipt.task_id;$('#message-mode').value='followup';}if(receipt.state==='context')toast('已记入群聊，没有启动新任务');saveDraft();await refresh(true);}
+  try{const receipt=await api('/api/messages',{...payload,nonce});$('#message-input').value='';state.uploads=[];state.urls=[];state.retry=null;state.replyTo=null;renderAttachments();state.task=null;state.signature='';state.detailSignature='';if(receipt.state==='context')toast('已记入群聊，没有启动新任务');saveDraft();await refresh(true);}
   catch(e){toast(e.message+'；内容已保留，可以重试');}
   finally{state.sending=false;$('#send').disabled=false;$('#message-input').focus();}
 }
@@ -173,16 +178,27 @@ function memoryView(box){
 function memoryForm(memory=null){modal(memory?.state==='deleted'?'明确恢复这条记忆':memory?'修正记忆':'添加长期记忆',`<p class="modal-note">保存到「${esc(currentRoom().name)}」。修改或删除后，正在执行的旧上下文会停止并重新加载。既有聊天记录与产物仍会保留，便于追溯。</p><form id="memory-form" data-id="${memory?.id||''}" data-version="${memory?.version||0}" data-restore="${memory?.state==='deleted'}"><label class="field">标题<input name="key" maxlength="100" value="${esc(memory?.key||'')}" ${memory?'readonly':''} required></label><label class="field">内容<textarea name="value" rows="5" maxlength="4000" required>${esc(memory?.value||'')}</textarea></label><label class="field">用途<input name="purpose" maxlength="200" value="${esc(memory?.purpose||'')}" placeholder="例如：安排日程时考虑我的作息" required></label><div class="modal-actions"><button class="button primary">${memory?.state==='deleted'?'确认恢复':'保存记忆'}</button></div></form>`);}
 async function manageAction(name,body){const result=await api('/api/manage/'+name,body);$('#modal').close();await refresh(true);return result;}
 function assignmentForm(routeId=null,taskId=null,followupId=null){const route=state.data.pending_routes.find(p=>p.id===routeId);const followup=Boolean(followupId)||route?.mode==='followup';modal(taskId?'选择接手成员':'分配已保存的消息',`<form id="assignment-form" data-route="${routeId||''}" data-tid="${taskId||''}" data-followup-id="${followupId||''}" data-followup="${Boolean(followup)}"><p class="modal-note">${taskId?'接手会保留原任务、预算和未处理的补充要求。':'这条消息不会丢失，也不会因为重复点击创建多份任务。'}</p><label class="field">${followup?'对应任务':'接手成员'}<select name="target" required>${followup?state.data.tasks.filter(t=>t.cancel_state==='active'&&t.status!=='succeeded').map(t=>`<option value="${t.id}">${esc(botName(t.actor_id))}：${esc(t.spec.objective.slice(0,60))}</option>`).join(''):currentRoom().members.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select></label><div class="modal-actions"><button class="button primary">确认分配</button></div></form>`);}
-function openSettings(){const model=state.data?.model||{name:'qwen3.7-plus',base_url:'https://maas.qianwenaiapi.com/compatible-mode/v1'};modal('模型设置',`<p class="modal-note">使用你自己的 Qwen 官网账号。密钥保存在本机数据目录，不会显示在聊天或发送给其他网站。</p><form id="settings-form"><label class="field">模型型号<input name="name" value="${esc(model.name)}" required></label><label class="field">官网接口地址<input name="base_url" value="${esc(model.base_url)}" required><small>请使用与你的账号地域和服务匹配的官方接口。</small></label><label class="field">API Key<input name="key" type="password" autocomplete="new-password" placeholder="${state.data?.ready?'已配置；留空保持原密钥':'粘贴你的 Qwen 官网 API Key'}"><small>不会回显已保存的密钥。配置保存不代表连通测试通过。</small></label><div class="modal-actions"><button class="button primary" type="submit">保存配置</button></div></form><hr><h3>资料备份</h3><p class="modal-note">保存任务、记忆、成果与持续目标。不包含模型密钥和数据目录外的原始文件。恢复时使用新目录，未完成工作保持暂停。</p><button class="button" data-download-backup>下载备份包</button>`);}
-async function performAction(name,taskId,extra={}){const task=state.data.tasks.find(t=>t.id===taskId);if(name==='resume'&&!Object.keys(extra).length&&task&&(task.calls_used>=task.spec.max_calls||task.tools_used>=task.spec.max_tools||task.active_seconds>=task.spec.max_seconds)){openBudget(taskId);return;}try{const result=await api('/api/actions/'+name,{task_id:taskId,...extra});toast(result.state==='stopping'?'正在停止执行，已有进度会保留':'操作已记录');$('#modal').close();await refresh();}catch(e){if(name==='resume'&&e.message.includes('budget'))openBudget(taskId);else toast(e.message);}}
-function openBudget(taskId){modal('增加任务预算',`<p class="modal-note">原进度和消耗会保留。只增加你选择的额度，模型调用可能产生费用。</p><form id="budget-form" data-tid="${taskId}"><label class="field">增加模型调用次数<input name="extra_calls" type="number" min="0" max="60" value="10"></label><label class="field">增加工具操作次数<input name="extra_tools" type="number" min="0" max="100" value="20"></label><label class="field">增加执行时间（秒）<input name="extra_seconds" type="number" min="0" max="2700" value="300"></label><div class="modal-actions"><button class="button primary">增加并继续</button></div></form>`);}
+function openSettings(){const model=state.data?.model||{name:'qwen3.7-plus',base_url:'https://maas.qianwenaiapi.com/compatible-mode/v1'};modal('模型设置',`<p class="modal-note">使用你自己的 Qwen 官网账号。密钥保存在本机数据目录，不会显示在聊天或发送给其他网站。</p><form id="settings-form"><label class="field">模型型号<input name="name" value="${esc(model.name)}" required></label><label class="field">官网接口地址<input name="base_url" value="${esc(model.base_url)}" required><small>请使用与你的账号地域和服务匹配的官方接口。</small></label><label class="field">API Key<input name="key" type="password" autocomplete="new-password" placeholder="${state.data?.ready?'已配置；留空保持原密钥':'粘贴你的 Qwen 官网 API Key'}"><small>不会回显已保存的密钥。配置保存不代表连通测试通过。</small></label><div class="modal-actions"><button class="button primary" type="submit">保存配置</button></div></form><hr><h3>资料备份</h3><p class="modal-note">保存对话、记忆、成果与跟进记录。不包含模型密钥和数据目录外的原始文件。恢复时使用新目录，未完成工作保持暂停。</p><button class="button" data-download-backup>下载备份包</button>`);}
+const continuationNonces=new Map();
+async function sendIntent(text,{actorId=null,taskId=null,key=text}={}){
+  const nonce=continuationNonces.get(key)||crypto.randomUUID();continuationNonces.set(key,nonce);
+  await api('/api/messages',{text,mode:'auto',room:state.room,actor_id:actorId,task_id:taskId,reply_to:null,uploads:[],urls:[],nonce});
+  continuationNonces.delete(key);$('#modal').close();chooseTask(null);await refresh(true);
+}
+async function performAction(name,taskId,extra={}){
+  if(name==='resume'){
+    const task=state.data.tasks.find(t=>t.id===taskId);if(!task)return;
+    try{await sendIntent(`请继续处理「${taskTitle(task)}」，保留已经完成的进度。`,{actorId:task.actor_id,taskId,key:taskId});}catch(error){toast(error.message);}
+    return;
+  }
+  try{const result=await api('/api/actions/'+name,{task_id:taskId,...extra});toast(result.state==='stopping'?'正在停止执行，已有进度会保留':'操作已记录');$('#modal').close();await refresh();}catch(error){toast(error.message);}
+}
 async function answer(qid,option){const q=state.data.questions.find(q=>q.id===qid);const text=option!==undefined?q.options[Number(option)]:state.answers[qid]?.trim();if(!text)return;try{const result=await api('/api/actions/answer',{question_id:qid,text,nonce:crypto.randomUUID()});if(result.state==='ignored_stale_answer')toast('这个问题已经失效，请查看当前任务');await refresh();}catch(e){toast(e.message);}}
 $('#composer-form').addEventListener('submit',send);
 $('#message-input').addEventListener('compositionstart',()=>state.composing=true);
 $('#message-input').addEventListener('compositionend',()=>{state.composing=false;saveDraft();});
 $('#message-input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&!state.composing&&e.keyCode!==229){e.preventDefault();$('#composer-form').requestSubmit();}});
 $('#message-input').addEventListener('input',()=>{state.retry=null;saveDraft();});
-$('#message-mode').addEventListener('change',saveDraft);
 $('#recipient').addEventListener('change',()=>{state.recipient=$('#recipient').value;state.replyTo=null;state.retry=null;saveDraft();roomView();});
 $('#clear-reply').onclick=()=>{state.replyTo=null;saveDraft();roomView();};
 $('#manage-bots').onclick=manageBots;
@@ -203,7 +219,7 @@ document.addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.task)chooseTask(b.dataset.task);
   if(b.dataset.room)await chooseRoom(b.dataset.room);
-  if(b.dataset.reply){state.replyTo=b.dataset.reply;state.task=b.dataset.tid||null;state.recipient=b.dataset.actor==='unassigned'?'':b.dataset.actor;$('#message-mode').value=state.task?'followup':'chat';saveDraft();roomView();messageView();await detailView();$('#message-input').focus();}
+  if(b.dataset.reply){state.replyTo=b.dataset.reply;state.task=b.dataset.tid||null;state.recipient=b.dataset.actor==='unassigned'?'':b.dataset.actor;saveDraft();roomView();messageView();await detailView();$('#message-input').focus();}
   if(b.hasAttribute('data-new-bot'))botForm();
   if(b.hasAttribute('data-new-group'))groupForm();
   if(b.dataset.editBot)botForm(state.data.bots.find(x=>x.id===b.dataset.editBot));
@@ -224,13 +240,13 @@ document.addEventListener('click',async e=>{
   if(b.dataset.tab){state.tab=b.dataset.tab;await detailView(true);}
   if(b.dataset.suggestion){$('#message-input').value=b.dataset.suggestion;saveDraft();$('#message-input').focus();}
   if(b.hasAttribute('data-clear-task'))chooseTask(null);
-  if(b.hasAttribute('data-compose-followup')){$('#message-mode').value='followup';saveDraft();$('#message-input').focus();}
+  if(b.hasAttribute('data-compose-followup')){saveDraft();$('#message-input').focus();}
   if(b.hasAttribute('data-open-settings'))openSettings();
   if(b.hasAttribute('data-download-backup')){b.disabled=true;try{await downloadBackup();}catch(error){toast(error.message);}finally{b.disabled=false;}}
   if(b.dataset.removeUpload!==undefined){state.uploads.splice(Number(b.dataset.removeUpload),1);renderAttachments();saveDraft();}
   if(b.dataset.removeUrl!==undefined){state.urls.splice(Number(b.dataset.removeUrl),1);renderAttachments();saveDraft();}
   if(b.dataset.answer)await answer(b.dataset.answer,b.dataset.option);
-  if(b.dataset.action){if(b.dataset.action==='cancel')modal('取消这项委托？',`<p class="modal-note">这会停止当前任务及其后台协作。已有记录和产物会保留，普通消息不会重新启动这项已取消的任务。</p><div class="modal-actions"><button class="button danger" data-confirm-cancel="${b.dataset.tid}">取消委托</button></div>`);else await performAction(b.dataset.action,b.dataset.tid);}
+  if(b.dataset.action){if(b.dataset.action==='cancel')modal('取消这项委托？',`<p class="modal-note">这会停止当前任务及其后台协作。已有记录和产物会保留，普通消息不会重新启动这项已取消的任务。</p><div class="modal-actions"><button class="button danger" data-confirm-cancel="${b.dataset.tid}">取消委托</button></div>`);else {b.disabled=true;try{await performAction(b.dataset.action,b.dataset.tid);}finally{b.disabled=false;}}}
   if(b.dataset.confirmCancel)await performAction('cancel',b.dataset.confirmCancel);
   if(b.dataset.artifact){try{const data=await api('/api/artifacts/'+b.dataset.artifact);modal(data.name,`<div class="artifact-preview rich">${rich(data.text)}</div><div class="modal-actions"><button class="button" data-feedback-task="${esc(state.data.deliveries.find(d=>d.id===b.dataset.artifact)?.task_id||"")}">这份成果怎么样</button><a class="button download" href="/api/artifacts/${b.dataset.artifact}?download=1" download="result.md">下载成果</a></div>`);}catch(error){toast(error.message);}}
 });
@@ -246,10 +262,9 @@ document.addEventListener('submit',async e=>{
   }
   if(e.target.id==='settings-form'){e.preventDefault();const form=new FormData(e.target),body={name:form.get('name'),base_url:form.get('base_url')};if(form.get('key'))body.key=form.get('key');try{await api('/api/settings',body);$('#modal').close();toast('配置已保存');await refresh();}catch(error){toast(error.message);}}
   if(e.target.id==='url-form'){e.preventDefault();state.urls.push(new FormData(e.target).get('url'));renderAttachments();saveDraft();$('#modal').close();}
-  if(e.target.id==='budget-form'){e.preventDefault();const extra=Object.fromEntries([...new FormData(e.target)].map(([k,v])=>[k,Number(v)]));await performAction('resume',e.target.dataset.tid,extra);}
 });
 $$('.resizer').forEach(r=>r.addEventListener('pointerdown',e=>{r.setPointerCapture(e.pointerId);const move=e=>{const width=r.dataset.panel==='left'?e.clientX:innerWidth-e.clientX;document.documentElement.style.setProperty(r.dataset.panel==='left'?'--left':'--right',Math.max(220,Math.min(440,width))+'px');};r.addEventListener('pointermove',move);r.addEventListener('pointerup',()=>r.removeEventListener('pointermove',move),{once:true});}));
-const goalsUI=installGoals({state,api,modal,toast,refresh,esc,timeLabel,chooseTask});
+const goalsUI=installGoals({state,api,modal,toast,refresh,esc,timeLabel,chooseTask,compose:composeAbout,request:sendIntent});
 async function poll(){await refresh();setTimeout(poll,document.hidden?5000:1500);}
 try{const boot=await api('/api/bootstrap');switchWorkspace(boot);await refresh(true);setTimeout(poll,1500);}catch(e){toast('无法连接本地服务，请确认启动窗口仍在运行。');}
 
@@ -265,6 +280,6 @@ async function downloadBackup(){
 function switchWorkspace(boot){
   if(state.workspace)saveDraft();
   state.workspace=boot.workspace_id;state.storagePrefix='pa.'+state.workspace+'.';state.token=boot.token;
-  state.room=localStorage.getItem(state.storagePrefix+'room')||'local';state.data=null;state.task=null;state.answers={};
+  state.room=localStorage.getItem(state.storagePrefix+'room')||'local';state.data=null;state.task=null;state.answers={};continuationNonces.clear();
   state.signature='';state.detailSignature='';state.sideSignature='';goalsUI.show(false);restoreDraft();
 }

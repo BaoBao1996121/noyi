@@ -164,7 +164,7 @@ def restore_backup(archive, destination):
             with closing(sqlite3.connect(temp / "state.sqlite")) as connection:
                 if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise ValueError("备份数据库完整性检查失败")
-                if connection.execute("PRAGMA user_version").fetchone()[0] > 7:
+                if connection.execute("PRAGMA user_version").fetchone()[0] > 8:
                     raise ValueError("此备份由较新版本创建，请先升级程序")
             restored = Store(temp / "state.sqlite")
             try:
@@ -172,7 +172,7 @@ def restore_backup(archive, destination):
                 with restored.transaction():
                     restored.db.execute("CREATE TABLE IF NOT EXISTS local_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
                     restored.db.execute("INSERT OR REPLACE INTO local_metadata VALUES('workspace_id',?)", (uuid.uuid4().hex,))
-                    for table, field in [("tasks", "spec"), ("routine_policies", "template"), ("admission_rules", "template")]:
+                    for table, field in [("tasks", "spec"), ("routine_policies", "template"), ("admission_rules", "template"), ("conversation_inputs", "spec")]:
                         for row in restored.all(f"SELECT id,{field} FROM {table}"):
                             spec = _relocate(json.loads(row[field]), manifest["original_data_directory"], destination)
                             restored.db.execute(f"UPDATE {table} SET {field}=? WHERE id=?", (encode(spec), row["id"]))
@@ -181,6 +181,10 @@ def restore_backup(archive, destination):
                     restored.db.execute("UPDATE tasks SET status='paused',auto_continue='paused',reason='restored_backup_requires_resume' WHERE status NOT IN ('succeeded','cancelled')")
                     restored.db.execute("UPDATE admission_rules SET mode='off',revision=revision+1 WHERE mode!='off'")
                     held_chats = restored.db.execute("UPDATE events SET state='held_after_restore' WHERE task_id IS NULL AND state='pending'").rowcount
+                    for incoming in restored.all("SELECT c.id,c.message_id,m.source,m.account,m.client_nonce FROM conversation_inputs c JOIN messages m ON m.id=c.message_id WHERE c.state='pending'"):
+                        receipt = {'message_id': incoming['message_id'], 'conversation_id': incoming['id'], 'task_id': None, 'state': 'held_after_restore', 'duplicate': False}
+                        restored.db.execute("UPDATE conversation_inputs SET state='held_after_restore',receipt=? WHERE id=?", (encode(receipt), incoming['id']))
+                        restored.db.execute("UPDATE ingress_receipts SET receipt=? WHERE source=? AND account=? AND nonce=?", (encode(receipt), incoming['source'], incoming['account'], incoming['client_nonce']))
                     restored.db.execute("UPDATE deliveries SET state='held_after_restore',last_error='restored_without_redelivery' WHERE state IN ('pending','failed')")
                     for room in restored.all("SELECT id FROM rooms"):
                         restored._notice(None, room["id"], "资料已从备份恢复。未完成任务与持续目标已暂停，自动接手已关闭；请检查来源和模型配置后明确恢复。原聊天请求不会自动重发。")
