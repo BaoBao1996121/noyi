@@ -171,7 +171,7 @@ class ReviewStore:
             now = time.time()
             start, end = (experiment["window_start"], experiment["window_end"]) if experiment else (max(goal["created"], now - days * 86400), now)
             snapshot = self._review_snapshot(goal_id, start, end)
-            spec = TaskSpec("复盘持续目标「" + goal["title"] + "」。读取当前复盘证据，区分观测、解释、假设和未知。检查成果与用户反馈，说明保留、停止或修改现有做法的理由。没有连接的业务效果数据不要编造，没有反馈不代表满意。使用 record_goal_review 保存有证据的结论、下次检验时间与条件，然后写一份简洁中文复盘报告并提交。策略决定是建议，不在本次自动改变计划或权限。", max_calls=14, max_tools=40, max_workers=0, enable_nudge=True)
+            spec = TaskSpec("回顾持续跟进的事项「" + goal["title"] + "」。用 read_review_evidence 读取本次冻结的执行记录，区分观测、解释、假设和未知。检查成果与用户反馈，给出保留、停止或修改现有做法的建议和理由。没有连接的业务效果数据不要编造，没有反馈不代表满意。写一份简洁中文报告并提交，用 [证据编号] 标注依据。建议不会自动改变计划或权限。", max_calls=14, max_tools=40, max_workers=0, enable_nudge=True)
             spec.objective += (" 本次关联观察实验；根据实验的实际状态和观察窗口判断，未到窗口末尾不能宣称实验成功。" if experiment else " 本次是历史记录复盘，没有关联实验。观察范围在请求时已经截取结束；不能称为实验，也不能声称观察期尚未结束。")
             spec.objective += " 把字段转成中文说明，例如 domain_outcome=null 写成‘尚未接入业务效果测量’，useful 写成‘有用’，不要照抄代码字段。"
             spec.objective += " 若证据目录里有工作成果，必须实际读取并引用至少一份，不能只看数量。只有本次明确关联实验时才判断该实验阶段；没有关联时只是历史工作复盘，不继承旧报告的实验状态或结论。健康记录中的失败数是连续失败数，不是所有历史失败总数。报告使用自然中文；日期和下次检验时间写为北京时间的年月日时分，不展示 Unix 时间戳、英文内部字段名或状态代码。逐项引用实际证据；当前目标状态与累计检查计数须读取 goal_state，不能当作观察窗口内的指标。"
@@ -198,7 +198,7 @@ class ReviewStore:
             return {"state": "stale_after_memory_correction", "action": "Cancel this review and request a fresh one; older derived evidence is not automatically reloaded."}
         payload = json.loads(snapshot["payload"])
         experiment = self.experiment_context(request["experiment_id"]) if request["experiment_id"] else None
-        return {"state": "available", "review_type": "experiment_review" if experiment else "historical_snapshot", "experiment_phase": experiment["state"] if experiment else "not_applicable", "snapshot_window_closed": True, "snapshot_id": snapshot["id"], "window": payload["effective_window"], "requested_window": payload["requested_window"], "metrics": payload["metrics"], "evidence_catalog": [{"id": k, "kind": v["kind"], "created": v["data"].get("created")} for k, v in payload["evidence"].items()], "experiment": experiment, "experiment_version_at_request": request["experiment_version"], "suggested_next_check_unix_seconds": time.time() + 86400, "suggested_next_check_beijing": datetime.fromtimestamp(time.time() + 86400, ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M 北京时间"), "trust": "Frozen operational receipts; user reports and model interpretations do not prove domain improvement. Read cited evidence with read_review_evidence before record_goal_review."}
+        return {"state": "available", "review_type": "experiment_review" if experiment else "historical_snapshot", "experiment_phase": experiment["state"] if experiment else "not_applicable", "snapshot_window_closed": True, "snapshot_id": snapshot["id"], "window": payload["effective_window"], "requested_window": payload["requested_window"], "metrics": payload["metrics"], "evidence_catalog": [{"id": k, "kind": v["kind"], "created": v["data"].get("created")} for k, v in payload["evidence"].items()], "experiment": experiment, "experiment_version_at_request": request["experiment_version"], "suggested_next_check_unix_seconds": time.time() + 86400, "suggested_next_check_beijing": datetime.fromtimestamp(time.time() + 86400, ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M 北京时间"), "trust": "Frozen operational receipts; user reports and model interpretations do not prove domain improvement. Read cited evidence with read_review_evidence before relying on it in the report."}
 
     def goal_context(self, run):
         context = super().goal_context(run)
@@ -272,10 +272,12 @@ class ReviewStore:
         return {"review_id": review_id, "state": "assessment_recorded", "policy_change_applied": False, "next_check_is_proposed": True, "trust": "Evidence-linked assessment, not proof of improvement. User must confirm changes and future reminders."}
 
     def completion_errors(self, run):
+        # A review is an ordinary report task (decision X-8): it must ground the
+        # report in evidence it actually read, but no structured record is required.
         errors = super().completion_errors(run)
-        if run["task_id"] and self.one("SELECT task_id FROM goal_review_requests WHERE task_id=?", (run["task_id"],)):
-            if not self.one("SELECT id FROM goal_reviews WHERE task_id=? AND request_revision=?", (run["task_id"], run["revision"])):
-                errors.append("This review needs record_goal_review with observed evidence, uncertainties and a next validation condition before completion.")
+        request = run["task_id"] and self.one("SELECT snapshot_id FROM goal_review_requests WHERE task_id=?", (run["task_id"],))
+        if request and not self.one("SELECT evidence_id FROM review_evidence_reads WHERE task_id=? AND snapshot_id=?", (run["task_id"], request["snapshot_id"])):
+            errors.append("This review must read its frozen evidence with read_review_evidence before the report is delivered.")
         return errors
 
     def review_report(self, review_id, account="local-user"):

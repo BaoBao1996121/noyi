@@ -445,7 +445,6 @@ async def test_actual_pi_conversation_review_owns_original_request_until_accepte
     model=ScriptedModel([
         tool_reply('resolve_conversation',{'action':'goal_review','goal_id':goal['id'],'reference':'项目资料'}),
         tool_reply('read_review_evidence',{'evidence_id':'metrics'}),
-        tool_reply('record_goal_review',args),
         tool_reply('write_artifact',{'name':'review.md','content':'已核对现有执行账本。尚未接入业务效果测量，因此实际改善保持未知。[metrics]'}),
         submit_written_artifact,
     ])
@@ -467,10 +466,11 @@ async def test_actual_pi_conversation_review_owns_original_request_until_accepte
     assert store.task(task['id'])['status']=='succeeded'
     assert store.task(task['id'])['acceptance']=='passed'
     assert store.one('SELECT artifact FROM deliveries WHERE task_id=?',(task['id'],))['artifact']
-    assert store.one('SELECT decision FROM goal_reviews')['decision']=='insufficient'
+    assert not store.all('SELECT * FROM goal_reviews')
+    assert store.one('SELECT evidence_id FROM review_evidence_reads')['evidence_id']=='metrics'
     assert store.goal(goal['id'])['status']==state
     assert not store.all('SELECT * FROM routine_policies')
-    assert len(store.all('SELECT * FROM model_requests'))==5
+    assert len(store.all('SELECT * FROM model_requests'))==4
 
 
 @pytest.mark.parametrize('change',['goal_revision','room_scope'])

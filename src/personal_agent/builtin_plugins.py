@@ -1,7 +1,7 @@
 """Built-in capabilities, expressed through the same plugin contract as extensions.
 
-Their guidance still lives in runtime.SYSTEM; moving it into per-plugin prompt
-fragments is a separate change because it alters the exact model request.
+Their guidance still lives in runtime.SYSTEM. A tool whose `available` check
+fails is neither offered to the model nor executable by name.
 """
 from __future__ import annotations
 
@@ -57,19 +57,29 @@ def artifacts_plugin():
     ])
 
 
-def _orchestration_available(name):
-    goal_only = {"record_goal_progress", "propose_policy_adjustment", "review_policy_proposal"}
-    review_only = {"read_review_evidence", "record_goal_review"}
+# Management bookkeeping the model no longer performs (decision X-8). Progress is
+# derived from the ledger when a task finishes; reviews are ordinary report tasks
+# that read frozen evidence. The store methods stay for existing data and APIs.
+HIDDEN_TOOLS = frozenset({"record_goal_progress", "propose_policy_adjustment", "review_policy_proposal",
+                          "record_goal_review", "record_investigation", "handoff_task", "observe_following"})
+DELEGATING_TOOLS = frozenset({"spawn_worker", "wait_workers", "read_worker_result", "adopt_worker_result"})
 
+
+def _orchestration_available(name):
     def available(runtime, run):
+        if name in HIDDEN_TOOLS:
+            return False
         store = runtime.store
-        root = store.task(store.task(run["task_id"])["root_task_id"])
-        reviewing = store.one("SELECT task_id FROM goal_review_requests WHERE task_id=?", (root["id"],))
-        if name in goal_only and not root["goal_id"]:
-            return False
-        if name in review_only and not reviewing:
-            return False
-        return not (name == "record_goal_progress" and reviewing)
+        task = store.task(run["task_id"])
+        if name == "read_review_evidence":
+            return bool(store.one("SELECT task_id FROM goal_review_requests WHERE task_id=?", (task["root_task_id"],)))
+        if name in DELEGATING_TOOLS:
+            return not task["parent_task_id"] and task["spec"].get("max_workers", 0) > 0
+        if name == "request_rework":
+            return not task["parent_task_id"] and bool(task["spec"].get("review_workers"))
+        if name == "read_dependency":
+            return bool(task["parent_task_id"]) and task["dependencies"] not in (None, "[]")
+        return True
     return available
 
 
@@ -109,9 +119,10 @@ def following_plugin():
 
     def spec(schema):
         name = schema["function"]["name"]
+        visible = (lambda runtime, run: False) if name in HIDDEN_TOOLS else available
         return ToolSpec(schema, lambda call, args: call.runtime.following.execute(call.run, name, args),
                         lambda args: validate_conversation_goal_arguments(name, args),
-                        effect="local_write", available=available)
+                        effect="local_write", available=visible)
     return Plugin("core.following", "1", [spec(s) for s in CONVERSATION_GOAL_SCHEMAS] + [
         ToolSpec(ACTION_COMPLETION, _complete_action, _validate_complete_action, exclusive=True, available=available)])
 

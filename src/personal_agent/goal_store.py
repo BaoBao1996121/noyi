@@ -274,6 +274,12 @@ class GoalStore:
                     goal = self.goal(task["goal_id"])
                     self.goal_event(goal["id"], "task_" + kwargs["status"], {"task_id": task["id"], "reason": kwargs["reason"], "acceptance": kwargs.get("acceptance", "pending"), "artifact": kwargs.get("artifact")}, run["id"])
                     review_grant = hasattr(self, "explicit_goal_task_granted") and self.explicit_goal_task_granted(task)
+                    # Progress is derived from the ledger, not reported by the model (X-8).
+                    ops = self.all("SELECT id,tool,status FROM operations WHERE run_id=?", (run["id"],))
+                    self.goal_event(goal["id"], "ledger_progress", {"task_id": task["id"], "status": kwargs["status"],
+                        "operations": len(ops), "failed": sum(o["status"] != "succeeded" for o in ops),
+                        "tools": sorted({o["tool"] for o in ops}), "evidence_refs": [o["id"] for o in ops if o["status"] == "succeeded"][:32],
+                        "trust": "runtime ledger counts, not an assessment of business outcome"}, run["id"])
                     if kwargs["status"] == "succeeded" and not review_grant:
                         self.db.execute("UPDATE goals SET current_state=?,wait_reason='本次成果已交付，持续职责仍保留',assessment_at=?,updated=? WHERE id=?", ("最近一次检查已完成：" + kwargs["content"][:500], time.time(), time.time(), goal["id"]))
                         self.db.execute("UPDATE policy_occurrences SET status='completed',reason='task_accepted' WHERE task_id=?", (task["id"],))

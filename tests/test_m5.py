@@ -33,9 +33,10 @@ def test_t33_missing_metrics_remain_unknown_and_unread_evidence_cannot_support_r
     assert run["task_id"] == receipt["task_id"]
     context = store.review_context(run)
     schemas = Runtime(store, tmp_path / 'data', ScriptedModel([])).schemas(run)
-    refs = next(s for s in schemas if s['function']['name'] == 'record_goal_review')['function']['parameters']['properties']['evidence_refs']
-    assert refs['items']['enum'] == [item['id'] for item in context['evidence_catalog']]
-    assert 'operation_id' in refs['description']
+    names = {s['function']['name'] for s in schemas}
+    assert 'record_goal_review' not in names
+    ids = next(s for s in schemas if s['function']['name'] == 'read_review_evidence')['function']['parameters']['properties']['evidence_id']
+    assert ids['enum'] == [item['id'] for item in context['evidence_catalog']]
     assert context["metrics"]["domain_outcome"] is None
     assert context["metrics"]["reported_management_seconds"] is None
     assert context["metrics"]["invoice_currency_cost"] is None
@@ -124,14 +125,14 @@ def test_experiment_reminder_survives_reopen_and_paused_goal_stays_quiet(store, 
 
 
 @pytest.mark.asyncio
-async def test_actual_pi_review_requires_recorded_assessment_before_delivery(store, tmp_path):
+async def test_actual_pi_review_delivers_report_grounded_in_read_evidence(store, tmp_path):
     goal = new_goal(store)
     receipt = store.request_goal_review(goal["id"], nonce="protocol-review")
-    model = ScriptedModel([tool_reply("read_review_evidence", {"evidence_id": "metrics"}), tool_reply("record_goal_review", review_args()), tool_reply("write_artifact", {"name": "review.md", "content": "资料采纳率与实际人工耗时均未测量。证据不足以判断改善；下一次应收集真实反馈。[metrics]"}), submit_written_artifact])
+    model = ScriptedModel([tool_reply("read_review_evidence", {"evidence_id": "metrics"}), tool_reply("write_artifact", {"name": "review.md", "content": "资料采纳率与实际人工耗时均未测量。证据不足以判断改善；下一次应收集真实反馈。[metrics]"}), submit_written_artifact])
     await Service(store, tmp_path / "data", model).serve(once=True)
     assert store.task(receipt["task_id"])["status"] == "succeeded"
-    assert store.goal(goal["id"])["calls_used"] == 4
-    assert len(store.all("SELECT * FROM goal_reviews")) == 1
+    assert store.goal(goal["id"])["calls_used"] == 3
+    assert not store.all("SELECT * FROM goal_reviews")
     assert len(store.all("SELECT * FROM routine_policies")) == 0
 
 

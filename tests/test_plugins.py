@@ -46,7 +46,7 @@ async def test_extension_tool_runs_through_ledger_and_prompt(store, tmp_path, sp
     assert task["tools_used"] == 4
     first = model.requests[0]
     assert "lookup_note" in [t["function"]["name"] for t in first["tools"]]
-    assert first["messages"][0]["content"].endswith("Installed capabilities:\nUse lookup_note for stored notes.\n")
+    assert "Installed capabilities:\nUse lookup_note for stored notes.\n" in first["messages"][0]["content"]
     operation = next(o for o in store.operations(task["id"]) if o["tool"] == "lookup_note")
     assert operation["status"] == "succeeded"
     assert operation["result"]["note"] == "Release needs human review."
@@ -56,11 +56,47 @@ async def test_extension_tool_runs_through_ledger_and_prompt(store, tmp_path, sp
 
 
 @pytest.mark.asyncio
-async def test_builtin_prompt_is_unchanged_without_extensions(store, tmp_path, spec, successful_model):
-    from personal_agent.runtime import SYSTEM
+async def test_plain_task_gets_only_core_and_applicable_guidance(store, tmp_path, spec, successful_model):
+    from personal_agent.runtime import SYSTEM, DELEGATION_GUIDE, FOLLOWING_GUIDE, GOAL_GUIDE, REVIEW_GUIDE
     store.submit(spec, nonce="plain")
     await Service(store, tmp_path / "data", successful_model).run_until_quiescent()
-    assert successful_model.requests[0]["messages"][0]["content"] == SYSTEM
+    request = successful_model.requests[0]
+    system = request["messages"][0]["content"]
+    assert system.startswith(SYSTEM)
+    assert GOAL_GUIDE not in system and REVIEW_GUIDE not in system
+    names = {t["function"]["name"] for t in request["tools"]}
+    assert (DELEGATION_GUIDE in system) == ("spawn_worker" in names)
+    assert (FOLLOWING_GUIDE in system) == ("start_following" in names)
+
+
+def test_hidden_management_tools_are_neither_offered_nor_executable(store, tmp_path, spec):
+    from personal_agent.builtin_plugins import HIDDEN_TOOLS
+    store.submit(spec, nonce="hidden")
+    run = store.claim()
+    runtime = Runtime(store, tmp_path / "data", ScriptedModel([]))
+    names = {t["function"]["name"] for t in runtime.schemas(run)}
+    assert not names & HIDDEN_TOOLS
+    assert len(names) <= 20
+    for name in HIDDEN_TOOLS:
+        assert runtime.plugins.spec(name).available(runtime, run) is False
+
+
+@pytest.mark.asyncio
+async def test_calling_hidden_tool_by_name_fails_that_call_only(store, tmp_path, spec):
+    submitted = store.submit(spec, nonce="guess")
+    model = ScriptedModel([
+        tool_reply("record_investigation", {"kind": "hypothesis", "statement": "guess", "evidence_refs": ["x"]}, "hidden"),
+        tool_reply("read_source", {"source_id": "policy"}, "read"),
+        tool_reply("write_artifact", {"name": "report.md", "content": "The release requires human review. [policy]"}, "write"),
+        submit_written_artifact,
+    ])
+    await Service(store, tmp_path / "data", model).run_until_quiescent()
+    task = store.task(submitted["task_id"])
+    hidden = next(o for o in store.operations(task["id"]) if o["tool"] == "record_investigation")
+    detail = hidden["result"]["detail"]
+    assert hidden["status"] == "failed" and ("not available" in detail or "unknown tool" in detail)
+    assert not store.all("SELECT * FROM investigation")
+    assert task["status"] == "succeeded"
 
 
 @pytest.mark.asyncio

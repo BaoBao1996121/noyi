@@ -468,7 +468,6 @@ async def test_actual_pi_can_review_paused_or_ended_history_without_resuming_bus
     model = ScriptedModel([
         tool_reply("read_review_evidence", {"evidence_id": "metrics"}, "metrics"),
         tool_reply("read_review_evidence", {"evidence_id": "goal_state"}, "state"),
-        tool_reply("record_goal_review", {"observed_facts": ["目前只具备账本记录，未连接业务效果数据"], "hypotheses": [], "uncertainties": ["实际效果未知"], "decision": "insufficient", "rationale": "缺少实际效果测量，不能证明改善", "evidence_refs": ["metrics", "goal_state"], "next_check": time.time() + 86400, "next_validation": "取得新的真实反馈后再判断"}, "record"),
         tool_reply("write_artifact", {"name": "history-review.md", "content": "本次仅回顾已有记录，业务效果未测量，不能证明改善；继续保留未知。[metrics] [goal_state]"}, "write"),
         submit_written_artifact,
     ])
@@ -478,13 +477,12 @@ async def test_actual_pi_can_review_paused_or_ended_history_without_resuming_bus
     after = store.goal(goal["id"])
     assert after["status"] == state and after["revision"] == before["revision"]
     assert after["current_state"] == before["current_state"] and after["wait_reason"] == before["wait_reason"]
-    assert after["calls_used"] - before["calls_used"] == 5
+    assert after["calls_used"] - before["calls_used"] == 4
     await TriggerScheduler(store, tmp_path / "data", clock=lambda: 2000).tick()
     assert not store.all("SELECT * FROM policy_occurrences")
     assert store.policy(policy["id"])["revision"] == 1
-    review_id = store.one("SELECT id FROM goal_reviews WHERE task_id=?", (reviewed["id"],))["id"]
-    report = store.review_report(review_id)
-    assert "关联任务执行的模型响应" in report["text"] and "对话接待" in report["text"]
+    assert not store.all("SELECT * FROM goal_reviews")
+    assert {r["evidence_id"] for r in store.all("SELECT evidence_id FROM review_evidence_reads WHERE task_id=?", (reviewed["id"],))} == {"metrics", "goal_state"}
 
 
 @pytest.mark.parametrize("state", ["paused", "retired"])

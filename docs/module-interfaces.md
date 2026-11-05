@@ -26,11 +26,14 @@ modules = ["my_notes"]
 
 - 每个工具声明副作用类别 `effect`：`read` / `local_write` / `external_retryable` / `external_unknown`。外部副作用的调用如果因崩溃中断，恢复时会标成“结果未知，先查证再重试”，不会被盲目重放。
 - 插件工具和内置工具走同一套流程：参数校验、预算、取消检查、操作落库、恢复。插件不能完成或验收任务；`core.` 前缀和已有工具名保留给内置插件，不能覆盖。
-- 插件的 `prompt` 片段追加到系统提示末尾；没有扩展插件时，系统提示与改造前逐字一致。
+- 插件的 `prompt` 片段追加到系统提示末尾。
+- 工具可声明 `available(runtime, run)`：不适用于当前任务的工具不会出现在模型的工具列表里，模型硬调用也只让这一次调用失败。
 - 插件代码意外抛错只让这一次工具调用失败，不会让整个任务失败。
 - 插件是本机安装的可信代码，不是安全隔离；调用不可信的外部程序仍需另做进程/权限隔离。
 
-内置插件的提示词目前仍集中在 `runtime.SYSTEM`，拆分到各插件会改变模型实际收到的请求，留作单独一步。
+系统提示按任务拼装（`Runtime.system_prompt`）：核心规则 `SYSTEM` 总是发送；委派、持续跟进、目标、回顾四段说明只在对应工具可用或任务属于目标时追加。普通任务看到 19 个工具、约 7.9K 字符系统提示。
+
+管理类工具（`record_goal_progress`、`propose_policy_adjustment`、`review_policy_proposal`、`record_goal_review`、`record_investigation`、`handoff_task`、`observe_following`）对模型隐藏（`builtin_plugins.HIDDEN_TOOLS`）。目标进度改由账本在任务结束时写 `ledger_progress` 事件；回顾是普通报告任务：先用 `read_review_evidence` 读冻结证据，再写报告提交，不再要求模型填结构化评估。对应 store 方法仍保留，供以后的程序化入口使用。
 
 | 边界 | 当前实现与替换方式 | 保持不变的约束 |
 |---|---|---|
