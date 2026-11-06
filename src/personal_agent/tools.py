@@ -244,6 +244,9 @@ def verify(toolset: Toolset, operations: list[dict], proposal: dict) -> dict:
             errors.append(f"source {sid} not fully read; optional failure requires limitations ID and UNAVAILABLE [{sid}] in artifact")
         else:
             checks.append({"source": sid, "unavailable_disclosed": True})
+    fetched = {o["result"].get("page_id") for o in operations if o["tool"] == "fetch_page" and o["status"] == "succeeded"}
+    for page_id in sorted(set(re.findall(r"\[(page_[0-9a-f]{10})\]", text)) - fetched):
+        errors.append(f"citation [{page_id}] has no successful fetch_page in this task")
     for required in toolset.task["spec"]["required_text"]:
         if required.casefold() not in text.casefold():
             errors.append(f"missing required text: {required}")

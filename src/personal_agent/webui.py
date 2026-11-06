@@ -220,6 +220,8 @@ async def security(request, handler):
     response.headers.update({"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
                              "Cross-Origin-Resource-Policy": "same-origin", "X-Frame-Options": "DENY",
                              "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"})
+    if response.headers.pop("X-Page-CSP", None):
+        response.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
     return response
 
 
@@ -349,6 +351,18 @@ async def artifact(request):
     return web.json_response({"name": name, "text": raw.decode("utf-8")})
 
 
+async def result_page(request):
+    from .result_page import render
+    c = request.app[CONSOLE]
+    html = render(c.store, c.data, request.match_info["task_id"])
+    if html is None:
+        raise web.HTTPNotFound(text="这份成果还没有通过验收")
+    response = web.Response(text=html, content_type="text/html")
+    # Inline style only; still no scripts, frames or external loads.
+    response.headers["X-Page-CSP"] = "page"
+    return response
+
+
 async def settings(request):
     c, body = request.app[CONSOLE], await json_body(request)
     if c.store.one("SELECT id FROM runs WHERE phase='running'") or c.service._active:
@@ -425,6 +439,7 @@ def create_app(store, data, model, *, run_service=True, shutdown_event=None, plu
                     web.post("/api/manage/{name}", manage), web.post("/api/goals/{name}", goal_manage),
                     web.get("/api/policies/{policy_id}", policy_detail)])
     app.router.add_get("/api/reviews/{review_id}", review_report)
+    app.router.add_get("/r/{task_id}", result_page)
     app.cleanup_ctx.append(lifecycle)
     return app
 

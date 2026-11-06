@@ -41,6 +41,8 @@ def test_delivery_keeps_one_conclusion_and_at_most_three_points():
     assert lines[0] == "结论：现行负责人是周宁。"
     assert [l for l in lines[1:] if l] == ["- 截止 11 月 12 日", "- 报名日期未定", "- 无需经理审批"]
     assert shape_delivery("  ") == "成果整理好了，见下方附件。"
+    paragraph = "现行负责人是周宁，旧版已作废，资料截止改到 11 月 12 日，审批改为作者自查。资料截止改到11月12日。审批改为作者自查。报名时间、预算和场地容量待确认。另有一句。"
+    assert shape_delivery(paragraph).splitlines() == ["现行负责人是周宁，旧版已作废，资料截止改到 11 月 12 日，审批改为作者自查。", "- 资料截止改到11月12日", "- 审批改为作者自查", "- 报名时间、预算和场地容量待确认"]
 
 
 def test_model_receipt_replaces_template_and_bad_receipt_falls_back(store):
@@ -55,12 +57,20 @@ def test_started_line_is_sent_once_when_work_actually_starts(store):
     incoming(store, "帮我整理一份周报", nonce="a")
     tid = intake(store, {"action": "new_task"})["task_id"]
     assert not contents(store, tid)  # only the intake receipt exists; nothing has started yet
+    store.db.execute("UPDATE conversation_inputs SET updated=updated-30")  # queued for a while
     run = store.claim()
     assert run["task_id"] == tid
     assert contents(store, tid)[-1] == "已开跑，做好把成果发你。"
     store.recover()  # crash: the same event is claimed again
     store.claim()
     assert contents(store, tid).count("已开跑，做好把成果发你。") == 1
+
+
+def test_no_started_line_when_work_begins_right_after_receipt(store):
+    incoming(store, "帮我整理一份周报", nonce="a")
+    tid = intake(store, {"action": "new_task"})["task_id"]
+    store.claim()
+    assert not contents(store, tid)
 
 
 def test_arrangement_only_and_direct_tasks_do_not_announce_start(store):

@@ -16,6 +16,7 @@ from .conversation_goals import ConversationGoals
 from .orchestration_tools import OrchestrationTools, public_context
 from .plugins import EFFECTS, PluginRegistry, ToolCall
 from .builtin_plugins import builtin_plugins
+from .web_tools import WEB_GUIDE
 
 
 SYSTEM = """You are a practical personal assistant. Complete the user's authorized task using the available tools.
@@ -26,7 +27,7 @@ An overall project lead is not automatically the author or owner of every unassi
 Use only supplied source IDs. A failed read is not a successful read. Disclose unavailable optional sources in the artifact.
 An earlier task's delivered result may be provided as an authorized source in a new revision request. Read it with read_source using its source ID; read_artifact only opens artifacts with write receipts in THIS task. Do not guess an older task's artifact path.
 For each unavailable optional source, include the exact marker UNAVAILABLE [source_id] in the artifact and put its ID in submit_result limitations. Never assert facts from an unread source.
-Use write_artifact, then submit_result with its exact artifact_ref and a short natural user-facing summary.
+Use write_artifact, then submit_result with its exact artifact_ref and a user-facing summary: first line one-sentence conclusion (under 60 Chinese characters, the answer itself, not 'I finished'), then at most three '- ' points. Details belong in the artifact.
 Acceptance is performed by the runtime; a claim of completion is insufficient. Correct concrete acceptance errors.
 Do not invent observations, tool access or results. If you cannot complete, state the missing condition honestly.
 Keep conversation concise. Do not expose internal deliberation. Tools may be sequenced; submit_result must be the only call in its response.
@@ -89,6 +90,8 @@ class Runtime:
             parts.append(GOAL_GUIDE)
         if "read_review_evidence" in names:
             parts.append(REVIEW_GUIDE)
+        if "web_search" in names:
+            parts.append(WEB_GUIDE)
         return "".join(parts)
 
     def runnable(self, run):
