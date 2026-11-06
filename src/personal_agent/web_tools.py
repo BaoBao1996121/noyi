@@ -70,9 +70,21 @@ class WebConfig:
                 raise ValueError("unknown [web] configuration fields")
         return cls(**values)
 
+    # Optional file holding only the search key, so search can use its own
+    # account while chat goes through another gateway.
+    key_file: str | None = None
+
+    def key(self):
+        value = os.environ.get(self.api_key_env)
+        if not value and self.key_file:
+            path = Path(self.key_file).expanduser()
+            if path.is_file():
+                value = path.read_text(encoding="utf-8").strip() or None
+        return value
+
     @property
     def enabled(self):
-        return bool(os.environ.get(self.api_key_env))
+        return bool(self.key())
 
 
 class BailianSearch:
@@ -82,7 +94,7 @@ class BailianSearch:
         self.config = config
 
     async def search(self, query):
-        key = os.environ.get(self.config.api_key_env)
+        key = self.config.key()
         if not key:
             raise ValueError("web search is not configured")
         async with httpx.AsyncClient(timeout=self.config.timeout_seconds, follow_redirects=False, trust_env=False) as client:
@@ -239,5 +251,9 @@ def web_plugin(web: WebTools):
                                ToolSpec(FETCH, web.fetch, effect="read", available=available)])
 
 
-def web_plugins(config_path=None):
-    return [web_plugin(WebTools(WebConfig.load(config_path)))]
+def web_plugins(config_path=None, data=None):
+    config = WebConfig.load(config_path)
+    if config.key_file is None and data is not None:
+        # Desktop instances keep the search-only key beside the model key; neither enters backups.
+        config.key_file = str(Path(data) / "search.key")
+    return [web_plugin(WebTools(config))]

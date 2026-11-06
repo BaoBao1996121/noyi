@@ -42,10 +42,12 @@ class LocalModel:
 
     @property
     def metadata(self):
-        return {"provider": "qwen_official", "requested_model": self.config.name, "base_url": self.config.base_url}
+        return {"provider": "local_gateway" if self.config.gateway else "qwen_official", "requested_model": self.config.name,
+                "base_url": self.config.base_url, "effort": self.config.effort, "chat_effort": self.config.chat_effort}
 
     async def configure(self, *, name, base_url, key=None):
-        config = ModelConfig(name=name, base_url=base_url, api_key_env=self.config.api_key_env)
+        keep = {k: getattr(self.config, k) for k in ("api_key_env", "effort", "chat_effort", "timeout_seconds", "max_output_tokens")}
+        config = ModelConfig(name=name, base_url=base_url, **keep)
         if key is not None and (not isinstance(key, str) or not key.strip() or any(c.isspace() for c in key.strip())):
             raise ValueError("请输入有效的 API Key")
         await self.close()

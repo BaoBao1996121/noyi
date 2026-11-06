@@ -119,3 +119,12 @@ async def test_daily_budget_spans_tasks(store, tmp_path, web):
                            tool_reply("write_artifact", {"name": "r.md", "content": "y"}, "w2"), submit])
     await Service(store, tmp_path / "data", model, plugins=[web_plugin(web)], concurrency=1).run_until_quiescent()
     assert web.backend.queries == ["a", "b", "c"]
+
+
+def test_search_key_can_come_from_its_own_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("WEB_FILE_KEY", raising=False)
+    key = tmp_path / "search.key"
+    config = WebConfig(api_key_env="WEB_FILE_KEY", key_file=str(key))
+    assert not config.enabled
+    key.write_text("unit-test-only\n", encoding="utf-8")
+    assert config.enabled and config.key() == "unit-test-only"

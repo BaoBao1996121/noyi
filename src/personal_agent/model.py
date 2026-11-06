@@ -15,8 +15,26 @@ OFFICIAL_HOSTS = {"maas.qianwenaiapi.com", "dashscope.aliyuncs.com", "dashscope-
 WORKSPACE_REGIONS = {"cn-beijing", "ap-southeast-1", "us-east-1", "eu-central-1", "ap-northeast-1", "cn-hongkong"}
 
 
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+
+
+def is_local_gateway(value: str) -> bool:
+    """A model router on this machine (e.g. Magpie) speaking OpenAI-compatible /v1."""
+    try:
+        endpoint = urlparse(value)
+        port = endpoint.port
+    except (ValueError, TypeError):
+        return False
+    return (endpoint.scheme == "http" and (endpoint.hostname or "") in LOOPBACK and port is not None
+            and not endpoint.username and not endpoint.password and not endpoint.query and not endpoint.fragment
+            and endpoint.path in {"/v1", "/v1/"})
+
+
 def validate_endpoint(value: str) -> None:
-    """Only documented official hosts and the compatible chat API path receive keys."""
+    """Only documented official hosts, or a loopback model gateway, receive keys."""
+    if isinstance(value, str) and is_local_gateway(value):
+        return
     if not isinstance(value, str) or any(c.isspace() for c in value):
         raise ValueError("Qwen adapter requires an official HTTPS endpoint")
     try:
@@ -40,10 +58,21 @@ class ModelConfig:
     timeout_seconds: float = 90
     max_output_tokens: int = 4096
     enable_thinking: bool = False
+    # Reasoning effort for work turns and for conversation intake. Only sent to
+    # a local gateway; official Qwen ignores these fields.
+    effort: str | None = None
+    chat_effort: str | None = None
+
+    @property
+    def gateway(self):
+        return is_local_gateway(self.base_url)
 
     def __post_init__(self):
         validate_endpoint(self.base_url)
-        if not isinstance(self.name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", self.name):
+        for field in ("effort", "chat_effort"):
+            if getattr(self, field) is not None and getattr(self, field) not in EFFORTS:
+                raise ValueError(f"{field} must be one of {sorted(EFFORTS)}")
+        if not isinstance(self.name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./-]{0,127}", self.name):
             raise ValueError("invalid model ID")
         if not isinstance(self.api_key_env, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.api_key_env):
             raise ValueError("invalid API key environment variable name")
@@ -60,14 +89,15 @@ class ModelConfig:
         values = tomllib.loads(path.read_text(encoding="utf-8-sig")).get("model", {}) if path else {}
         if not isinstance(values, dict) or set(values) - set(cls.__dataclass_fields__):
             raise ValueError("unknown model configuration fields")
-        for env, field in [("PA_MODEL", "name"), ("PA_BASE_URL", "base_url")]:
+        for env, field in [("PA_MODEL", "name"), ("PA_BASE_URL", "base_url"), ("PA_API_KEY_ENV", "api_key_env"),
+                           ("PA_EFFORT", "effort"), ("PA_CHAT_EFFORT", "chat_effort")]:
             if os.environ.get(env):
                 values[field] = os.environ[env]
         return cls(**values)
 
 
 class QwenModel:
-    """Official Qwen cloud via its documented OpenAI-compatible interface."""
+    """Official Qwen cloud, or a loopback gateway, via the OpenAI-compatible interface."""
     def __init__(self, config: ModelConfig):
         from openai import AsyncOpenAI
         import httpx
@@ -84,22 +114,30 @@ class QwenModel:
 
     @property
     def metadata(self):
-        return {"provider": "qwen_official", "requested_model": self.config.name,
+        return {"provider": "local_gateway" if self.config.gateway else "qwen_official", "requested_model": self.config.name,
                 "base_url": self.config.base_url, "enable_thinking": self.config.enable_thinking,
+                "effort": self.config.effort, "chat_effort": self.config.chat_effort,
                 "max_output_tokens": self.config.max_output_tokens,
                 "timeout_seconds": self.config.timeout_seconds}
 
     async def complete(self, messages, tools):
         kwargs = dict(model=self.config.name, messages=messages,
-                      max_tokens=self.config.max_output_tokens,
-                      extra_body={"enable_thinking": self.config.enable_thinking})
+                      max_tokens=self.config.max_output_tokens)
+        intake = bool(tools) and len(tools) == 1 and tools[0].get("type") == "function"             and tools[0].get("function", {}).get("name") == "resolve_conversation"
+        if self.config.gateway:
+            effort = self.config.chat_effort if intake else self.config.effort
+            if effort:
+                kwargs["reasoning_effort"] = effort
+        else:
+            kwargs["extra_body"] = {"enable_thinking": self.config.enable_thinking}
         if tools:
             kwargs["tools"] = tools
             # Intake has one protocol exit: record its scoped decision. A
             # prose-only acknowledgement cannot create or route real work.
             # Business turns retain the provider's normal automatic choice.
-            if (len(tools) == 1 and tools[0].get("type") == "function"
-                    and tools[0].get("function", {}).get("name") == "resolve_conversation"):
+            # Claude behind the gateway rejects forced tool_choice; the intake
+            # router already re-asks when a turn ends without the decision.
+            if intake and not self.config.gateway:
                 kwargs["tool_choice"] = {"type": "function", "function": {"name": "resolve_conversation"}}
         result = await self.client.chat.completions.create(**kwargs)
         msg = result.choices[0].message

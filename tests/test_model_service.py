@@ -210,3 +210,73 @@ def test_resume_cli_exposes_explicit_budget_extension():
     args = parser().parse_args(["retry", "task-1", "--extra-calls", "3", "--extra-tools", "5", "--extra-seconds", "45"])
     assert args.command == "retry"
     assert (args.task_id, args.extra_calls, args.extra_tools, args.extra_seconds) == ("task-1", 3, 5, 45)
+
+
+@pytest.mark.parametrize("base", ["http://127.0.0.1:3425/v1", "http://localhost:3425/v1/"])
+def test_local_gateway_endpoint_is_accepted(base):
+    config = ModelConfig(name="newapi/claude-opus-5-5", base_url=base, effort="medium", chat_effort="low")
+    assert config.gateway
+
+
+@pytest.mark.parametrize("base", ["http://10.0.0.5:3425/v1", "http://127.0.0.1/v1", "http://127.0.0.1:3425/other",
+                                  "http://user:pw@127.0.0.1:3425/v1", "https://ai-gw.example.com/v1"])
+def test_non_loopback_or_odd_gateway_endpoint_is_rejected(base):
+    with pytest.raises(ValueError):
+        ModelConfig(base_url=base)
+
+
+def test_unknown_effort_is_rejected():
+    with pytest.raises(ValueError):
+        ModelConfig(base_url="http://127.0.0.1:3425/v1", effort="turbo")
+
+
+async def test_gateway_sends_role_effort_and_never_forces_tool_choice(monkeypatch):
+    monkeypatch.setenv("PA_GATEWAY_TEST_KEY", "unit-test-only")
+    config = ModelConfig(name="newapi/claude-opus-5-5", base_url="http://127.0.0.1:3425/v1",
+                         api_key_env="PA_GATEWAY_TEST_KEY", effort="medium", chat_effort="low")
+    model = QwenModel(config)
+    await model.close()
+    requests = []
+
+    def respond(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"id": "c", "object": "chat.completion", "created": 1, "model": "claude-opus-5-5",
+                                         "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "ok"}}],
+                                         "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
+
+    model.client = AsyncOpenAI(api_key="unit-test-only", base_url=config.base_url, max_retries=0,
+                              http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)))
+    intake = [{"type": "function", "function": {"name": "resolve_conversation", "parameters": {"type": "object"}}}]
+    work = [{"type": "function", "function": {"name": "read_source", "parameters": {"type": "object"}}}]
+    try:
+        await model.complete([{"role": "user", "content": "hi"}], intake)
+        await model.complete([{"role": "user", "content": "work"}], work)
+    finally:
+        await model.close()
+    assert requests[0]["reasoning_effort"] == "low" and "tool_choice" not in requests[0]
+    assert requests[1]["reasoning_effort"] == "medium"
+    assert "enable_thinking" not in requests[0] and "enable_thinking" not in requests[1]
+    assert model.metadata["provider"] == "local_gateway"
+
+
+async def test_official_qwen_keeps_forced_intake_and_no_effort(monkeypatch):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "unit-test-only")
+    model = QwenModel(ModelConfig(effort="high"))
+    await model.close()
+    requests = []
+
+    def respond(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"id": "c", "object": "chat.completion", "created": 1, "model": "q",
+                                         "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "ok"}}],
+                                         "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
+
+    model.client = AsyncOpenAI(api_key="unit-test-only", base_url=model.config.base_url, max_retries=0,
+                              http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)))
+    try:
+        await model.complete([{"role": "user", "content": "hi"}],
+                             [{"type": "function", "function": {"name": "resolve_conversation", "parameters": {"type": "object"}}}])
+    finally:
+        await model.close()
+    assert requests[0]["tool_choice"]["function"]["name"] == "resolve_conversation"
+    assert "reasoning_effort" not in requests[0]

@@ -103,7 +103,7 @@ def main():
             from .webui import serve_web
             if not 1024 <= args.port <= 65535:
                 raise ValueError("port must be between 1024 and 65535")
-            serve_web(data, ModelConfig.load(args.config), port=args.port, plugins=configured_plugins(args.config) + web_plugins(args.config))
+            serve_web(data, ModelConfig.load(args.config), port=args.port, plugins=configured_plugins(args.config) + web_plugins(args.config, data))
             return
         store = Store(data / "state.sqlite")
         if args.command == "submit":
@@ -134,7 +134,7 @@ def main():
             model = QwenModel(config)
             async def run():
                 try:
-                    await Service(store, data, model, plugins=configured_plugins(args.config) + web_plugins(args.config)).serve(args.once)
+                    await Service(store, data, model, plugins=configured_plugins(args.config) + web_plugins(args.config, data)).serve(args.once)
                 finally:
                     await model.close()
             print("服务开始执行；退出本进程将停止执行，已接收的任务会保留。", flush=True)

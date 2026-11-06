@@ -20,6 +20,7 @@ async def test_backup_roundtrip_preserves_evidence_and_pauses_unfinished_work(st
     source = data / 'uploads' / 'notes.txt'
     source.write_text('Saved source', encoding='utf-8')
     (data / 'credentials.key').write_text('private-test-key', encoding='utf-8')
+    (data / 'search.key').write_text('private-search-key', encoding='utf-8')
     goal = store.create_goal(room='local', actor_id='default', title='Keep track', objective='Observe')
     spec = TaskSpec('Summarize', [{'id': 'notes', 'kind': 'file', 'location': str(source), 'required': True}])
     policy = store.create_policy(goal['id'], schedule={'kind': 'interval', 'interval_seconds': 60, 'timezone': 'Asia/Shanghai'}, template=spec)
@@ -36,7 +37,7 @@ async def test_backup_roundtrip_preserves_evidence_and_pauses_unfinished_work(st
     archive = tmp_path / 'backup.zip'
     create_backup(store, data, archive)
     with zipfile.ZipFile(archive) as z:
-        assert 'credentials.key' not in z.namelist()
+        assert 'credentials.key' not in z.namelist() and 'search.key' not in z.namelist()
         assert b'private-test-key' not in b''.join(z.read(n) for n in z.namelist())
     destination = tmp_path / 'restored'
     result = restore_backup(archive, destination)

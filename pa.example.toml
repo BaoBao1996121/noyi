@@ -6,6 +6,19 @@ api_key_env = "DASHSCOPE_API_KEY"
 timeout_seconds = 90
 max_output_tokens = 4096
 enable_thinking = false
+# Local model gateway (e.g. Magpie on this machine) instead of official Qwen:
+# name = "newapi/claude-opus-5-5"
+# base_url = "http://127.0.0.1:3425/v1"
+# api_key_env = "PA_GATEWAY_KEY"
+# effort = "medium"       # work turns
+# chat_effort = "low"     # replying to the user (intake)
+
+# Web search (optional). Uses its own key; key_file is read when the env var is unset.
+# [web]
+# api_key_env = "DASHSCOPE_API_KEY"
+# key_file = "~/.personal-agent/search.key"
+# task_search_limit = 30
+# daily_search_limit = 200
 
 # Optional capability plugins: Python modules exposing plugin(). See docs/module-interfaces.md.
 # [plugins]
