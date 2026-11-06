@@ -658,7 +658,7 @@ class ConversationRouter:
                     messages.append({"role":"user","content":"The previous interpretation was rejected by the ledger: " + last_error})
                 messages.append({"role":"user","content":item["content"]})
                 started = time.monotonic()
-                reply = await self.runtime.request(run, messages, CONVERSATION_SCHEMA)
+                reply = await self.runtime.request(run, messages, CONVERSATION_SCHEMA, lambda: self.store.reserve_conversation(run))
                 self.store.step(run,"model",{**asdict(reply),"seconds":time.monotonic()-started,"engine":self.runtime.engine.identity,"purpose":"conversation_intake"})
                 return asdict(reply) if self.store.current(run) else {"halt":True}
             if method == "tool":

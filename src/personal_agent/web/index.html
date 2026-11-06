@@ -34,10 +34,10 @@
         <div id="recipient-row" class="recipient-row"><label>发送给 <select id="recipient" aria-label="接收成员"></select></label><span id="audience-note"></span><button id="clear-reply" class="small-link hidden" type="button">取消回复</button></div>
         <div id="attachment-list" class="attachments"></div>
         <textarea id="message-input" rows="2" placeholder="直接说你想做什么，也可以补充、提问，或让我继续跟进…" aria-label="输入消息"></textarea>
-        <div class="composer-bottom"><div class="compose-actions"><button id="attach" class="icon" type="button" aria-label="添加资料" title="添加 UTF-8 文本资料">＋</button><button id="add-url" class="icon" type="button" aria-label="添加资料网址" title="添加资料网址">↗</button></div><span class="keyboard-hint">Enter 发送 · Shift Enter 换行</span><button id="send" type="submit" class="send" aria-label="发送消息">↑</button></div>
+        <div class="composer-bottom"><div class="compose-actions"><button id="attach" class="icon" type="button" aria-label="添加资料" title="添加文本资料或图片">＋</button><button id="add-url" class="icon" type="button" aria-label="添加资料网址" title="添加资料网址">↗</button></div><span class="keyboard-hint">Enter 发送 · Shift Enter 换行</span><button id="send" type="submit" class="send" aria-label="发送消息">↑</button></div>
       </form>
       <div class="composer-note"><span id="model-label">Qwen 官网</span><span>进展和成果会留在这里</span></div>
-      <input id="file-input" type="file" accept=".txt,.md,.json,.csv,.log" multiple hidden>
+      <input id="file-input" type="file" accept=".txt,.md,.json,.csv,.log,.png,.jpg,.jpeg,.gif,.webp,image/*" multiple hidden>
     </div>
   </main>
   <div class="resizer detail-resizer" data-panel="right" role="separator" aria-label="调整详情宽度"></div>

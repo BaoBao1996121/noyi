@@ -591,3 +591,33 @@ async def test_users_own_naming_of_a_listed_matter_need_not_copy_its_wording(sto
     run = claim_intake(store)
     with pytest.raises(ValueError):
         store.apply_conversation(run, {"action": "followup", "task_id": a, "reference": "那份对比表"})
+
+
+def transport_fault():
+    import httpx, openai
+    return openai.APIConnectionError(request=httpx.Request("POST", "https://api.deepseek.com/chat/completions"))
+
+
+async def test_transient_provider_fault_is_retried_as_a_recorded_request(store,tmp_path,monkeypatch):
+    import personal_agent.runtime as rt
+    monkeypatch.setattr(rt, "RETRY_DELAYS", (0, 0))
+    incoming(store,"你好")
+    model = ScriptedModel([transport_fault(), tool_reply('resolve_conversation',{'action':'reply','text':'你好，在的。'})])
+    await Runtime(store,tmp_path/'data',model).execute(claim_intake(store))
+    assert store.one('SELECT content FROM deliveries')['content'] == '你好，在的。'
+    assert [r['state'] for r in store.all('SELECT state FROM model_requests ORDER BY sequence')] == ['unknown','completed']
+    assert store.one('SELECT calls_used FROM conversation_inputs')['calls_used'] == 2
+    assert store.one("SELECT id FROM steps WHERE kind='model_retry'")
+
+
+async def test_refused_or_persistent_provider_fault_is_not_retried_forever(store,tmp_path,monkeypatch):
+    import httpx, openai
+    import personal_agent.runtime as rt
+    monkeypatch.setattr(rt, "RETRY_DELAYS", (0, 0))
+    incoming(store,"你好")
+    refused = openai.BadRequestError("Arrearage", response=httpx.Response(400, request=httpx.Request("POST","https://api.deepseek.com")), body=None)
+    await Runtime(store,tmp_path/'data',ScriptedModel([refused])).execute(claim_intake(store))
+    assert len(store.all('SELECT id FROM model_requests')) == 1
+    incoming(store,"在吗",nonce="second")
+    await Runtime(store,tmp_path/'data',ScriptedModel([transport_fault()]*3)).execute(claim_intake(store))
+    assert store.one("SELECT state FROM conversation_inputs ORDER BY created DESC LIMIT 1")['state'] == 'failed'

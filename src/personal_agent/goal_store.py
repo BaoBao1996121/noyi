@@ -25,7 +25,7 @@ class GoalStore:
                     self.db.execute(f"ALTER TABLE tasks ADD COLUMN {column} {definition}")
             for sql in (
                 "CREATE TABLE IF NOT EXISTS goals(id TEXT PRIMARY KEY,owner TEXT NOT NULL,room_id TEXT NOT NULL,actor_id TEXT NOT NULL,title TEXT NOT NULL,objective TEXT NOT NULL,status TEXT NOT NULL,revision INTEGER NOT NULL,current_state TEXT NOT NULL,gaps TEXT NOT NULL,unknowns TEXT NOT NULL,next_action TEXT NOT NULL,wait_reason TEXT NOT NULL,evidence TEXT NOT NULL,calls_limit INTEGER NOT NULL,tools_limit INTEGER NOT NULL,calls_used INTEGER NOT NULL DEFAULT 0,tools_used INTEGER NOT NULL DEFAULT 0,allow_policy_adjustments INTEGER NOT NULL DEFAULT 0,created REAL NOT NULL,updated REAL NOT NULL)",
-                "CREATE TABLE IF NOT EXISTS routine_policies(id TEXT PRIMARY KEY,goal_id TEXT NOT NULL REFERENCES goals(id),actor_id TEXT NOT NULL,state TEXT NOT NULL,revision INTEGER NOT NULL,schedule TEXT NOT NULL,template TEXT NOT NULL,next_due REAL NOT NULL,last_check REAL,last_success REAL,fingerprint TEXT,registration_receipt TEXT,authority_ref TEXT NOT NULL,created REAL NOT NULL,updated REAL NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS routine_policies(id TEXT PRIMARY KEY,goal_id TEXT NOT NULL REFERENCES goals(id),actor_id TEXT NOT NULL,state TEXT NOT NULL,revision INTEGER NOT NULL,schedule TEXT NOT NULL,template TEXT NOT NULL,next_due REAL,last_check REAL,last_success REAL,fingerprint TEXT,registration_receipt TEXT,authority_ref TEXT NOT NULL,created REAL NOT NULL,updated REAL NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS policy_occurrences(id TEXT PRIMARY KEY,policy_id TEXT NOT NULL,policy_revision INTEGER NOT NULL,goal_revision INTEGER NOT NULL,logical_key TEXT NOT NULL,status TEXT NOT NULL,scheduled_at REAL NOT NULL,observed_at REAL,payload TEXT NOT NULL,task_id TEXT,reason TEXT,created REAL NOT NULL,UNIQUE(policy_id,policy_revision,logical_key))",
                 "CREATE TABLE IF NOT EXISTS source_health(policy_id TEXT NOT NULL,source_id TEXT NOT NULL,state TEXT NOT NULL,sha256 TEXT,snapshot_ref TEXT,checked_at REAL NOT NULL,checks INTEGER NOT NULL,failures INTEGER NOT NULL,error_type TEXT,PRIMARY KEY(policy_id,source_id))",
                 "CREATE TABLE IF NOT EXISTS observations(id TEXT PRIMARY KEY,policy_id TEXT NOT NULL,policy_revision INTEGER NOT NULL,goal_revision INTEGER NOT NULL,state TEXT NOT NULL,fingerprint TEXT,receipts TEXT NOT NULL,created REAL NOT NULL)",
@@ -33,9 +33,24 @@ class GoalStore:
                 "CREATE TABLE IF NOT EXISTS policy_proposals(id TEXT PRIMARY KEY,goal_id TEXT NOT NULL,goal_revision INTEGER NOT NULL,policy_id TEXT NOT NULL,policy_revision INTEGER NOT NULL,task_id TEXT NOT NULL,actor_id TEXT NOT NULL,change TEXT NOT NULL,reason TEXT NOT NULL,evidence TEXT NOT NULL,expected_cost TEXT NOT NULL,state TEXT NOT NULL,review_run TEXT,created REAL NOT NULL)",
             ):
                 self.db.execute(sql)
+            self._nullable_next_due()
             if "assessment_at" not in {r["name"] for r in self.all("PRAGMA table_info(goals)")}:
                 self.db.execute("ALTER TABLE goals ADD COLUMN assessment_at REAL NOT NULL DEFAULT 0")
             self.db.execute("PRAGMA user_version=6")
+
+    def _nullable_next_due(self):
+        # Older ledgers declared next_due NOT NULL and stored a finished
+        # one-time arrangement as an infinite time. NULL now means "no next
+        # time"; rebuild the table once and convert those rows.
+        column = next(r for r in self.all("PRAGMA table_info(routine_policies)") if r["name"] == "next_due")
+        if column["notnull"]:
+            names = ",".join(r["name"] for r in self.all("PRAGMA table_info(routine_policies)"))
+            sql = self.one("SELECT sql FROM sqlite_master WHERE name='routine_policies'")["sql"]
+            self.db.execute("ALTER TABLE routine_policies RENAME TO routine_policies_old")
+            self.db.execute(sql.replace("next_due REAL NOT NULL", "next_due REAL", 1))
+            self.db.execute(f"INSERT INTO routine_policies({names}) SELECT {names} FROM routine_policies_old")
+            self.db.execute("DROP TABLE routine_policies_old")
+        self.db.execute("UPDATE routine_policies SET next_due=NULL WHERE next_due>=9e999 OR next_due<=-9e999")
 
     def goal(self, goal_id, account=None):
         value = self.one("SELECT * FROM goals WHERE id=?", (goal_id,))
@@ -90,7 +105,7 @@ class GoalStore:
                 raise ValueError("同一目标最多启用 8 项检查计划")
             policy_id = gid()
             due = now if config["kind"] == "watch" else next_due(config, now)
-            if due == float("inf"):
+            if due is None:
                 raise ValueError("这个时间已经过了，请换一个将来的时间")
             authority = self.goal_event(goal_id, "policy_authorized", {"policy_id": policy_id, "schedule": config, "source_ids": [s["id"] for s in spec.sources], "budget": {"max_calls": spec.max_calls, "max_tools": spec.max_tools}})
             self.db.execute("INSERT INTO routine_policies(id,goal_id,actor_id,state,revision,schedule,template,next_due,authority_ref,created,updated) VALUES(?,?,?,'planned',1,?,?,?,?,?,?)", (policy_id, goal_id, goal["actor_id"], encode(config), encode(asdict(spec)), due, authority, now, now))
@@ -191,7 +206,7 @@ class GoalStore:
             self.require_member(old["actor_id"], goal["room_id"])
             revision = old["revision"] + 1
             due = now if config["kind"] == "watch" else next_due(config, now)
-            if due == float("inf") and state == "active":
+            if due is None and state == "active":
                 raise ValueError("这个时间已经过了，请换一个将来的时间")
             receipt = {"registration_id": gid(), "adapter": "local-sqlite-scheduler/v1", "policy_id": policy_id, "revision": revision, "registered_at": now, "next_due": due, "status": "registered" if state == "active" else state}
             authority = self.goal_event(goal["id"], "policy_updated", {"policy_id": policy_id, "revision": revision, "state": state})

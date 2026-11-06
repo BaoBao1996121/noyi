@@ -11,7 +11,20 @@ from .contracts import digest
 from .sources import ExactSourceReader
 
 MAX_SOURCE_BYTES = 128_000
+MAX_IMAGE_BYTES = 4_000_000
 PAGE_CHARS = 8_000
+IMAGE_SIGNATURES = [(b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"),
+                    (b"GIF87a", "image/gif"), (b"GIF89a", "image/gif")]
+
+
+def image_type(raw: bytes):
+    """The image media type proven by the file's own bytes, never by its name."""
+    for signature, mime in IMAGE_SIGNATURES:
+        if raw.startswith(signature):
+            return mime
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 class SourceUnavailable(ValueError):
@@ -101,7 +114,7 @@ class Toolset:
             current = current.parent
         return path
 
-    async def read_source(self, source_id: str, offset: int = 0):
+    async def read_source(self, source_id: str, offset: int = 0, *, vision: bool = False):
         if type(offset) is not int or offset < 0:
             raise ValueError("offset must be a nonnegative integer")
         if source_id not in self.sources:
@@ -109,17 +122,27 @@ class Toolset:
         source = self.sources[source_id]
         cache = self._checked(self.root / "sources" / (digest(source_id.encode()) + ".txt"))
         try:
-            return await self._read_source(source_id, source, cache, offset)
+            image = self._checked(self.root / "sources" / (digest(source_id.encode()) + ".image"))
+            if image.exists():
+                return self._image_result(source_id, source, image, vision)
+            return await self._read_source(source_id, source, cache, offset, image, vision)
         except (OSError, UnicodeError, httpx.HTTPError) as exc:
             raise SourceUnavailable("authorized source could not be read") from exc
 
-    async def _read_source(self, source_id, source, cache, offset):
+    async def _read_source(self, source_id, source, cache, offset, image, vision):
         if source.get("observed_unavailable"):
             raise SourceUnavailable("optional source was unavailable at observation time")
         if not cache.exists():
             raw = await self.source_reader.read(dict(source))
             if not isinstance(raw, bytes):
                 raise ValueError("source adapter must return bytes")
+            if image_type(raw):
+                if len(raw) > MAX_IMAGE_BYTES:
+                    raise SourceUnavailable("image too large")
+                if source.get("expected_sha256") and digest(raw) != source["expected_sha256"]:
+                    raise SourceUnavailable("observed source snapshot changed")
+                atomic_write(image, raw)
+                return self._image_result(source_id, source, image, vision)
             if len(raw) > MAX_SOURCE_BYTES:
                 raise SourceUnavailable("source too large; no truncated read counted as full coverage")
             text = raw.decode("utf-8-sig")
@@ -137,6 +160,29 @@ class Toolset:
         return {"source_id": source_id, "text": text[offset:end], "start": offset,
                 "end": end, "total": len(text), "eof": end == len(text),
                 "sha256": digest(text.encode()), "snapshot": str(cache.relative_to(self.root))}
+
+    def _image_result(self, source_id, source, image, vision):
+        raw = image.read_bytes()
+        if (source.get("expected_sha256") and digest(raw) != source["expected_sha256"]) or not image_type(raw):
+            raise SourceUnavailable("observed source cache changed")
+        if not vision:
+            # A model that cannot see images would answer from nothing.
+            raise SourceUnavailable("this source is an image and the current model cannot see images")
+        # One unit of coverage: the whole image is shown to the model with the
+        # next request, attached by the runtime from this receipt.
+        return {"source_id": source_id, "image": {"media_type": image_type(raw), "bytes": len(raw)},
+                "text": "The image is attached after this result as user content.",
+                "start": 0, "end": 1, "total": 1, "eof": True, "sha256": digest(raw),
+                "snapshot": str(image.relative_to(self.root)).replace("\\", "/")}
+
+    def image_data_url(self, result):
+        """Load a receipted image snapshot for the model, rechecking its digest."""
+        import base64
+        path = self._checked(self.root / result["snapshot"])
+        raw = path.read_bytes()
+        if digest(raw) != result["sha256"] or not image_type(raw):
+            raise SourceUnavailable("image snapshot changed")
+        return f"data:{image_type(raw)};base64," + base64.b64encode(raw).decode()
 
     def write_artifact(self, op_id: str, name: str, content: str, base_version=None):
         if not isinstance(content, str) or not content.strip() or len(content.encode()) > MAX_SOURCE_BYTES:

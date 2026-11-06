@@ -11,7 +11,9 @@ from urllib.parse import urlparse
 
 
 def encode(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    # Strict JSON: every consumer (ledger, engine bridge, browser) parses
+    # standard JSON, so a non-finite number must fail where it is produced.
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False)
 
 
 def digest(data: bytes) -> str:

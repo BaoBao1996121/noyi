@@ -407,7 +407,7 @@ def test_once_schedule_is_due_once_at_its_local_time():
     at = datetime(2026, 11, 6, 7, 54, tzinfo=timezone.utc).timestamp()
     assert next_due(config, at - 600) == at
     window = due_window(config, at, at + 5)
-    assert window["scheduled"] == at and window["next_due"] == float("inf")
+    assert window["scheduled"] == at and window["next_due"] is None
     for bad in ({"kind": "once"}, {"kind": "once", "at": "明天三点"}):
         with pytest.raises(ValueError):
             validate_schedule(bad)
@@ -474,3 +474,45 @@ def test_ending_a_matter_retires_its_arrangements(store, source):
     goal, policy = setup_goal(store, source, kind="interval")
     store.set_goal_state(goal["id"], "retired", expected_revision=store.goal(goal["id"])["revision"])
     assert store.policy(policy["id"])["state"] == "retired"
+
+
+def test_finished_one_time_arrangement_lists_as_valid_json(store, tmp_path):
+    # A once-arrangement that has fired has no next time. Listing it must
+    # stay valid JSON (the engine bridge parses strictly); infinity is not.
+    import json as _json
+    now = time.time()
+    goal = store.create_goal(room="local", actor_id="default", title="提醒", objective="到时提醒")
+    zone = time.strftime("%z")
+    at = time.strftime("%Y-%m-%d %H:%M", time.localtime(now + 120))
+    policy = store.create_policy(goal["id"], schedule={"kind": "once", "at": at, "timezone": "Etc/GMT" + ("-" if zone[0] == "+" else "+") + str(int(zone[1:3]))},
+                                 template=TaskSpec("提醒"), now=now)
+    store.prepare_occurrence(policy["id"], due_window(store.policy(policy["id"])["schedule"], policy["next_due"], policy["next_due"] + 5), now=policy["next_due"] + 5)
+    after = store.policy(policy["id"])
+    assert after["next_due"] is None
+    _json.loads(encode(after), parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))
+
+
+def test_encode_refuses_non_json_numbers():
+    with pytest.raises(ValueError):
+        encode({"next_due": float("inf")})
+
+
+def test_old_ledger_with_infinite_next_time_is_converted(tmp_path):
+    # Ledgers written before NULL meant "no next time" stored a finished
+    # one-time arrangement as infinity under a NOT NULL column.
+    path = tmp_path / "old.sqlite"
+    first = Store(path)
+    goal = first.create_goal(room="local", actor_id="default", title="提醒", objective="提醒")
+    at = time.strftime("%Y-%m-%d %H:%M", time.localtime(time.time() + 600))
+    policy = first.create_policy(goal["id"], schedule={"kind": "once", "at": at}, template=TaskSpec("提醒"))
+    sql = first.one("SELECT sql FROM sqlite_master WHERE name='routine_policies'")["sql"]
+    with first.transaction():
+        first.db.execute("ALTER TABLE routine_policies RENAME TO p_old")
+        first.db.execute(sql.replace("next_due REAL", "next_due REAL NOT NULL", 1))
+        first.db.execute("INSERT INTO routine_policies SELECT * FROM p_old")
+        first.db.execute("DROP TABLE p_old")
+        first.db.execute("UPDATE routine_policies SET next_due=9e999")
+    first.close()
+    reopened = Store(path)
+    assert reopened.policy(policy["id"])["next_due"] is None
+    encode(reopened.policy(policy["id"]))

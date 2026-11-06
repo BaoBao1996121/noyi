@@ -17,7 +17,7 @@ from .contracts import TaskSpec, digest, encode
 from .model import ModelConfig, QwenModel
 from .service import Service, ServiceLock
 from .store import Store
-from .tools import Toolset, MAX_SOURCE_BYTES, atomic_write, safe_child
+from .tools import Toolset, MAX_SOURCE_BYTES, MAX_IMAGE_BYTES, atomic_write, image_type, safe_child
 from .goal_api import goal_snapshot, goal_action
 
 
@@ -42,7 +42,7 @@ class LocalModel:
 
     @property
     def metadata(self):
-        return {"provider": "local_gateway" if self.config.gateway else "qwen_official", "requested_model": self.config.name,
+        return {"provider": self.config.provider, "requested_model": self.config.name,
                 "base_url": self.config.base_url, "effort": self.config.effort, "chat_effort": self.config.chat_effort}
 
     async def configure(self, *, name, base_url, key=None):
@@ -119,7 +119,7 @@ class Console:
         return {"workspace_id": self.workspace_id, "tasks": tasks, "messages": list(reversed(messages)), "deliveries": list(reversed(deliveries)), "questions": questions,
                 "goals": goal_snapshot(self.store, room),
                 "unassigned": pending, "server_time": time.time(), "ready": getattr(self.model, "ready", True),
-                "model": {"name": config.name, "base_url": config.base_url}, "service_error": self.service_error or self.service.triggers.error,
+                "model": {"name": config.name, "base_url": config.base_url, "provider": config.provider}, "service_error": self.service_error or self.service.triggers.error,
                 "controls": self.store.all("SELECT c.* FROM controls c JOIN tasks t ON t.id=c.task_id WHERE t.room_id=? ORDER BY c.created DESC LIMIT 50", (room,)),
                 "rooms": [{**r, "members": self.store.members(r["id"])} for r in self.store.all("SELECT * FROM rooms WHERE owner='local-user' ORDER BY rowid")],
                 "bots": self.store.all("SELECT * FROM bots WHERE owner='local-user' ORDER BY created,id"),
@@ -324,20 +324,27 @@ async def upload(request):
     reader = await request.multipart()
     part = await reader.next()
     if not part or part.name != "file" or not part.filename:
-        raise ValueError("请选择一份 UTF-8 文本、Markdown 或 JSON 资料")
+        raise ValueError("请选择一份 UTF-8 文本、Markdown、JSON 资料或一张图片")
     raw = bytearray()
     while chunk := await part.read_chunk():
         raw.extend(chunk)
+        if len(raw) > MAX_IMAGE_BYTES:
+            raise ValueError("图片最多 4 MB，文本资料最多 128 KB")
+    # The kind is decided by the file's own bytes, not its name or the browser.
+    if image_type(bytes(raw)):
+        suffix = ".image"
+    else:
         if len(raw) > MAX_SOURCE_BYTES:
-            raise ValueError("每份资料最多 128 KB")
-    try:
-        raw.decode("utf-8-sig")
-    except UnicodeError:
-        raise ValueError("目前支持 UTF-8 文本资料；请先导出为 TXT 或 Markdown") from None
-    if b"\x00" in raw:
-        raise ValueError("不能读取二进制资料")
+            raise ValueError("每份文本资料最多 128 KB")
+        try:
+            raw.decode("utf-8-sig")
+        except UnicodeError:
+            raise ValueError("目前支持 UTF-8 文本资料和 PNG、JPEG、GIF、WebP 图片") from None
+        if b"\x00" in raw:
+            raise ValueError("不能读取二进制资料")
+        suffix = ".txt"
     upload_id = uuid.uuid4().hex
-    path = safe_child(c.data / "uploads", upload_id + ".txt")
+    path = safe_child(c.data / "uploads", upload_id + suffix)
     if not path.resolve().is_relative_to(c.data):
         raise ValueError("资料保存路径无效")
     atomic_write(path, bytes(raw))
@@ -430,7 +437,7 @@ async def lifecycle(app):
 
 
 def create_app(store, data, model, *, run_service=True, shutdown_event=None, plugins=None):
-    app = web.Application(middlewares=[security], client_max_size=MAX_SOURCE_BYTES + 20000)
+    app = web.Application(middlewares=[security], client_max_size=MAX_IMAGE_BYTES + 20000)
     app[CONSOLE] = Console(store, data, model, run_service=run_service, shutdown_event=shutdown_event, plugins=plugins)
     app.add_routes([web.get("/", static), web.get("/assets/{name}", static), web.get("/api/bootstrap", boot),
                     web.get("/api/state", snapshot), web.get("/api/tasks/{task_id}", detail), web.post("/api/messages", submit),

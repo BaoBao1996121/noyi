@@ -566,3 +566,24 @@ def test_following_created_after_memory_correction_keeps_its_fresh_registration_
     result = ConversationGoals(store).execute(run, "start_following", start_args(mid))
     assert result["goal"]["current_state"] == "还没有首次跟进结果"
     assert result["goal"]["wait_reason"] == "已安排后续跟进，等待约定时间或资料变化"
+
+
+@pytest.mark.asyncio
+async def test_action_receipt_may_cite_ids_the_effect_itself_issued(store, source, tmp_path):
+    # Models often cite the registration or goal ID returned by the effect
+    # instead of the operation ID; both name the same real effect. An ID that
+    # no effect of this run issued (e.g. the user's message) stays rejected.
+    text = "帮我持续盯着这份资料，有变化就整理新的行动清单"
+    submitted = store.submit(TaskSpec(text, [source], result_kind="action_receipt"), nonce="pi-receipt-ref", source="web")
+    def cite(key):
+        def reply(messages, schemas):
+            registered = next(r for r in (json.loads(m["content"]) for m in messages if m["role"] == "tool") if r.get("authority_receipt"))
+            ref = submitted["message_id"] if key == "message" else registered["goal"]["id"]
+            return tool_reply("complete_action", {"summary": "已开始跟进这份资料。", "effect_refs": [ref]}, "complete-" + key)
+        return reply
+    model = ScriptedModel([tool_reply("start_following", start_args(submitted["message_id"]), "register"), cite("message"), cite("goal")])
+    await Runtime(store, tmp_path / "data", model).execute(store.claim())
+    task = store.task(submitted["task_id"])
+    operations = store.operations(task["id"])
+    assert operations[1]["status"] == "failed" and operations[0]["id"] in operations[1]["result"]["detail"]
+    assert task["status"] == "succeeded" and operations[-1]["result"]["effect_refs"] == [operations[0]["id"]]

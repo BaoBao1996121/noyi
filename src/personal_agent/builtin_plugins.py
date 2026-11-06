@@ -5,13 +5,15 @@ fails is neither offered to the model nor executable by name.
 """
 from __future__ import annotations
 
+import json
+
 from .conversation_goals import CONVERSATION_GOAL_SCHEMAS, validate_conversation_goal_arguments
 from .orchestration_tools import ORCHESTRATION_SCHEMAS, SUSPENDING_TOOLS, validate_orchestration_arguments
 from .plugins import Plugin, ToolSpec
 from .tools import TOOL_SCHEMAS, tool, validate_arguments, verify
 
 
-ACTION_COMPLETION = tool('complete_action', 'Finish an arrangement-only request using actual effect operation IDs. This accepts registration, a change, or starting a review/observation; a started review is not a finished report, an observation plan proves no improvement. For a requested document use submit_result.',
+ACTION_COMPLETION = tool('complete_action', 'Finish an arrangement-only request citing the operation_id of each effect tool call that made the arrangement (start_following and similar). This accepts registration, a change, or starting a review/observation; a started review is not a finished report, an observation plan proves no improvement. For a requested document use submit_result.',
     {'summary': {'type':'string'}, 'effect_refs': {'type':'array','items':{'type':'string'},'minItems':1,'maxItems':8}}, ['summary','effect_refs'])
 
 REPORT_UNABLE = tool('report_unable', 'End this task honestly when it cannot be done with the available tools or needs something only the user can supply. The explanation is sent to the user as is: one or two plain sentences saying what you cannot do and what would make it possible (an alternative you can do, or what they could provide). Never claim any work was done.',
@@ -25,7 +27,10 @@ def _schema(name):
 
 
 async def _read_source(call, args):
-    return await call.toolset.read_source(**args)
+    # Whether images may be shown is the configured model's verified capability,
+    # never something the model asserts in its own arguments.
+    config = getattr(call.runtime.model, "config", None)
+    return await call.toolset.read_source(**args, vision=bool(getattr(config, "vision", False)))
 
 
 def _write_artifact(call, args):
@@ -109,11 +114,34 @@ def _complete_action(call, args):
     task = store.task(run['task_id'])
     if task['parent_task_id'] or task['goal_id'] or task['spec']['required_text'] or task['spec'].get('result_kind', 'artifact') != 'action_receipt':
         raise ValueError('此任务需要交付并验收成果，不能只报告安排完成')
-    effects = store.all("SELECT o.id FROM operations o JOIN runs r ON r.id=o.run_id WHERE o.task_id=? AND r.revision=? AND o.status='succeeded' AND o.tool IN (%s)" % ",".join("?" * len(FOLLOWING_EFFECT_TOOLS)), (task['id'], run['revision'], *FOLLOWING_EFFECT_TOOLS))
-    if any(ref not in {effect['id'] for effect in effects} for ref in args['effect_refs']):
-        raise ValueError('安排尚未实际完成，请引用本次成功的操作回执')
+    effects = store.all("SELECT o.id,o.result FROM operations o JOIN runs r ON r.id=o.run_id WHERE o.task_id=? AND r.revision=? AND o.status='succeeded' AND o.tool IN (%s)" % ",".join("?" * len(FOLLOWING_EFFECT_TOOLS)), (task['id'], run['revision'], *FOLLOWING_EFFECT_TOOLS))
+    # A reference names an effect this run actually made: its operation ID,
+    # or an identifier that operation's own recorded result issued (receipt,
+    # goal, arrangement). Both resolve to the operation; nothing else does.
+    owner = {}
+    for effect in effects:
+        for ref in _issued_ids(json.loads(effect['result'] or '{}')):
+            owner.setdefault(ref, effect['id'])
+        owner[effect['id']] = effect['id']
+    unknown = [ref for ref in args['effect_refs'] if ref not in owner]
+    if unknown:
+        raise ValueError('这些引用不是本次成功操作产生的：%s。可引用的操作回执：%s' % ('、'.join(unknown), '、'.join(e['id'] for e in effects) or '（本次还没有成功的安排操作）'))
+    refs = list(dict.fromkeys(owner[ref] for ref in args['effect_refs']))
     errors = store.completion_errors(run)
-    return {'passed': not errors, 'errors': errors, 'scope': 'registered following effects only; not a document or business outcome', 'effect_refs': args['effect_refs']}
+    return {'passed': not errors, 'errors': errors, 'scope': 'registered following effects only; not a document or business outcome', 'effect_refs': refs}
+
+
+def _issued_ids(value, key=''):
+    # Identifiers recorded in an effect result: fields named id, *_id or
+    # *_receipt. Free text and quoted user content are never identifiers.
+    if isinstance(value, dict):
+        for name, item in value.items():
+            yield from _issued_ids(item, name)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _issued_ids(item, key)
+    elif isinstance(value, str) and (key == 'id' or key.endswith('_id') or key.endswith('_receipt')):
+        yield value
 
 
 def following_plugin():

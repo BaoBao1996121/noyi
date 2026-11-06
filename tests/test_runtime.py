@@ -287,7 +287,7 @@ async def test_timeout_during_pending_read_finalizes_operation_as_interrupted(st
     submitted = store.submit(spec, nonce="read-timeout")
     entered = asyncio.Event()
 
-    async def blocked_read(self, source_id, offset=0):
+    async def blocked_read(self, source_id, offset=0, *, vision=False):
         assert source_id == "policy"
         entered.set()
         await asyncio.Event().wait()

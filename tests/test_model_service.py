@@ -280,3 +280,66 @@ async def test_official_qwen_keeps_forced_intake_and_no_effort(monkeypatch):
         await model.close()
     assert requests[0]["tool_choice"]["function"]["name"] == "resolve_conversation"
     assert "reasoning_effort" not in requests[0]
+
+
+@pytest.mark.parametrize("base", ["https://api.deepseek.com", "https://api.deepseek.com/v1", "https://api.deepseek.com/"])
+def test_deepseek_official_endpoint_is_a_registered_provider(base):
+    config = ModelConfig(name="deepseek-flash", base_url=base)
+    assert config.provider == "deepseek_official" and not config.gateway
+
+
+@pytest.mark.parametrize("base", ["http://api.deepseek.com", "https://api.deepseek.com.evil.example",
+                                  "https://api.deepseek.com/other", "https://api.deepseek.com:8443"])
+def test_deepseek_lookalikes_are_rejected(base):
+    with pytest.raises(ValueError):
+        ModelConfig(name="deepseek-flash", base_url=base)
+
+
+def test_vision_is_a_verified_model_property():
+    assert ModelConfig(name="deepseek-flash", base_url="https://api.deepseek.com").vision
+    assert not ModelConfig(name="deepseek-v4-pro", base_url="https://api.deepseek.com").vision
+    assert not ModelConfig().vision
+
+
+async def _deepseek_requests(monkeypatch, config, tools):
+    monkeypatch.setenv("PA_DEEPSEEK_TEST_KEY", "unit-test-only")
+    model = QwenModel(config)
+    await model.close()
+    requests = []
+
+    def respond(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"id": "c", "object": "chat.completion", "created": 1, "model": config.name,
+                                         "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "ok", "reasoning_content": "private"}}],
+                                         "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
+
+    model.client = AsyncOpenAI(api_key="unit-test-only", base_url=config.base_url, max_retries=0,
+                              http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)))
+    try:
+        replies = [await model.complete([{"role": "user", "content": "hi"}], t) for t in tools]
+    finally:
+        await model.close()
+    assert all("reasoning_content" not in r.message for r in replies)
+    assert model.metadata["provider"] == "deepseek_official"
+    return requests
+
+
+INTAKE = [{"type": "function", "function": {"name": "resolve_conversation", "parameters": {"type": "object"}}}]
+WORK = [{"type": "function", "function": {"name": "read_source", "parameters": {"type": "object"}}}]
+
+
+async def test_deepseek_without_effort_turns_thinking_off_and_forces_intake(monkeypatch):
+    config = ModelConfig(name="deepseek-flash", base_url="https://api.deepseek.com", api_key_env="PA_DEEPSEEK_TEST_KEY")
+    intake, work = await _deepseek_requests(monkeypatch, config, [INTAKE, WORK])
+    assert intake["thinking"] == {"type": "disabled"} and intake["tool_choice"]["function"]["name"] == "resolve_conversation"
+    assert work["thinking"] == {"type": "disabled"} and "tool_choice" not in work
+    assert "enable_thinking" not in intake and "reasoning_effort" not in work
+
+
+async def test_deepseek_thinking_never_sends_a_forced_choice(monkeypatch):
+    # DeepSeek returns 400 for a forced tool choice while thinking.
+    config = ModelConfig(name="deepseek-flash", base_url="https://api.deepseek.com", api_key_env="PA_DEEPSEEK_TEST_KEY",
+                         effort="high", chat_effort="low")
+    intake, work = await _deepseek_requests(monkeypatch, config, [INTAKE, WORK])
+    assert intake["thinking"] == {"type": "enabled"} and intake["reasoning_effort"] == "low" and "tool_choice" not in intake
+    assert work["reasoning_effort"] == "high"

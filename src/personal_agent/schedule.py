@@ -65,9 +65,10 @@ def calendar_candidates(config, start, count_days=16):
 
 def next_due(config, after, *, anchor=None):
     if config["kind"] == "once":
-        # Due once at its time; after it has been taken it is never due again.
+        # Due once at its time; after it has been taken it is never due
+        # again, which is no next time (None), not an infinite timestamp.
         at = once_at(config)
-        return at if anchor is None and at > after - config.get("grace_seconds", 60) else math.inf
+        return at if anchor is None and at > after - config.get("grace_seconds", 60) else None
     if config["kind"] in {"interval", "watch"}:
         seconds = config.get("interval_seconds", 60)
         if anchor is None:

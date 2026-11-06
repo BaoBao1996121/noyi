@@ -31,23 +31,49 @@ def is_local_gateway(value: str) -> bool:
             and endpoint.path in {"/v1", "/v1/"})
 
 
-def validate_endpoint(value: str) -> None:
-    """Only documented official hosts, or a loopback model gateway, receive keys."""
+def _qwen_official(endpoint) -> bool:
+    host = endpoint.hostname or ""
+    workspace = re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}\.([a-z0-9-]+)\.maas\.aliyuncs\.com", host)
+    return ((host in OFFICIAL_HOSTS or bool(workspace and workspace.group(1) in WORKSPACE_REGIONS))
+            and endpoint.path in {"/compatible-mode/v1", "/compatible-mode/v1/"})
+
+
+def _deepseek_official(endpoint) -> bool:
+    return endpoint.hostname == "api.deepseek.com" and endpoint.path in {"", "/", "/v1", "/v1/"}
+
+
+# Every provider that may receive a key is registered here with how it is
+# addressed and what it can do. Unknown hosts never receive credentials.
+# thinking: how reasoning is controlled. forced_tool_choice: whether intake may
+# force its decision tool (only when that provider accepts it). vision: model
+# IDs verified to see image input; others must not be sent images.
+PROVIDERS = {
+    "qwen_official": {"match": _qwen_official, "thinking": "qwen_flag", "vision": frozenset()},
+    "deepseek_official": {"match": _deepseek_official, "thinking": "deepseek", "vision": frozenset({"deepseek-flash"})},
+}
+
+
+def provider_for(value: str) -> str:
+    """Name the registered provider for an endpoint, or refuse before any key or network use."""
     if isinstance(value, str) and is_local_gateway(value):
-        return
+        return "local_gateway"
     if not isinstance(value, str) or any(c.isspace() for c in value):
-        raise ValueError("Qwen adapter requires an official HTTPS endpoint")
+        raise ValueError("model endpoint must be a registered official HTTPS endpoint")
     try:
         endpoint = urlparse(value)
-        host, port = endpoint.hostname or "", endpoint.port
+        port = endpoint.port
     except ValueError:
-        raise ValueError("invalid official Qwen endpoint") from None
-    workspace = re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}\.([a-z0-9-]+)\.maas\.aliyuncs\.com", host)
-    official = host in OFFICIAL_HOSTS or (workspace and workspace.group(1) in WORKSPACE_REGIONS)
-    if (endpoint.scheme != "https" or endpoint.username or endpoint.password or not official
-            or port not in (None, 443) or endpoint.query or endpoint.fragment
-            or endpoint.path not in {"/compatible-mode/v1", "/compatible-mode/v1/"}):
-        raise ValueError("Qwen adapter requires an official HTTPS compatible-mode/v1 endpoint")
+        raise ValueError("invalid model endpoint") from None
+    if (endpoint.scheme == "https" and not endpoint.username and not endpoint.password
+            and port in (None, 443) and not endpoint.query and not endpoint.fragment):
+        for name, provider in PROVIDERS.items():
+            if provider["match"](endpoint):
+                return name
+    raise ValueError("model endpoint must be a registered official HTTPS endpoint")
+
+
+def validate_endpoint(value: str) -> None:
+    provider_for(value)
 
 
 @dataclass
@@ -58,14 +84,24 @@ class ModelConfig:
     timeout_seconds: float = 90
     max_output_tokens: int = 4096
     enable_thinking: bool = False
-    # Reasoning effort for work turns and for conversation intake. Only sent to
-    # a local gateway; official Qwen ignores these fields.
+    # Reasoning effort for work turns and for conversation intake. Sent to a
+    # local gateway or DeepSeek (unset means thinking off there); official Qwen
+    # uses enable_thinking instead.
     effort: str | None = None
     chat_effort: str | None = None
 
     @property
+    def provider(self):
+        return provider_for(self.base_url)
+
+    @property
     def gateway(self):
-        return is_local_gateway(self.base_url)
+        return self.provider == "local_gateway"
+
+    @property
+    def vision(self):
+        """Only models verified to see images receive them; others fail visibly."""
+        return self.name in PROVIDERS.get(self.provider, {}).get("vision", ())
 
     def __post_init__(self):
         validate_endpoint(self.base_url)
@@ -96,8 +132,22 @@ class ModelConfig:
         return cls(**values)
 
 
+def transient_error(exc) -> bool:
+    """A provider fault worth one more attempt: the connection broke, timed
+    out, was rate limited, or the server failed. Requests the provider
+    refused as invalid, unauthorized or unaffordable are not transient."""
+    try:
+        import openai
+    except ImportError:
+        return False
+    if isinstance(exc, openai.APIConnectionError):
+        return True
+    status = getattr(exc, "status_code", None)
+    return isinstance(exc, openai.APIStatusError) and (status == 429 or type(status) is int and status >= 500)
+
+
 class QwenModel:
-    """Official Qwen cloud, or a loopback gateway, via the OpenAI-compatible interface."""
+    """A registered official provider, or a loopback gateway, via the OpenAI-compatible interface."""
     def __init__(self, config: ModelConfig):
         from openai import AsyncOpenAI
         import httpx
@@ -114,7 +164,7 @@ class QwenModel:
 
     @property
     def metadata(self):
-        return {"provider": "local_gateway" if self.config.gateway else "qwen_official", "requested_model": self.config.name,
+        return {"provider": self.config.provider, "requested_model": self.config.name,
                 "base_url": self.config.base_url, "enable_thinking": self.config.enable_thinking,
                 "effort": self.config.effort, "chat_effort": self.config.chat_effort,
                 "max_output_tokens": self.config.max_output_tokens,
@@ -123,21 +173,32 @@ class QwenModel:
     async def complete(self, messages, tools):
         kwargs = dict(model=self.config.name, messages=messages,
                       max_tokens=self.config.max_output_tokens)
-        intake = bool(tools) and len(tools) == 1 and tools[0].get("type") == "function"             and tools[0].get("function", {}).get("name") == "resolve_conversation"
-        if self.config.gateway:
-            effort = self.config.chat_effort if intake else self.config.effort
+        intake = (bool(tools) and len(tools) == 1 and tools[0].get("type") == "function"
+                  and tools[0].get("function", {}).get("name") == "resolve_conversation")
+        effort = self.config.chat_effort if intake else self.config.effort
+        thinking = PROVIDERS.get(self.config.provider, {}).get("thinking", "effort")
+        force = False
+        if thinking == "qwen_flag":
+            kwargs["extra_body"] = {"enable_thinking": self.config.enable_thinking}
+            force = True
+        elif thinking == "deepseek":
+            # DeepSeek rejects a forced tool choice while thinking, so intake is
+            # forced only with thinking off; unset effort means thinking off.
+            kwargs["extra_body"] = {"thinking": {"type": "enabled" if effort else "disabled"}}
             if effort:
                 kwargs["reasoning_effort"] = effort
-        else:
-            kwargs["extra_body"] = {"enable_thinking": self.config.enable_thinking}
+            force = not effort
+        elif effort:
+            kwargs["reasoning_effort"] = effort
         if tools:
             kwargs["tools"] = tools
             # Intake has one protocol exit: record its scoped decision. A
             # prose-only acknowledgement cannot create or route real work.
             # Business turns retain the provider's normal automatic choice.
-            # Claude behind the gateway rejects forced tool_choice; the intake
-            # router already re-asks when a turn ends without the decision.
-            if intake and not self.config.gateway:
+            # Where a forced choice is rejected (Claude behind the gateway,
+            # DeepSeek thinking), the intake router re-asks when a turn ends
+            # without the decision.
+            if intake and force:
                 kwargs["tool_choice"] = {"type": "function", "function": {"name": "resolve_conversation"}}
         result = await self.client.chat.completions.create(**kwargs)
         msg = result.choices[0].message

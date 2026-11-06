@@ -14,6 +14,20 @@
 
 选择理由：M0 首要验证文本任务、多轮工具调用和结果交付。官方 [Function Calling 文档](https://help.aliyun.com/zh/model-studio/qwen-function-calling) 列出 Qwen3.7-Plus 系列支持工具调用；据此先用一个通用 Plus 模型建立基线。此决定不声称它在本项目评测中胜过其他模型，也不静默切换到本地模型、第三方代理或 DeepSeek。
 
+## 2026-11-07 更新：DeepSeek 官网（用户指定，默认 flash）
+
+用户要求改用自己独立的 DeepSeek API，并指定默认都用 `deepseek-flash`。适配器改为按提供方登记：本机网关、Qwen 官网、DeepSeek 官网各有自己的地址校验、思考开关写法和识图能力，不在别处判断型号。
+
+| 项目 | DeepSeek 约定 |
+|---|---|
+| 地址 | `https://api.deepseek.com`（也接受 `/v1`），只允许官方主机、HTTPS、无凭据 |
+| 型号 | `deepseek-flash`：能看图，回复和干活都用它；`deepseek-v4-pro` 不能看图（图片会被静默替换成占位文字），不登记为识图 |
+| 思考开关 | `extra_body.thinking.type` 加 `reasoning_effort`；思考开启时官方拒绝强制指定工具，所以只在思考关闭时强制对话入口调用 `resolve_conversation` |
+| 图片 | 只给已登记识图的型号；图片作为用户消息附在工具结果之后（放在工具结果里实测会答错），账本不存图片字节 |
+| 临时故障 | 连接中断、超时、429、5xx 最多再试两次，每次是单独记账、单独占预算的请求；被拒（如欠费、参数错误）不重试 |
+
+2026-11-06 真实核对：flash 能读出图片内容，pro 看不到；回复每句 2–4 秒（网关上的 Opus 为 6–18 秒）。对照验收结果见 [体验对齐方案](plan-experience.md) 第 3 轮。
+
 ## 官网地址与兼容配置
 
 已核对千问官网 [获取 API Key](https://platform.qianwenai.com/docs/api-reference/preparation/api-key) 与 [首次调用](https://platform.qianwenai.com/docs/developer-guides/getting-started/first-api-call)：标准 API 使用 `https://maas.qianwenaiapi.com/compatible-mode/v1`，文档列出的模型 ID 包括 `qwen3.7-plus`，Python 示例也使用 `DASHSCOPE_API_KEY` 环境变量。
