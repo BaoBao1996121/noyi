@@ -13,7 +13,7 @@ import re
 import time
 import uuid
 
-from .speech import check_receipt, explicit_remember
+from .speech import check_receipt, explicit_remember, local_now
 from .contracts import TaskSpec, digest, encode
 
 
@@ -271,6 +271,7 @@ class ConversationStore:
                    "tasks": [{"id": t["id"], "actor_id": t["actor_id"], "objective": t["spec"]["objective"][:1600], "status": t["status"], "revision": t["requirement_revision"], "reason": t["reason"], "goal_id": t["goal_id"], "authorized_sources":[{**{k:v for k,v in source.items() if k != 'location'},'derived_prior_result':source['id'].startswith('previous_result_')} for source in t['spec']['sources']]} for t in tasks],
                    "questions": questions, "history": history, "sources": [{k:v for k,v in source.items() if k != "location"} for source in json.loads(item["spec"])["sources"]],
                    "goals": self.all("SELECT id,title,objective,status,revision FROM goals WHERE room_id=? ORDER BY created DESC LIMIT 12", (room["id"],))}
+        context["local_time"] = local_now()
         context["responding_actor"] = next({key: bot[key] for key in ("id", "name", "role")} for bot in context["members"] if bot["id"] == item["actor_id"])
         for goal in context["goals"]:
             goal["arrangements"] = [{**row,"schedule":json.loads(row["schedule"])} for row in self.all("SELECT schedule,state,next_due FROM routine_policies WHERE goal_id=? ORDER BY created",(goal["id"],))]

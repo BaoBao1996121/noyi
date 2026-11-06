@@ -14,6 +14,13 @@ STARTED = "已开跑，做好把成果发你。"
 STARTED_AFTER = 10
 RESTARTED = "已重新开跑，做好把成果发你。"
 PROGRESS_AFTER = 20 * 60
+WEEKDAYS = "一二三四五六日"
+
+
+def local_now(now=None):
+    """Current local time for the model: it has no clock of its own."""
+    t = time.localtime(now)
+    return time.strftime("%Y-%m-%d %H:%M", t) + f" 星期{WEEKDAYS[t.tm_wday]}（{time.strftime('%z', t)[:3]}:{time.strftime('%z', t)[3:]}）"
 EMPTY_DELIVERY = "成果整理好了，见下方附件。"
 MAX_POINTS = 3
 HEAD_MAX = 80

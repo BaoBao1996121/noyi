@@ -17,6 +17,7 @@ from .orchestration_tools import OrchestrationTools, public_context
 from .plugins import EFFECTS, PluginRegistry, ToolCall
 from .builtin_plugins import builtin_plugins
 from .web_tools import WEB_GUIDE
+from .speech import local_now
 
 
 SYSTEM = """You are a practical personal assistant. Complete the user's authorized task using the available tools.
@@ -126,7 +127,8 @@ class Runtime:
         spec["sources"] = [{k: v for k, v in s.items() if k != "location"} for s in spec["sources"]]
         tools = self.schemas(run)
         system = self.system_prompt(run, tools)
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": encode(spec)}]
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": encode(spec)},
+                    {"role": "user", "content": "Current local time: " + local_now()}]
         messages.append(room_message)
         floor = self.store.one("SELECT context_floor FROM rooms WHERE id=?", (task["room_id"],))["context_floor"]
         previous = recovery_operations([o for o in self.store.operations(task["id"]) if o["created"] >= floor])
