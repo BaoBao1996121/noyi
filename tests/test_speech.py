@@ -85,7 +85,7 @@ def test_arrangement_only_and_direct_tasks_do_not_announce_start(store):
 
 def test_explicit_remember_saves_immediately_and_restates(store):
     incoming(store, "记住，以后交付先写一句结论，再列三条要点", nonce="a")
-    intake(store, {"action": "remember", "memory_key": "交付格式", "memory_value": "先写一句结论，再列三条要点", "receipt": "记住了，以后交付先给一句结论，再列三条要点。"})
+    intake(store, {"action": "remember", "basis": "记住，以后交付先写一句结论", "memory_key": "交付格式", "memory_value": "先写一句结论，再列三条要点", "receipt": "记住了，以后交付先给一句结论，再列三条要点。"})
     memory = store.one("SELECT * FROM memories WHERE key='交付格式'")
     assert memory["state"] == "active" and memory["source_type"] == "user_explicit"
     assert memory["value"] == "先写一句结论，再列三条要点"
@@ -128,3 +128,31 @@ async def test_submitted_summary_is_shaped_before_delivery(store, tmp_path):
     assert store.task(tid)["status"] == "succeeded"
     final = store.one("SELECT content FROM deliveries WHERE task_id=? AND artifact IS NOT NULL", (tid,))["content"]
     assert final == "清单整理好了。\n- 一\n- 二\n- 三"
+
+
+@pytest.mark.parametrize("wake", ["resume_event", "pending_followup"])
+def test_restarted_line_follows_resume_state_whatever_woke_the_task(store, wake):
+    incoming(store, "帮我做一份长调研", nonce="a")
+    tid = intake(store, {"action": "new_task"})["task_id"]
+    run = store.claim()
+    store.request_control(tid, "stop_task")
+    store.ack_control(run, "stop_reply")
+    if wake == "pending_followup":
+        # Another event is already queued, so resume adds none of its own.
+        store.db.execute("INSERT INTO events(id,actor_id,task_id,message_id,kind,created) VALUES('ev-f',?,?,(SELECT id FROM messages WHERE task_id=? LIMIT 1),'followup',?)", (store.task(tid)["actor_id"], tid, tid, time.time()))
+    store.resume(tid)
+    assert store.claim()["task_id"] == tid
+    assert contents(store, tid).count("已重新开跑，做好把成果发你。") == 1
+
+
+def test_time_waiting_for_the_user_does_not_count_toward_progress_line(store):
+    incoming(store, "帮我做一份长调研", nonce="a")
+    tid = intake(store, {"action": "new_task"})["task_id"]
+    run = store.claim()
+    store.db.execute("UPDATE runs SET started=started-300 WHERE id=?", (run["id"],))
+    store.db.execute("UPDATE runs SET phase='ended',ended=? WHERE id=?", (time.time(), run["id"]))
+    store.db.execute("UPDATE tasks SET status='ready',active_seconds=300 WHERE id=?", (tid,))
+    # Waited 40 minutes for the user's answer: that is not working time.
+    store.db.execute("INSERT INTO runs(id,actor_id,task_id,trigger,epoch,revision,phase,started) VALUES('r2',?,?,'followup',2,1,'ended',?)", (store.task(tid)["actor_id"], tid, time.time() - 2400))
+    store.tick_waits()
+    assert not [c for c in contents(store, tid) if c.startswith("还在做")]

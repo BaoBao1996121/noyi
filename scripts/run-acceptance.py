@@ -10,6 +10,7 @@ Env: PA_* model settings (see pa.example.toml), DASHSCOPE_API_KEY for search.
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -148,6 +149,7 @@ def run(probe, steps, watch_file):
         p.send("S5", "先停一下")
         p.watch("S5", 40)
         p.send("S5", "继续吧")
+        p.watch("S5", 120, until=lambda s, l: (p.task(tid) or {}).get("status") not in {"stopped", "paused"})
         p.watch("S5", 900, until=delivered(tid))
         p.record("S5", final=p.task(tid) and p.task(tid)["status"])
     if "S6" in steps:
@@ -156,15 +158,17 @@ def run(probe, steps, watch_file):
     if "S7" in steps:
         t = time.time()
         p.send("S7", "帮我写一份下周团队周会的议程。你需要什么信息先问我，问清楚再写。")
-        state, lines = p.watch("S7", 180, until=lambda s, l: any(r["type"] == "question" and r["state"] == "pending" for r in l))
+        tid = wait_root(p, t)
+        own = lambda r: r["type"] == "question" and r["task_id"] == tid
+        state, lines = p.watch("S7", 180, until=lambda s, l: any(own(r) and r["state"] == "pending" for r in l))
         p.record("S7", note="quiet window: checking for nagging for 150s")
         p.watch("S7", 150)
-        q = next((r for r in lines if r["type"] == "question"), None)
+        q = next((r for r in lines if own(r) and r["state"] == "pending"), None)
         if q:
             p.t0 = time.time()
             p.record("S7", answer="只答一部分")
             p.post("/api/actions/answer", {"question_id": q["id"], "text": "周会时长 30 分钟", "nonce": uuid.uuid4().hex})
-            p.watch("S7", 240, until=lambda s, l: any(r["type"] == "question" and r["state"] == "pending" for r in l) or any(r.get("artifact") for r in l))
+            p.watch("S7", 240, until=lambda s, l: any(own(r) and r["state"] == "pending" for r in l) or any(r.get("artifact") and r.get("task_id") == tid for r in l))
     if "S8" in steps:
         p.send("S8", "两分钟后提醒我喝水")
         p.watch("S8", 200)
@@ -230,9 +234,16 @@ def main():
     parser.add_argument("--progress-after", type=float, default=120)
     parser.add_argument("--steps", default="S1,S2,S4,S5,S6,S7,S8,R1,R3,R4,R5,R6,R7,X15")
     parser.add_argument("--reuse", action="store_true", help="reuse an existing output directory and running server")
+    parser.add_argument("--model-from", type=Path, default=REPO / ".pa" / "personal",
+                        help="data directory whose saved model settings (model.json, credentials.key, search.key) the instance uses")
     args = parser.parse_args()
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=args.reuse)
+    if not args.reuse:
+        (out / "data").mkdir(exist_ok=True)
+        for name in ("model.json", "credentials.key", "search.key"):
+            if (args.model_from / name).is_file():
+                shutil.copyfile(args.model_from / name, out / "data" / name)
     server = None
     if not args.reuse:
         env = {**os.environ, "PYTHONUTF8": "1", "PYTHONPATH": str(REPO / "src")}
@@ -247,6 +258,11 @@ def main():
     try:
         with open(out / "log.jsonl", "a", encoding="utf-8") as log:
             probe = Probe(f"http://127.0.0.1:{args.port}", log)
+            ready = probe.get("/api/state")
+            if not ready.get("ready"):
+                # Without a configured model every message stays queued and the
+                # whole run would record silence as if it were behavior.
+                raise SystemExit(f"model not ready ({ready.get('model')}); pass --model-from a configured data directory")
             run(probe, set(args.steps.split(",")), out / "watched.txt")
     finally:
         if server:

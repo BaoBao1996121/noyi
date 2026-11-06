@@ -90,6 +90,8 @@ class GoalStore:
                 raise ValueError("同一目标最多启用 8 项检查计划")
             policy_id = gid()
             due = now if config["kind"] == "watch" else next_due(config, now)
+            if due == float("inf"):
+                raise ValueError("这个时间已经过了，请换一个将来的时间")
             authority = self.goal_event(goal_id, "policy_authorized", {"policy_id": policy_id, "schedule": config, "source_ids": [s["id"] for s in spec.sources], "budget": {"max_calls": spec.max_calls, "max_tools": spec.max_tools}})
             self.db.execute("INSERT INTO routine_policies(id,goal_id,actor_id,state,revision,schedule,template,next_due,authority_ref,created,updated) VALUES(?,?,?,'planned',1,?,?,?,?,?,?)", (policy_id, goal_id, goal["actor_id"], encode(config), encode(asdict(spec)), due, authority, now, now))
             receipt = {"registration_id": gid(), "adapter": "local-sqlite-scheduler/v1", "policy_id": policy_id, "revision": 1, "registered_at": now, "next_due": due, "status": "registered", "service_requirement": "local service must be running; missed occurrences handled on restart"}
@@ -129,6 +131,9 @@ class GoalStore:
                     raise ValueError("目标累计预算已用完，请先增加额度")
             revision = goal["revision"] + 1
             self.db.execute("UPDATE goals SET status=?,revision=?,wait_reason=?,updated=? WHERE id=?", (status, revision, "已按你的要求暂停" if status == "paused" else "已继续跟进，等待约定时间或新情况" if status == "active" else "这件事已结束跟进", time.time(), goal_id))
+            if status in {"achieved", "retired"}:
+                # An ended matter keeps no live arrangements behind it.
+                self.db.execute("UPDATE routine_policies SET state='retired',updated=? WHERE goal_id=? AND state!='retired'", (time.time(), goal_id))
             if status != "active":
                 self._stop_goal_tasks(goal_id, "goal_" + status)
             else:
@@ -186,6 +191,8 @@ class GoalStore:
             self.require_member(old["actor_id"], goal["room_id"])
             revision = old["revision"] + 1
             due = now if config["kind"] == "watch" else next_due(config, now)
+            if due == float("inf") and state == "active":
+                raise ValueError("这个时间已经过了，请换一个将来的时间")
             receipt = {"registration_id": gid(), "adapter": "local-sqlite-scheduler/v1", "policy_id": policy_id, "revision": revision, "registered_at": now, "next_due": due, "status": "registered" if state == "active" else state}
             authority = self.goal_event(goal["id"], "policy_updated", {"policy_id": policy_id, "revision": revision, "state": state})
             self.db.execute("UPDATE routine_policies SET schedule=?,template=?,state=?,revision=?,next_due=?,registration_receipt=?,authority_ref=?,fingerprint=NULL,updated=? WHERE id=?", (encode(config), encode(asdict(spec)), state, revision, due, encode(receipt), authority, now, policy_id))
@@ -223,13 +230,13 @@ class GoalStore:
                 return active["stop_reason"] or reason
         return super().control_reason(run)
 
-    def claim(self, exclude_actor_ids=()):
+    def claim(self, exclude_task_ids=()):
         with self.transaction():
             for task in self.all("SELECT id FROM tasks WHERE status='ready'"):
                 t = self.task(task["id"])
                 if reason := self.goal_gate(t):
                     self.db.execute("UPDATE tasks SET status='paused',auto_continue='paused',reason=? WHERE id=?", (reason, t["id"]))
-            return super().claim(exclude_actor_ids=exclude_actor_ids)
+            return super().claim(exclude_task_ids=exclude_task_ids)
 
     def ack_control(self, run, reason):
         with self.transaction():
@@ -283,9 +290,23 @@ class GoalStore:
                     if kwargs["status"] == "succeeded" and not review_grant:
                         self.db.execute("UPDATE goals SET current_state=?,wait_reason='本次成果已交付，持续职责仍保留',assessment_at=?,updated=? WHERE id=?", ("最近一次检查已完成：" + kwargs["content"][:500], time.time(), time.time(), goal["id"]))
                         self.db.execute("UPDATE policy_occurrences SET status='completed',reason='task_accepted' WHERE task_id=?", (task["id"],))
+                        self._complete_one_time(task, goal)
                         for proposal in self.all("SELECT id FROM policy_proposals WHERE goal_id=? AND state='approved'", (goal["id"],)):
                             self._apply_policy_proposal(proposal["id"])
         return result
+
+    def _complete_one_time(self, task, goal):
+        """A one-time arrangement is fulfilled by its accepted run."""
+        if not task["policy_id"]:
+            return
+        policy = self.policy(task["policy_id"])
+        if policy["schedule"]["kind"] != "once":
+            return
+        now = time.time()
+        self.db.execute("UPDATE routine_policies SET state='retired',updated=? WHERE id=?", (now, policy["id"]))
+        if not self.one("SELECT 1 FROM routine_policies WHERE goal_id=? AND state='active'", (goal["id"],)):
+            self.db.execute("UPDATE goals SET status='achieved',revision=revision+1,wait_reason='约定的时间已到，已经办完',updated=? WHERE id=?", (now, goal["id"]))
+        self.goal_event(goal["id"], "one_time_fulfilled", {"policy_id": policy["id"], "task_id": task["id"]})
 
     def invalidate_room(self, room, reason, **kwargs):
         super().invalidate_room(room, reason, **kwargs)
@@ -399,8 +420,12 @@ class GoalStore:
             blocked = any(r["state"] == "failed" and sources[r["source_id"]].get("required", True) for r in receipts)
             fingerprint = digest(encode(sorted((r["source_id"], r["state"], r.get("sha256")) for r in receipts)).encode())
             payload = json.loads(occurrence["payload"])
-            changed = not blocked and (not sources or fingerprint != policy["fingerprint"] or payload.get("force"))
-            state = "failed" if blocked else "changed" if changed else "unchanged"
+            # A change-only watch has two phases: the first successful check
+            # after registration (or any edit, which clears the fingerprint)
+            # records the baseline; only a later difference starts work.
+            baseline = policy["schedule"].get("first_check") == "baseline" and policy["fingerprint"] is None and not blocked and not payload.get("force")
+            changed = not blocked and not baseline and (not sources or fingerprint != policy["fingerprint"] or payload.get("force"))
+            state = "failed" if blocked else "baseline" if baseline else "changed" if changed else "unchanged"
             self.db.execute("UPDATE routine_policies SET last_check=?,last_success=CASE WHEN ? THEN last_success ELSE ? END,fingerprint=CASE WHEN ? THEN fingerprint ELSE ? END WHERE id=?", (now, int(blocked), now, int(blocked), fingerprint, policy["id"]))
             # Watch polls without a change are represented by source-health
             # counters, not a growing stream of indistinguishable notices.
@@ -412,6 +437,8 @@ class GoalStore:
                 self.db.execute("UPDATE goals SET wait_reason='来源读取失败，不能判断为没有变化',next_action='等待来源恢复或用户修复资料位置',updated=? WHERE id=?", (now, goal["id"]))
                 if health_changed:
                     self._notice(None, goal["room_id"], f"持续目标「{goal['title']}」有资料暂时无法读取，检查没有完成。请查看来源状态；已有成果保留。")
+            elif baseline:
+                self.db.execute("UPDATE goals SET wait_reason='已记下资料当前内容作为对照，有变化才会开始工作',updated=? WHERE id=?", (now, goal["id"]))
             elif not changed:
                 self.db.execute("UPDATE goals SET wait_reason='来源已成功检查，本次没有变化',updated=? WHERE id=?", (now, goal["id"]))
                 if any(r["state"] == "failed" for r in before):

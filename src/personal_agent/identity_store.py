@@ -203,7 +203,7 @@ class IdentityStore:
             self._notice(None, room, f"成员已停用，{len(blocked)} 项未完成工作已暂停。请在任务详情选择有效成员接手；已有记录保留。")
         self.identity_audit("scope_changed", room, {"reason": reason, "blocked_tasks": blocked})
 
-    def claim(self, exclude_actor_ids=()):
+    def claim(self, exclude_task_ids=()):
         # Prevent archived/removed Bot chat events from being dispatched at all.
         with self.transaction():
             for e in self.all("SELECT e.id,e.actor_id,e.task_id,m.room_id FROM events e JOIN messages m ON m.id=e.message_id WHERE e.state='pending' AND e.kind!='conversation'"):
@@ -212,7 +212,7 @@ class IdentityStore:
                         self.db.execute("UPDATE tasks SET status='paused',auto_continue='paused',reason='member_unavailable' WHERE id=? AND status NOT IN ('succeeded','cancelled')", (e["task_id"],))
                     else:
                         self.db.execute("UPDATE events SET state='background' WHERE id=?", (e["id"],))
-            run = super().claim(exclude_actor_ids=exclude_actor_ids)
+            run = super().claim(exclude_task_ids=exclude_task_ids)
             if run:
                 room = self.task(run["task_id"])["room_id"] if run["task_id"] else self.one("SELECT m.room_id FROM messages m JOIN events e ON e.message_id=m.id WHERE e.claimed_by_run=?", (run["id"],))["room_id"]
                 revision = self.one("SELECT revision FROM rooms WHERE id=?", (room,))["revision"]

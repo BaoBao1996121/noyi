@@ -42,7 +42,7 @@ ORCHESTRATION_SCHEMAS = [
          {"dependency_id": {"type": "string"}}, ["dependency_id"]),
     tool("adopt_worker_result", "After reading a verified child artifact, explicitly review whether it satisfies the CURRENT requirements. Required old-revision child results need this review before parent completion. Record a concrete rationale; this does not change the child's original requirements.",
          {"child_id": {"type": "string"}, "artifact_sha256": {"type": "string"}, "rationale": {"type": "string"}}, ["child_id", "artifact_sha256", "rationale"]),
-    tool("ask_user", "Ask a specific unresolved information, authorization, or review question; persist the question identity and release this run. Use alone in its response. Asking does not itself expand permissions.",
+    tool("ask_user", "Ask a specific unresolved information, authorization, or review question; persist the question identity and release this run. Use alone in its response. Asking does not itself expand permissions. When the answer is one of a few plausible choices, give them as options so the user can tap one (they can still type their own); leave options empty only for open details. Ask only what is still unknown: if an earlier answer covered part of it, ask just the rest.",
          {"question": {"type": "string", "minLength": 1},
           "options": {"type": "array", "items": {"type": "string"}},
           "kind": {"type": "string", "enum": ["information", "authorization", "review"]}},

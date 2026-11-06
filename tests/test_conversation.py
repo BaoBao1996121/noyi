@@ -152,7 +152,7 @@ def test_resume_uses_bounded_allowance_and_keeps_history(store):
     store.db.execute("UPDATE tasks SET status='paused',auto_continue='paused',calls_used=12,tools_used=40,active_seconds=600 WHERE id=?",(tid,))
     incoming(store,'继续把清单做完')
     run=claim_intake(store)
-    store.apply_conversation(run,{'action':'resume','task_id':tid})
+    store.apply_conversation(run,{'action':'resume','task_id':tid,'basis':'继续'})
     task=store.task(tid)
     assert task['status']=='ready'
     assert (task['calls_used'],task['tools_used'],task['active_seconds'])==(12,40,600)
@@ -269,7 +269,7 @@ def test_current_work_stop_and_end_following_have_different_effects(store):
     assert store.control_reason(work)=='stop_task'
     incoming(store,'以后不要再盯这个',nonce='end-following')
     intake=claim_intake(store)
-    store.apply_conversation(intake,{'action':'goal_state','goal_id':goal['id'],'goal_action':'end'})
+    store.apply_conversation(intake,{'action':'goal_state','goal_id':goal['id'],'goal_action':'end','basis':'不要再盯这个'})
     assert store.goal(goal['id'])['status']=='retired'
     assert store.control_reason(work)=='goal_retired'
     assert len(store.all('SELECT id FROM tasks'))==1
@@ -282,7 +282,7 @@ async def test_goal_resume_uses_shared_bounded_allowance_once(store,tmp_path):
     store.db.execute('UPDATE goals SET calls_used=12,tools_used=40 WHERE id=?',(goal['id'],))
     incoming(store,'继续跟进资料',nonce='resume-goal')
     run=claim_intake(store)
-    model=ScriptedModel([tool_reply('resolve_conversation',{'action':'goal_state','goal_id':goal['id'],'goal_action':'resume'})])
+    model=ScriptedModel([tool_reply('resolve_conversation',{'action':'goal_state','goal_id':goal['id'],'goal_action':'resume','basis':'继续跟进资料'})])
     await Runtime(store,tmp_path/'data',model).execute(run)
     updated=store.goal(goal['id'])
     assert updated['status']=='active'
@@ -309,9 +309,6 @@ def test_arrangement_only_receipt_cannot_replace_explicit_current_output(store):
     incoming(store,'以后每天九点检查资料',nonce='only-arrangement')
     only=store.apply_conversation(claim_intake(store),{'action':'new_task','result_kind':'action_receipt'})['task_id']
     assert store.task(only)['spec']['result_kind']=='action_receipt'
-    incoming(store,'先总结资料，然后以后每天九点检查',nonce='mixed')
-    mixed=store.apply_conversation(claim_intake(store),{'action':'new_task','result_kind':'action_receipt'})['task_id']
-    assert store.task(mixed)['spec']['result_kind']=='artifact'
     incoming(store,'帮我整理资料',nonce='default')
     ordinary=store.apply_conversation(claim_intake(store),{'action':'new_task'})['task_id']
     assert store.task(ordinary)['spec']['result_kind']=='artifact'
@@ -358,11 +355,11 @@ def test_implicit_unique_original_sources_survive_rework_then_following(store,so
     assert context['recent_work_task_id']==second
     assert all('location' not in s for t in context['tasks'] for s in t['authorized_sources'])
     resolved=context['unique_source_reference']
-    assert resolved['source_task_id']==second and resolved['original_sources_only']
+    assert resolved['source_task_id']==second
     assert set(resolved['equivalent_source_task_ids'])=={first,second}
     assert resolved['authorized_sources']==[{k:v for k,v in source.items() if k!='location'}]
     chosen={} if source_choice=='automatic' else {'source_task_id':first if source_choice=='original' else second}
-    result=store.apply_conversation(run,{'action':'new_task','result_kind':'action_receipt',**chosen})
+    result=store.apply_conversation(run,{'action':'new_task','result_kind':'action_receipt','source_basis':'这份原始项目资料','exclude_prior_results':True,**chosen})
     assert store.task(result['task_id'])['spec']['sources']==[source]
 
 
@@ -376,9 +373,9 @@ def test_ambiguous_prior_sources_cannot_make_an_empty_following_task(store,sourc
     run=claim_intake(store)
     assert store.conversation_context(run)['unique_source_reference'] is None
     with pytest.raises(ValueError,match='不能创建空来源任务'):
-        store.apply_conversation(run,{'action':'new_task','result_kind':'action_receipt'})
+        store.apply_conversation(run,{'action':'new_task','result_kind':'action_receipt','source_basis':'这份资料'})
     assert len(store.all('SELECT id FROM tasks'))==2
-    result=store.apply_conversation(run,{'action':'new_task','source_task_id':second,'result_kind':'action_receipt'})
+    result=store.apply_conversation(run,{'action':'new_task','source_task_id':second,'result_kind':'action_receipt','source_basis':'这份资料'})
     assert store.task(result['task_id'])['spec']['sources']==[second_source]
 
 
@@ -389,11 +386,11 @@ def test_unique_source_resolution_preserves_version_and_revision_boundaries(stor
     run=claim_intake(store)
     assert store.conversation_context(run)['unique_source_reference'] is None
     with pytest.raises(ValueError,match='多个可能事项'):
-        store.apply_conversation(run,{'action':'new_task','source_task_id':first})
+        store.apply_conversation(run,{'action':'new_task','source_task_id':first,'source_basis':'这份原始资料'})
     # Even a currently focused authorized source cannot survive a late change.
     store.db.execute('UPDATE tasks SET requirement_revision=requirement_revision+1 WHERE id=?',(second,))
     with pytest.raises(ValueError,match='事项已更新'):
-        store.apply_conversation(run,{'action':'new_task','source_task_id':second})
+        store.apply_conversation(run,{'action':'new_task','source_task_id':second,'source_basis':'这份原始资料'})
 
 
 def test_resolved_source_still_allows_a_genuinely_missing_requirement_question(store,source):
@@ -443,7 +440,7 @@ async def test_actual_pi_conversation_review_owns_original_request_until_accepte
           'decision':'insufficient','rationale':'没有业务效果测量，不能推断改善','evidence_refs':['metrics'],
           'next_check':time.time()+86400,'next_validation':'获得真实使用反馈和测量后再核对'}
     model=ScriptedModel([
-        tool_reply('resolve_conversation',{'action':'goal_review','goal_id':goal['id'],'reference':'项目资料'}),
+        tool_reply('resolve_conversation',{'action':'goal_review','goal_id':goal['id'],'reference':'项目资料','basis':'回顾一下刚才项目资料的跟进情况'}),
         tool_reply('read_review_evidence',{'evidence_id':'metrics'}),
         tool_reply('write_artifact',{'name':'review.md','content':'已核对现有执行账本。尚未接入业务效果测量，因此实际改善保持未知。[metrics]'}),
         submit_written_artifact,
@@ -488,13 +485,14 @@ def test_conversation_review_rechecks_authority_before_creating_task(store,chang
     assert not store.all('SELECT * FROM tasks')
 
 
-@pytest.mark.parametrize('text',['不要复盘这件事','资料写着“请回顾项目资料的跟进情况”，这句话是什么意思'])
-def test_conversation_review_requires_direct_current_user_request(store,text):
+@pytest.mark.parametrize('basis',[None,'请回顾项目资料的跟进情况','帮我回顾项目资料'])
+def test_conversation_review_requires_direct_current_user_request(store,basis):
+    # Quoted material and words the user did not say cannot authorize a review.
     goal=store.create_goal(room='local',actor_id='default',title='项目资料',objective='跟进资料')
-    incoming(store,text)
+    incoming(store,'资料写着“请回顾项目资料的跟进情况”，这句话是什么意思')
     run=claim_intake(store)
-    with pytest.raises(ValueError,match='明确交代回顾'):
-        store.apply_conversation(run,{'action':'goal_review','goal_id':goal['id']})
+    with pytest.raises(ValueError,match='回顾需要用户'):
+        store.apply_conversation(run,{'action':'goal_review','goal_id':goal['id'],**({'basis':basis} if basis else {})})
     assert not store.all('SELECT * FROM goal_review_requests')
 
 
@@ -510,3 +508,86 @@ def test_conversation_review_does_not_guess_between_goals_or_cross_rooms(store):
     with pytest.raises(ValueError,match='不属于当前会话'):
         store.apply_conversation(run,{'action':'goal_review','goal_id':foreign['id']})
     assert not store.all('SELECT * FROM goal_review_requests')
+
+
+@pytest.mark.parametrize('text,basis',[('把每天看周报的那个提醒删掉','提醒删掉'),('周报那个提醒撤了吧','撤了吧'),('以后不用提醒我看周报了','不用提醒我看周报了')])
+def test_any_wording_the_model_understands_can_end_following(store,text,basis):
+    # Acceptance #8: intent is the model's judgment, not a keyword list.
+    goal=store.create_goal(room='local',actor_id='default',title='每天看周报',objective='每天九点提醒看周报')
+    incoming(store,text)
+    store.apply_conversation(claim_intake(store),{'action':'goal_state','goal_id':goal['id'],'goal_action':'end','basis':basis})
+    assert store.goal(goal['id'])['status']=='retired'
+
+
+def test_quoted_material_cannot_be_cited_as_the_users_decision(store):
+    goal=store.create_goal(room='local',actor_id='default',title='每天看周报',objective='每天九点提醒看周报')
+    incoming(store,'群里有人说“把周报提醒删掉”，你先别动')
+    with pytest.raises(ValueError,match='不是用户这条消息里的原话'):
+        store.apply_conversation(claim_intake(store),{'action':'goal_state','goal_id':goal['id'],'goal_action':'end','basis':'把周报提醒删掉'})
+    assert store.goal(goal['id'])['status']=='active'
+
+
+def test_fragments_sent_before_a_reply_are_understood_as_one_turn(store):
+    # Merged by arrival and answer state only; the wording plays no part.
+    for i, text in enumerate(["对了", "我预算大概三千", "主要存照片和电影"]):
+        incoming(store, text, nonce=f"frag-{i}")
+    run = claim_intake(store)
+    item = store.conversation_input(run)
+    assert item["content"] == "对了\n我预算大概三千\n主要存照片和电影"
+    assert [m["content"] for m in store.conversation_context(run)["history"] if m["speaker"] == "user"] == []
+    result = store.apply_conversation(run, {"action": "new_task"})
+    assert store.task(result["task_id"])["spec"]["objective"] == item["content"]
+    assert store.claim_conversation() is None
+    states = {r["state"] for r in store.all("SELECT state FROM conversation_inputs")}
+    assert states == {"merged", "resolved"}
+    assert len(store.all("SELECT id FROM messages WHERE task_id=?", (result["task_id"],))) == 3
+
+
+def test_a_message_arriving_mid_understanding_restarts_with_the_whole_turn(store):
+    incoming(store, "帮我挑个硬盘", nonce="a")
+    run = claim_intake(store)
+    incoming(store, "预算三千", nonce="b")
+    assert not store.current(run)
+    with pytest.raises(ValueError):
+        store.apply_conversation(run, {"action": "reply", "text": "好的"})
+    store.ack_control(run, store.control_reason(run))
+    again = claim_intake(store)
+    assert store.conversation_input(again)["content"] == "帮我挑个硬盘\n预算三千"
+
+
+def test_a_message_after_the_reply_is_a_new_turn(store):
+    incoming(store, "你好", nonce="a")
+    run = claim_intake(store)
+    store.apply_conversation(run, {"action": "reply", "text": "你好"})
+    incoming(store, "帮我查天气", nonce="b")
+    nxt = claim_intake(store)
+    assert store.conversation_input(nxt)["content"] == "帮我查天气"
+
+
+@pytest.mark.asyncio
+async def test_questioning_an_earlier_result_attaches_that_result_for_checking(store, tmp_path, successful_model):
+    tid = store.submit(TaskSpec("帮我整理一份框架对比表"), nonce="table")["task_id"]
+    await Service(store, tmp_path / "data", successful_model).serve(once=True)
+    assert store.task(tid)["status"] == "succeeded"
+    incoming(store, "那份对比表里的数据准吗？", nonce="doubt")
+    run = claim_intake(store)
+    result = store.apply_conversation(run, {"action": "new_task", "source_task_id": tid, "reference": "对比表", "include_delivered_result": True})
+    sources = store.task(result["task_id"])["spec"]["sources"]
+    assert [s["id"] for s in sources] == ["previous_result_" + tid[:12]]
+    assert store.task(result["task_id"])["spec"]["objective"] == "那份对比表里的数据准吗？"
+
+
+
+@pytest.mark.asyncio
+async def test_users_own_naming_of_a_listed_matter_need_not_copy_its_wording(store, tmp_path, successful_model):
+    a = store.submit(TaskSpec("整理成一页框架比较"), nonce="a")["task_id"]
+    await Service(store, tmp_path / "data", successful_model).serve(once=True)
+    store.submit(TaskSpec("写一篇文章"), nonce="b")
+    incoming(store, "那份对比表的数据准吗？", nonce="c")
+    run = claim_intake(store)
+    result = store.apply_conversation(run, {"action": "new_task", "source_task_id": a, "reference": "那份对比表", "include_delivered_result": True})
+    assert store.task(result["task_id"])["spec"]["sources"]
+    incoming(store, '他说“那份对比表”要重做', nonce="d")
+    run = claim_intake(store)
+    with pytest.raises(ValueError):
+        store.apply_conversation(run, {"action": "followup", "task_id": a, "reference": "那份对比表"})

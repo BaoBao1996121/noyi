@@ -19,6 +19,7 @@ class LifecycleStore:
                     self.db.execute(f"ALTER TABLE tasks ADD COLUMN {name} {definition}")
             for sql in (
                 "CREATE TABLE IF NOT EXISTS activity_log(operation_id TEXT PRIMARY KEY,task_id TEXT NOT NULL,run_id TEXT NOT NULL,tool TEXT NOT NULL,outcome TEXT NOT NULL,new_progress INTEGER NOT NULL,created REAL NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS coverage_reads(task_id TEXT NOT NULL,fingerprint TEXT NOT NULL,last_read REAL NOT NULL,PRIMARY KEY(task_id,fingerprint))",
                 "CREATE TABLE IF NOT EXISTS progress_log(id TEXT PRIMARY KEY,task_id TEXT NOT NULL,run_id TEXT NOT NULL,kind TEXT NOT NULL,fingerprint TEXT NOT NULL,evidence_ref TEXT NOT NULL,summary TEXT NOT NULL,created REAL NOT NULL,UNIQUE(task_id,kind,fingerprint))",
                 "CREATE TABLE IF NOT EXISTS investigation(id TEXT PRIMARY KEY,task_id TEXT NOT NULL,run_id TEXT NOT NULL,kind TEXT NOT NULL,statement TEXT NOT NULL,evidence_refs TEXT NOT NULL,created REAL NOT NULL,UNIQUE(task_id,kind,statement))",
                 "CREATE TABLE IF NOT EXISTS nudges(id TEXT PRIMARY KEY,task_id TEXT NOT NULL,run_id TEXT NOT NULL,revision INTEGER NOT NULL,reason TEXT NOT NULL,gaps TEXT NOT NULL,created REAL NOT NULL)",
@@ -57,7 +58,7 @@ class LifecycleStore:
             elif tool == "fetch_page" and not failed:
                 kind = "web_coverage"
                 fingerprint = encode([result["page_id"], result["sha256"], result["start"], result["end"]])
-                summary = encode({k: result[k] for k in ("page_id", "url", "start", "end", "total", "eof")})
+                summary = encode({k: result.get(k) for k in ("page_id", "url", "title", "start", "end", "total", "eof")})
             elif tool == "web_search" and not failed:
                 kind, fingerprint, summary = "web_search", result["query"], encode({"query": result["query"], "urls": len(result["urls"])})
             elif tool == "read_review_evidence" and not failed:
@@ -79,13 +80,22 @@ class LifecycleStore:
                 kind, fingerprint, summary = 'following_registered', result['authority_receipt'], encode({'action':result['action'],'goal_id':result['goal']['id']})
             elif tool == "submit_result" and result.get("passed"):
                 kind, fingerprint, summary = "accepted_artifact", result["artifact"]["sha256"], encode(result["artifact"])
-            progress = False
+            progress = restored = False
+            now = time.time()
             if kind:
-                cursor = self.db.execute("INSERT OR IGNORE INTO progress_log VALUES(?,?,?,?,?,?,?,?)", (uuid.uuid4().hex, run["task_id"], run["id"], kind, fingerprint, operation_id, summary, time.time()))
+                cursor = self.db.execute("INSERT OR IGNORE INTO progress_log VALUES(?,?,?,?,?,?,?,?)", (uuid.uuid4().hex, run["task_id"], run["id"], kind, fingerprint, operation_id, summary, now))
                 progress = cursor.rowcount == 1
-            self.db.execute("INSERT INTO activity_log VALUES(?,?,?,?,?,?,?)", (operation_id, run["task_id"], run["id"], tool, "failure" if failed else "success", int(progress), time.time()))
+                if kind in {"source_coverage", "web_coverage", "review_evidence", "child_observation"}:
+                    # Compaction removed earlier bodies from the request; the
+                    # first identical read after it restores what the model had
+                    # and is neither progress nor stagnation. A second one is.
+                    previous = self.one("SELECT last_read FROM coverage_reads WHERE task_id=? AND fingerprint=?", (run["task_id"], fingerprint))
+                    compacted = self.one("SELECT MAX(created) t FROM steps WHERE task_id=? AND kind='context_compacted'", (run["task_id"],))["t"]
+                    restored = not progress and bool(previous and compacted and previous["last_read"] < compacted)
+                    self.db.execute("INSERT OR REPLACE INTO coverage_reads VALUES(?,?,?)", (run["task_id"], fingerprint, now))
+            self.db.execute("INSERT INTO activity_log VALUES(?,?,?,?,?,?,?)", (operation_id, run["task_id"], run["id"], tool, "failure" if failed else "success", int(progress), now))
             # Artifact edits or invented hypotheses alone do not reset stagnation.
-            self.db.execute("UPDATE tasks SET stagnant_tools=CASE WHEN ? THEN 0 ELSE stagnant_tools+1 END,failure_streak=CASE WHEN ? THEN failure_streak+1 ELSE 0 END WHERE id=?", (int(progress), int(failed), run["task_id"]))
+            self.db.execute("UPDATE tasks SET stagnant_tools=CASE WHEN ? THEN 0 WHEN ? THEN stagnant_tools ELSE stagnant_tools+1 END,failure_streak=CASE WHEN ? THEN failure_streak+1 ELSE 0 END WHERE id=?", (int(progress), int(restored), int(failed), run["task_id"]))
 
     def resume(self, tid, **kwargs):
         # An explicit user retry starts a fresh consecutive-failure window.
@@ -142,7 +152,7 @@ class LifecycleStore:
         for source in task["spec"]["sources"]:
             if source["id"] not in observed and source["id"] not in negative:
                 gaps.append("authorized source not yet investigated: " + source["id"])
-        gaps.append("No final artifact has passed current task acceptance; use receipts and remaining authorized routes, or state a concrete blocker.")
+        gaps.append("No final artifact has passed current task acceptance; use receipts and remaining authorized routes. If it truly cannot be done, call report_unable with an honest explanation instead of replying in plain text.")
         return gaps
 
     def waiting_children_at_end(self, run):

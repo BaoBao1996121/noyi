@@ -216,7 +216,7 @@ def test_compaction_keeps_whole_assistant_tool_groups():
     assert changed
     expected = {c["id"] for m in result if m["role"] == "assistant" for c in m["tool_calls"]}
     actual = {m["tool_call_id"] for m in result if m["role"] == "tool"}
-    assert actual == expected and len(result) < len(messages)
+    assert actual == expected and len(json.dumps(result)) < len(json.dumps(messages)) // 2
 
 
 def test_bounded_input_batches_do_not_lose_unseen_responsibility(store):
@@ -265,3 +265,15 @@ async def test_ending_gate_turns_live_child_work_into_wait_without_nudge_spin(st
     await service.serve(once=True)
     assert model.calls == 3
     assert store.one("SELECT state FROM attentions")["state"] == "pending"
+
+
+def test_compaction_shortens_old_reads_instead_of_forgetting_them():
+    messages = [{"role": "system", "content": "Rules"}, {"role": "user", "content": "Requirements"}]
+    for i in range(12):
+        reply = tool_reply("fetch_page", {"url": f"https://example.com/{i}"}, str(i))
+        messages += [reply.message, {"role": "tool", "tool_call_id": str(i), "content": json.dumps({"page_id": f"page_{i}", "url": f"https://example.com/{i}", "title": f"T{i}", "text": "x" * 8000})}]
+    result, changed = compact_request(messages, {})
+    assert changed and len(json.dumps(result)) < len(json.dumps(messages)) // 2
+    kept = [json.loads(m["content"]) for m in result if m["role"] == "tool"]
+    assert [k["url"] for k in kept] == [f"https://example.com/{i}" for i in range(12)]
+    assert all(len(k["text"]) < 1000 for k in kept[:-4]) and all(len(k["text"]) == 8000 for k in kept[-4:])

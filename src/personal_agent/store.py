@@ -41,7 +41,9 @@ CREATE TABLE IF NOT EXISTS runs(
  trigger TEXT NOT NULL, epoch INTEGER, revision INTEGER, phase TEXT NOT NULL,
  end_reason TEXT, started REAL NOT NULL, ended REAL, context_manifest TEXT
 );
-CREATE UNIQUE INDEX IF NOT EXISTS one_active_actor ON runs(actor_id) WHERE phase='running';
+DROP INDEX IF EXISTS one_active_actor;
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_run ON runs(task_id) WHERE phase='running' AND task_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_chat_run ON runs(actor_id) WHERE phase='running' AND task_id IS NULL;
 CREATE TABLE IF NOT EXISTS events(
  id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, task_id TEXT REFERENCES tasks(id),
  message_id TEXT NOT NULL REFERENCES messages(id), kind TEXT NOT NULL,
@@ -165,7 +167,7 @@ class BaseStore:
     def claim(self) -> dict | None:
         with self.transaction():
             event = self.one("""SELECT e.* FROM events e WHERE e.state='pending'
-                AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.actor_id=e.actor_id AND r.phase='running')
+                AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.phase='running' AND (r.task_id=e.task_id OR e.task_id IS NULL AND r.task_id IS NULL AND r.actor_id=e.actor_id))
                 AND (e.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=e.task_id AND t.status='ready'))
                 ORDER BY e.created,e.id LIMIT 1""")
             if not event:

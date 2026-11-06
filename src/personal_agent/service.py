@@ -128,8 +128,10 @@ class Service:
                     incoming = self.store.claim_conversation()
                     if incoming:
                         self._active[incoming["id"]] = (incoming, asyncio.create_task(self.runtime.execute(incoming)))
+                # One Run per task, not per assistant: a quick question is not
+                # queued behind the same assistant's long task (acceptance #3).
                 while sum(r["trigger"] != "conversation" for r, _ in self._active.values()) < self.concurrency:
-                    run = self.store.claim(exclude_actor_ids={r["actor_id"] for r, _ in self._active.values() if r["trigger"] != "conversation"})
+                    run = self.store.claim(exclude_task_ids={r["task_id"] for r, _ in self._active.values() if r["task_id"]})
                     if run is None:
                         break
                     self._active[run["id"]] = (run, asyncio.create_task(self.runtime.execute(run)))

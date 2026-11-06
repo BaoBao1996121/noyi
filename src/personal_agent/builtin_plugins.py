@@ -14,6 +14,9 @@ from .tools import TOOL_SCHEMAS, tool, validate_arguments, verify
 ACTION_COMPLETION = tool('complete_action', 'Finish an arrangement-only request using actual effect operation IDs. This accepts registration, a change, or starting a review/observation; a started review is not a finished report, an observation plan proves no improvement. For a requested document use submit_result.',
     {'summary': {'type':'string'}, 'effect_refs': {'type':'array','items':{'type':'string'},'minItems':1,'maxItems':8}}, ['summary','effect_refs'])
 
+REPORT_UNABLE = tool('report_unable', 'End this task honestly when it cannot be done with the available tools or needs something only the user can supply. The explanation is sent to the user as is: one or two plain sentences saying what you cannot do and what would make it possible (an alternative you can do, or what they could provide). Never claim any work was done.',
+    {'explanation': {'type': 'string'}}, ['explanation'])
+
 FOLLOWING_EFFECT_TOOLS = ('start_following', 'manage_following', 'review_following', 'observe_following')
 
 
@@ -127,5 +130,27 @@ def following_plugin():
         ToolSpec(ACTION_COMPLETION, _complete_action, _validate_complete_action, exclusive=True, available=available)])
 
 
+def _validate_report_unable(args):
+    from .speech import PROMISE
+    if not isinstance(args, dict) or set(args) != {'explanation'} or not isinstance(args['explanation'], str):
+        raise ValueError('需要一段简短说明')
+    text = args['explanation'].strip()
+    if not 4 <= len(text) <= 400:
+        raise ValueError('说明请控制在一两句话（400 字以内）')
+    if PROMISE.search(text):
+        raise ValueError('做不到时不能声称已经完成了什么')
+
+
+def _report_unable(call, args):
+    task = call.runtime.store.task(call.run['task_id'])
+    if task['parent_task_id']:
+        raise ValueError('协作者请把做不到的原因交回主任务，而不是直接告诉用户')
+    return {'explanation': args['explanation'].strip(), 'scope': 'honest report; no result produced'}
+
+
+def outcome_plugin():
+    return Plugin("core.outcome", "1", [ToolSpec(REPORT_UNABLE, _report_unable, _validate_report_unable, exclusive=True)])
+
+
 def builtin_plugins():
-    return [artifacts_plugin(), orchestration_plugin(), following_plugin()]
+    return [artifacts_plugin(), orchestration_plugin(), following_plugin(), outcome_plugin()]

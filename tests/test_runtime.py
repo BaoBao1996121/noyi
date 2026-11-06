@@ -304,3 +304,24 @@ async def test_timeout_during_pending_read_finalizes_operation_as_interrupted(st
     assert operations[0]["result"] is None
     assert not store.all("SELECT * FROM runs WHERE phase='running'")
     assert task["acceptance"] != "passed"
+
+
+@pytest.mark.asyncio
+async def test_unable_task_ends_with_models_honest_words_not_internal_status(store, tmp_path):
+    # Acceptance #8: the user must never see runtime status text.
+    tid = store.submit(TaskSpec("两分钟后提醒我喝水"), nonce="unable")["task_id"]
+    model = ScriptedModel([tool_reply("report_unable", {"explanation": "我现在没法做一次性的定时提醒，只能做周期提醒。要不要改成每小时提醒一次？"})])
+    await Runtime(store, tmp_path / "data", model).execute(store.claim())
+    task = store.task(tid)
+    assert task["status"] == "paused" and task["reason"] == "unable_reported" and task["acceptance"] != "passed"
+    assert store.one("SELECT content FROM deliveries WHERE task_id=?", (tid,))["content"].startswith("我现在没法做一次性")
+
+
+@pytest.mark.asyncio
+async def test_unable_report_cannot_claim_finished_work(store, tmp_path):
+    tid = store.submit(TaskSpec("整理资料"), nonce="claim")["task_id"]
+    model = ScriptedModel([tool_reply("report_unable", {"explanation": "已经整理好了，见附件。"}),
+                           ModelReply({"role": "assistant", "content": "好的"}, 1, 1, "m")])
+    await Runtime(store, tmp_path / "data", model).execute(store.claim())
+    content = store.one("SELECT content FROM deliveries WHERE task_id=?", (tid,))["content"]
+    assert "已经整理好" not in content and "验收" not in content

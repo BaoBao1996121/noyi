@@ -217,3 +217,24 @@ def test_review_report_facts_come_from_frozen_ledger_not_model_restatements(stor
     assert report['fact_source'] == 'frozen_ledger_projection'
     store.reserve(run, 'model')
     assert store.review_report(record['review_id'])['sha256'] == report['sha256']
+
+
+@pytest.mark.asyncio
+async def test_reading_again_what_compaction_dropped_is_not_stagnation(store, tmp_path):
+    from personal_agent.tools import Toolset
+    goal = new_goal(store)
+    tid = store.submit(TaskSpec("Large report"), nonce="large-report")["task_id"]
+    await Service(store, tmp_path / "data", ScriptedModel([tool_reply("write_artifact", {"name": "large.md", "content": "背景" * 4500}), submit_written_artifact])).serve(once=True)
+    store.db.execute("UPDATE tasks SET goal_id=?,goal_revision=1 WHERE id=?", (goal["id"], tid))
+    delivery = store.one("SELECT id FROM deliveries WHERE task_id=? AND artifact IS NOT NULL", (tid,))
+    receipt = store.request_goal_review(goal["id"], nonce="paged-review")
+    run = store.claim()
+    runtime = Runtime(store, tmp_path / "data", ScriptedModel([]))
+    tools = Toolset(tmp_path / "data", store.task(receipt["task_id"]))
+    call = tool_reply("read_review_evidence", {"evidence_id": "delivery:" + delivery["id"]}).message["tool_calls"][0]
+    await runtime.execute_tool(run, tools, call, 1)
+    store.step(run, "context_compacted", {})
+    await runtime.execute_tool(run, tools, call, 1)
+    assert store.task(receipt["task_id"])["stagnant_tools"] == 0
+    await runtime.execute_tool(run, tools, call, 1)
+    assert store.task(receipt["task_id"])["stagnant_tools"] == 1

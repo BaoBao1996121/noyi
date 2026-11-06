@@ -6,11 +6,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 def validate_schedule(config):
-    if not isinstance(config, dict) or set(config) - {"kind", "timezone", "interval_seconds", "time", "weekdays", "missed", "grace_seconds"}:
+    if not isinstance(config, dict) or set(config) - {"kind", "timezone", "interval_seconds", "time", "weekdays", "missed", "grace_seconds", "at", "first_check"}:
         raise ValueError("无效检查计划字段")
     kind = config.get("kind")
-    if kind not in {"interval", "calendar", "watch"}:
-        raise ValueError("检查计划必须是间隔、日历或资料变化")
+    if kind not in {"interval", "calendar", "watch", "once"}:
+        raise ValueError("检查计划必须是间隔、日历、资料变化或到时执行一次")
     try:
         ZoneInfo(config.get("timezone", "Asia/Shanghai"))
     except (ZoneInfoNotFoundError, ValueError, TypeError):
@@ -20,7 +20,11 @@ def validate_schedule(config):
     grace = config.get("grace_seconds", 60)
     if type(grace) not in (int, float) or not math.isfinite(grace) or not 0 <= grace <= 86400:
         raise ValueError("漏触发宽限范围为 0–86400 秒")
-    if kind in {"interval", "watch"}:
+    if config.get("first_check", "deliver") not in {"deliver", "baseline"} or kind != "watch" and "first_check" in config:
+        raise ValueError("first_check 只用于资料变化检查：deliver 或 baseline")
+    if kind == "once":
+        once_at(config)
+    elif kind in {"interval", "watch"}:
         seconds = config.get("interval_seconds", 60)
         minimum = 1 if kind == "watch" else 60
         if type(seconds) not in (int, float) or not math.isfinite(seconds) or not minimum <= seconds <= 86400 * 31:
@@ -32,6 +36,15 @@ def validate_schedule(config):
         if not isinstance(days, list) or not days or len(set(days)) != len(days) or any(type(d) is not int or not 0 <= d <= 6 for d in days):
             raise ValueError("星期需要 0–6（周一至周日）")
     return {**config, "timezone": config.get("timezone", "Asia/Shanghai"), "missed": config.get("missed", "coalesce"), "grace_seconds": grace}
+
+
+def once_at(config):
+    """The single local wall time of a one-time run, as a UTC timestamp."""
+    try:
+        local = datetime.strptime(config.get("at", ""), "%Y-%m-%d %H:%M")
+    except (TypeError, ValueError):
+        raise ValueError("到时执行一次需要具体时间，格式 YYYY-MM-DD HH:MM（本地时间）") from None
+    return local.replace(tzinfo=ZoneInfo(config.get("timezone", "Asia/Shanghai"))).timestamp()
 
 
 def calendar_candidates(config, start, count_days=16):
@@ -51,6 +64,10 @@ def calendar_candidates(config, start, count_days=16):
 
 
 def next_due(config, after, *, anchor=None):
+    if config["kind"] == "once":
+        # Due once at its time; after it has been taken it is never due again.
+        at = once_at(config)
+        return at if anchor is None and at > after - config.get("grace_seconds", 60) else math.inf
     if config["kind"] in {"interval", "watch"}:
         seconds = config.get("interval_seconds", 60)
         if anchor is None:
@@ -66,7 +83,9 @@ def due_window(config, due, now):
     """One durable decision for a missed range; never burst-replay every slot."""
     if due > now:
         return None
-    if config["kind"] in {"interval", "watch"}:
+    if config["kind"] == "once":
+        missed, latest = 0, due
+    elif config["kind"] in {"interval", "watch"}:
         seconds = config.get("interval_seconds", 60)
         missed = int(math.floor((now - due) / seconds))
         latest = due + missed * seconds

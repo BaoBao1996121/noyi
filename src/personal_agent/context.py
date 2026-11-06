@@ -1,4 +1,6 @@
 """Bound request context without mutating the durable task/receipt history."""
+import json
+
 from .contracts import encode
 
 
@@ -13,11 +15,38 @@ def recovery_operations(operations):
     return public
 
 
-def compact_request(messages, pinned, *, threshold=80000):
-    """Keep original requirements, current responsibility and whole tool groups.
+# Older tool results keep their identity and a short excerpt; their full
+# bodies stay readable through the read tools. Dropping whole old groups made
+# the model forget pages it had already read and fetch them again (#15).
+EXCERPT_CHARS = 600
+RECENT_GROUPS = 4
 
-    Removed source/artifact bodies remain available through read tools. Negative
-    evidence, investigations and review requirements are pinned from the ledger.
+
+def _excerpt(message):
+    try:
+        data = json.loads(message["content"])
+    except (TypeError, ValueError):
+        return {**message, "content": str(message.get("content", ""))[:EXCERPT_CHARS] + " …[compacted]"}
+    if not isinstance(data, dict):
+        return {**message, "content": encode(data)[:EXCERPT_CHARS] + " …[compacted]"}
+    short = {}
+    for key, value in data.items():
+        if isinstance(value, str) and len(value) > EXCERPT_CHARS:
+            short[key] = value[:EXCERPT_CHARS] + " …[compacted; read again only if exact text is needed]"
+        elif isinstance(value, (list, dict)) and len(encode(value)) > EXCERPT_CHARS:
+            short[key] = encode(value)[:EXCERPT_CHARS] + " …[compacted]"
+        else:
+            short[key] = value
+    return {**message, "content": encode(short)}
+
+
+def compact_request(messages, pinned, *, threshold=80000):
+    """Keep original requirements, current responsibility and every tool group.
+
+    Recent groups stay whole; older tool results are shortened to their
+    identity (source, URL, title, range) and an excerpt instead of being
+    dropped. Negative evidence, investigations and review requirements are
+    pinned from the ledger.
     """
     if len(encode(messages)) <= threshold:
         return messages, False
@@ -35,14 +64,10 @@ def compact_request(messages, pinned, *, threshold=80000):
             current.append(message)
     if current:
         groups.append(current)
-    tail, size = [], 0
-    for group in reversed(groups):
-        length = len(encode(group))
-        if tail and size + length > 24000:
-            break
-        tail.insert(0, group)
-        size += length
-        if len(tail) == 6:
-            break
-    summary = {"role": "user", "content": "Durable context after compaction (receipt evidence, not new permissions): " + encode(pinned)}
-    return initial + audience[-1:] + orchestration[-1:] + goal[-1:] + [summary] + [m for group in tail for m in group], True
+    recent = groups[-RECENT_GROUPS:]
+    older = [[group[0]] + [_excerpt(m) for m in group[1:]] for group in groups[:-RECENT_GROUPS]]
+    # If even the shortened history is too large, the oldest groups go first.
+    while older and len(encode(older + recent)) > threshold - 20000:
+        older.pop(0)
+    summary = {"role": "user", "content": "Durable context after compaction (receipt evidence, not new permissions). Older tool results below are shortened to an excerpt; the progress list names every source range and page (URL, title) already read. Work from what you have; re-read only when you need exact text you no longer see, and record findings with record_investigation so they survive: " + encode(pinned)}
+    return initial + audience[-1:] + orchestration[-1:] + goal[-1:] + [summary] + [m for group in older + recent for m in group], True

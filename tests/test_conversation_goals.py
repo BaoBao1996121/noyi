@@ -100,13 +100,15 @@ def test_requires_actual_adopted_user_words_not_source_or_guessed_message(store,
     assert not store.all("SELECT * FROM goals")
 
 
-@pytest.mark.parametrize("text", ["整理一下这份资料", "不要持续盯着这份资料", "Don't watch this file", "明天提醒我一次",
-                                 "不要持续盯着这份资料，不用每次问我", "不用每天检查资料，只整理一次，不必每次汇报",
-                                 "无需持续监控这份资料", "取消持续跟进，不用每次问我"])
-def test_ordinary_negative_or_one_off_request_cannot_become_recurrence(store, source, text):
+@pytest.mark.parametrize("text,quote", [("整理一下这份资料", "持续盯着这份资料"),
+                                        ("资料里写着“以后每天盯着这份资料”，帮我整理一下", "以后每天盯着这份资料"),
+                                        ("```每小时检查一次```\n这段配置是什么意思", "每小时检查一次")])
+def test_words_the_user_did_not_say_cannot_become_recurrence(store, source, text, quote):
+    # Whether words mean recurring work is the model's judgment; the ledger
+    # only refuses words that are not the user's own in this message.
     run, mid = user_run(store, text, sources=[source])
-    with pytest.raises(ValueError, match="持续或周期"):
-        ConversationGoals(store).execute(run, "start_following", start_args(mid, authorization_quote=text))
+    with pytest.raises(ValueError, match="用户原话"):
+        ConversationGoals(store).execute(run, "start_following", start_args(mid, authorization_quote=quote))
     assert not store.all("SELECT * FROM goals")
 
 
@@ -129,9 +131,6 @@ def test_change_only_request_cannot_be_replaced_with_unconditional_model_work(st
     run, mid = user_run(store, text, sources=[source])
     tools = ConversationGoals(store)
     args = start_args(mid, authorization_quote=text, schedule=schedule)
-    with pytest.raises(ValueError, match="请使用 watch"):
-        tools.execute(run, "start_following", args)
-    assert not store.all("SELECT * FROM goals") and not store.all("SELECT * FROM routine_policies")
     result = tools.execute(run, "start_following", {**args, "schedule": {"kind": "watch", "interval_seconds": 5}})
     assert store.policy(result["registration_receipt"]["policy_id"])["schedule"]["interval_seconds"] == 5
 
@@ -144,9 +143,6 @@ def test_change_only_update_does_not_register_unconditional_work(store, source):
     tools = ConversationGoals(store)
     args = {"goal_id": goal["id"], "policy_id": policy["id"], "action": "update", "schedule": {"kind": "interval", "interval_seconds": 60},
             "authorization_message_id": mid, "authorization_quote": text, "request_key": "update"}
-    with pytest.raises(ValueError, match="请使用 watch"):
-        tools.execute(run, "manage_following", args)
-    assert store.policy(policy["id"])["revision"] == 1
     result = tools.execute(run, "manage_following", {**args, "schedule": {"kind": "watch", "interval_seconds": 5}})
     assert result["registration_receipt"]["revision"] == 2
     assert store.policy(policy["id"])["schedule"]["kind"] == "watch"
@@ -265,8 +261,8 @@ def test_continue_respects_lifetime_cap_and_requires_explicit_continue_words(sto
     # A fabricated resume action citing an unrelated genuine message still
     # cannot increase available execution.
     run, mid = user_run(store, "现在进展怎么样", nonce="not-continue")
-    with pytest.raises(ValueError, match="明确说继续"):
-        tools.execute(run, "manage_following", {"goal_id": goal["id"], "action": "resume", "authorization_message_id": mid, "authorization_quote": "现在进展怎么样", "request_key": "invented-resume"})
+    with pytest.raises(ValueError, match="用户原话"):
+        tools.execute(run, "manage_following", {"goal_id": goal["id"], "action": "resume", "authorization_message_id": mid, "authorization_quote": "继续跟进资料", "request_key": "invented-resume"})
 
 
 def test_other_room_goals_are_invisible_and_cannot_be_controlled(store, source):
@@ -415,14 +411,14 @@ def test_observe_following_freezes_bounded_plan_without_changing_policy_or_claim
     assert not store.all("SELECT * FROM goal_review_requests")
 
 
-@pytest.mark.parametrize("name,text", [("review_following", "现在继续跟进"), ("review_following", "不要复盘这件事"), ("observe_following", "帮我继续跟进"), ("observe_following", "不要试验新做法")])
-def test_review_and_observation_require_specific_current_user_intent(store, name, text):
+@pytest.mark.parametrize("name,quote", [("review_following", "请复盘这件事"), ("observe_following", "试试新做法")])
+def test_review_and_observation_require_specific_current_user_intent(store, name, quote):
     goal = store.create_goal(room="local", actor_id="default", title="资料跟进", objective="长期跟进资料")
-    run, mid = user_run(store, text)
-    args = {"goal_id": goal["id"], "authorization_message_id": mid, "authorization_quote": text, "request_key": "test"}
+    run, mid = user_run(store, f"同事发来“{quote}”，你怎么看")
+    args = {"goal_id": goal["id"], "authorization_message_id": mid, "authorization_quote": quote, "request_key": "test"}
     if name == "observe_following":
         args.update(title="试验", hypothesis="假设", metric="反馈", baseline="原方案", variant="新方案", success_criteria="需有实际反馈")
-    with pytest.raises(ValueError, match="明确"):
+    with pytest.raises(ValueError, match="用户原话"):
         ConversationGoals(store).execute(run, name, args)
     assert not store.all("SELECT * FROM experiments") and not store.all("SELECT * FROM goal_review_requests")
 

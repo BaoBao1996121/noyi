@@ -224,15 +224,15 @@ class CollaborationStore:
         attentions = self.all("SELECT id,question,answer,state,kind,revision FROM attentions WHERE task_id=? ORDER BY created", (run["task_id"],))
         return {"inputs": inputs, "followups": followups, "children": children, "attentions": attentions}
 
-    def claim(self, exclude_actor_ids=()):
+    def claim(self, exclude_task_ids=()):
         self.tick_waits()
         with self.transaction():
-            excluded = tuple(exclude_actor_ids)
-            actor_filter = (" AND e.actor_id NOT IN (" + ",".join("?" for _ in excluded) + ")") if excluded else ""
+            excluded = tuple(t for t in exclude_task_ids if t)
+            task_filter = (" AND (e.task_id IS NULL OR e.task_id NOT IN (" + ",".join("?" for _ in excluded) + "))") if excluded else ""
             event = self.one("""SELECT e.* FROM events e WHERE e.state='pending' AND e.kind!='conversation'
-                AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.actor_id=e.actor_id AND r.phase='running')
+                AND NOT EXISTS(SELECT 1 FROM runs r WHERE r.phase='running' AND (r.task_id=e.task_id OR e.task_id IS NULL AND r.task_id IS NULL AND r.actor_id=e.actor_id))
                 AND (e.task_id IS NULL OR EXISTS(SELECT 1 FROM tasks t WHERE t.id=e.task_id AND t.status='ready' AND t.auto_continue='on' AND t.cancel_state='active'))
-                """ + actor_filter + " ORDER BY CASE WHEN e.kind IN ('followup','answer','user_task','chat') THEN 0 ELSE 1 END,e.created,e.id LIMIT 1", excluded)
+                """ + task_filter + " ORDER BY CASE WHEN e.kind IN ('followup','answer','user_task','chat') THEN 0 ELSE 1 END,e.created,e.id LIMIT 1", excluded)
             if not event:
                 return None
             tid, rid = event["task_id"], uid()

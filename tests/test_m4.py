@@ -400,3 +400,77 @@ async def test_ui_goal_policy_nonce_controls_and_admission_registration(store, s
         state = await (await client.get("/api/state")).json()
         assert state["goals"][0]["admissions"][0]["state"] == "observed"
         assert not store.all("SELECT id FROM tasks")
+
+
+def test_once_schedule_is_due_once_at_its_local_time():
+    config = validate_schedule({"kind": "once", "at": "2026-11-06 15:54", "timezone": "Asia/Shanghai"})
+    at = datetime(2026, 11, 6, 7, 54, tzinfo=timezone.utc).timestamp()
+    assert next_due(config, at - 600) == at
+    window = due_window(config, at, at + 5)
+    assert window["scheduled"] == at and window["next_due"] == float("inf")
+    for bad in ({"kind": "once"}, {"kind": "once", "at": "明天三点"}):
+        with pytest.raises(ValueError):
+            validate_schedule(bad)
+
+
+@pytest.mark.asyncio
+async def test_one_time_reminder_runs_once_then_the_arrangement_ends(store, tmp_path, successful_model):
+    # Acceptance #8: "两分钟后提醒我喝水" is a real arrangement, not a refusal.
+    now = time.time()
+    at = time.strftime("%Y-%m-%d %H:%M", time.localtime(now + 120))
+    goal = store.create_goal(room="local", actor_id="default", title="提醒喝水", objective="到时提醒用户喝水")
+    zone = time.strftime("%z")
+    policy = store.create_policy(goal["id"], schedule={"kind": "once", "at": at, "timezone": "Etc/GMT" + ("-" if zone[0] == "+" else "+") + str(int(zone[1:3]))},
+                                 template=TaskSpec("提醒用户喝水"), now=now)
+    due = policy["next_due"]
+    scheduler = TriggerScheduler(store, tmp_path / "data", clock=lambda: due - 30)
+    await scheduler.tick()
+    assert not store.all("SELECT * FROM tasks")
+    scheduler.clock = lambda: due + 1
+    await scheduler.tick()
+    assert len(store.all("SELECT * FROM tasks")) == 1
+    model = ScriptedModel([tool_reply("write_artifact", {"name": "reminder.md", "content": "该喝水了。"}, "write"), submit_written_artifact])
+    service = Service(store, tmp_path / "data", model, clock=lambda: due + 2)
+    await service.run_until_quiescent()
+    assert store.policy(policy["id"])["state"] == "retired"
+    assert store.goal(goal["id"])["status"] == "achieved"
+    scheduler.clock = lambda: due + 3600
+    await scheduler.tick()
+    assert len(store.all("SELECT * FROM tasks")) == 1
+
+
+def test_one_time_arrangement_in_the_past_is_refused(store):
+    goal = store.create_goal(room="local", actor_id="default", title="提醒", objective="提醒")
+    with pytest.raises(ValueError, match="已经过了"):
+        store.create_policy(goal["id"], schedule={"kind": "once", "at": "2020-01-01 09:00"}, template=TaskSpec("提醒"))
+
+
+@pytest.mark.asyncio
+async def test_change_only_watch_first_check_is_a_silent_baseline(store, source, tmp_path, successful_model):
+    goal = store.create_goal(room="local", actor_id="default", title="变化提醒", objective="资料有变化就告诉我")
+    store.create_policy(goal["id"], schedule={"kind": "watch", "interval_seconds": 1, "first_check": "baseline"}, template=TaskSpec("说明资料变化", sources=[source]), now=1000)
+    service = Service(store, tmp_path / "data", successful_model, clock=lambda: 1000)
+    before = len(store.all("SELECT * FROM deliveries"))
+    await service.triggers.tick()
+    await service.run_until_quiescent()
+    assert not store.all("SELECT * FROM tasks") and not successful_model.requests
+    assert len(store.all("SELECT * FROM deliveries")) == before
+    service.triggers.clock = lambda: 1002
+    await service.triggers.tick()
+    assert not store.all("SELECT * FROM tasks")
+    Path(source["location"]).write_text("New policy: no human approval is required.\n", encoding="utf-8")
+    service.triggers.clock = lambda: 1004
+    await service.triggers.tick()
+    assert len(store.all("SELECT * FROM tasks")) == 1
+
+
+def test_first_check_phase_only_applies_to_watch():
+    from personal_agent.schedule import validate_schedule
+    with pytest.raises(ValueError, match="first_check"):
+        validate_schedule({"kind": "interval", "interval_seconds": 60, "first_check": "baseline"})
+
+
+def test_ending_a_matter_retires_its_arrangements(store, source):
+    goal, policy = setup_goal(store, source, kind="interval")
+    store.set_goal_state(goal["id"], "retired", expected_revision=store.goal(goal["id"])["revision"])
+    assert store.policy(policy["id"])["state"] == "retired"

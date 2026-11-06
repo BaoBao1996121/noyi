@@ -25,20 +25,27 @@ def test_unauthorized_room_submission_leaves_no_work(store, spec):
     assert not store.all("SELECT * FROM events")
 
 
-def test_two_clients_cannot_claim_two_runs_for_same_actor(store, spec, tmp_path):
-    store.submit(spec, nonce="first")
-    store.submit(spec, nonce="second")
+def test_two_clients_cannot_claim_two_runs_for_same_task(store, spec, tmp_path):
+    first_task = store.submit(spec, nonce="first")["task_id"]
     other = Store(tmp_path / "data" / "state.sqlite")
     try:
         first = store.claim()
-        assert first is not None
+        assert first is not None and first["task_id"] == first_task
+        store.db.execute("INSERT INTO events(id,actor_id,task_id,message_id,kind,created) SELECT 'again',actor_id,task_id,message_id,'user_resume',created+1 FROM events WHERE task_id=?", (first_task,))
+        store.db.execute("UPDATE tasks SET status='ready' WHERE id=?", (first_task,))
         assert other.claim() is None
         assert len(other.all("SELECT * FROM runs WHERE phase='running'")) == 1
-        store.finish(first, status="failed", reason="test", content="Unable to finish.")
-        second = other.claim()
-        assert second is not None and second["task_id"] != first["task_id"]
     finally:
         other.close()
+
+
+def test_one_assistant_can_run_a_quick_task_beside_its_long_task(store, spec):
+    # Acceptance #3: a quick question is not queued behind the same assistant's long work.
+    long_task = store.submit(spec, nonce="long")["task_id"]
+    quick_task = store.submit(spec, nonce="quick")["task_id"]
+    first, second = store.claim(), store.claim(exclude_task_ids={long_task})
+    assert {first["task_id"], second["task_id"]} == {long_task, quick_task}
+    assert first["actor_id"] == second["actor_id"]
 
 
 def test_claim_does_not_mean_input_was_used_by_model(store, spec):

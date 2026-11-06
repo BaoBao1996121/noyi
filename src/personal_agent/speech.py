@@ -14,6 +14,9 @@ STARTED = "已开跑，做好把成果发你。"
 STARTED_AFTER = 10
 RESTARTED = "已重新开跑，做好把成果发你。"
 PROGRESS_AFTER = 20 * 60
+# Every user resume path leaves the task in one of these states; the line
+# follows the state, not whichever event happened to wake the task.
+RESUMED_REASONS = {"user_resume", "user_goal_resume"}
 WEEKDAYS = "一二三四五六日"
 
 
@@ -22,9 +25,27 @@ def local_now(now=None):
     t = time.localtime(now)
     return time.strftime("%Y-%m-%d %H:%M", t) + f" 星期{WEEKDAYS[t.tm_wday]}（{time.strftime('%z', t)[:3]}:{time.strftime('%z', t)[3:]}）"
 EMPTY_DELIVERY = "成果整理好了，见下方附件。"
+# What the user hears when the runtime, not the model, ends a task. Internal
+# reasons stay in the ledger (runs.end_reason); only these lines are shown.
+END_LINES = {
+    "time_budget": "卡住了：这件事用完了约定的时间，还没做完。进度已保存，你说一声「继续」我就接着做。",
+    "timeout": "卡住了：这一轮执行超时，还没做完。进度已保存，说「继续」我会接着做。",
+    "model_or_runtime_error": "卡住了：执行时出错，还没做完。说「继续」我会再试一次；如果还不行，任务详情里有错误记录。",
+    "model_budget": "卡住了：这件事的调用次数用完了，还没做完。进度已保存，你确认要继续我再接着做。",
+    "tool_budget": "卡住了：这件事的操作次数用完了，还没做完。进度已保存，你确认要继续我再接着做。",
+    "stagnation_budget": "卡住了：试了几次都没有新进展，我先停下，不再重复。可能缺资料或权限，你补充后说「继续」。",
+    "output_limit": "卡住了：回答被截断，我没有执行不完整的操作。说「继续」我会换个方式再做。",
+    "no_accepted_artifact": "这件事我没能做完，也没拿出能交给你的结果。你可以补充要求后说「继续」，或者换个说法再交代一次。",
+    "engine_ended_without_acceptance": "这件事我没能做完，也没拿出能交给你的结果。你可以补充要求后说「继续」，或者换个说法再交代一次。",
+    "chat_tool_denied": "这句我没法直接处理，你把想让我做的事说具体一点，我来接手。",
+    "chat_output_limit": "回答太长被截断了，你可以让我只说重点。",
+}
+
+
+def end_line(reason):
+    return END_LINES.get(reason, "这件事暂时没做完，进度已保存。你说「继续」我就接着做。")
 MAX_POINTS = 3
 HEAD_MAX = 80
-REMEMBER = re.compile(r"记住|记一下|以后(?:都|就|每次|一律)|下次(?:都|也)|每次都")
 
 
 def check_receipt(text):
@@ -50,9 +71,6 @@ def shape_delivery(summary):
     return "\n".join([head, *points[:MAX_POINTS]])
 
 
-def explicit_remember(text):
-    return bool(REMEMBER.search(text or ""))
-
 
 class SpeechStore:
     """Code-owned conversation lines, keyed so each is sent at most once."""
@@ -76,13 +94,13 @@ class SpeechStore:
                 and not self.one("SELECT 1 FROM goal_review_requests WHERE task_id=?", (task["id"],))
                 and bool(self.one("SELECT 1 FROM conversation_inputs c JOIN messages m ON m.id=c.message_id WHERE m.task_id=?", (task["id"],))))
 
-    def claim(self, exclude_actor_ids=()):
-        run = super().claim(exclude_actor_ids)
+    def claim(self, exclude_task_ids=()):
+        run = super().claim(exclude_task_ids)
         if run and run["task_id"]:
             with self.transaction():
                 task = self.task(run["task_id"])
                 if self._announces(task):
-                    if run["trigger"] == "user_resume":
+                    if task["reason"] in RESUMED_REASONS:
                         self._say_once(task, f"restarted:{run['epoch']}", RESTARTED)
                     elif self._waited(task):
                         self._say_once(task, "started", STARTED)
@@ -98,14 +116,18 @@ class SpeechStore:
         super().tick_waits()
         now = time.time()
         with self.transaction():
-            rows = self.all("""SELECT t.id, MIN(r.started) AS first FROM tasks t JOIN runs r ON r.task_id=t.id
+            # Working time, not wall time: time spent waiting for the user's
+            # answer, paused or stopped is never charged to a task, so it does
+            # not bring the progress line closer.
+            rows = self.all("""SELECT t.id, t.active_seconds + COALESCE(MAX(?-r.started),0) AS worked FROM tasks t
+                LEFT JOIN runs r ON r.task_id=t.id AND r.phase='running'
                 WHERE t.parent_task_id IS NULL AND t.status IN ('running','waiting_children','waiting_dependencies','ready')
                 AND NOT EXISTS(SELECT 1 FROM speech_marks s WHERE s.task_id=t.id AND s.kind='progress')
-                GROUP BY t.id HAVING first<=?""", (now - PROGRESS_AFTER,))
+                GROUP BY t.id HAVING worked>=?""", (now, PROGRESS_AFTER))
             for row in rows:
                 task = self.task(row["id"])
                 if self._announces(task):
-                    self._say_once(task, "progress", self.progress_line(task, now - row["first"]))
+                    self._say_once(task, "progress", self.progress_line(task, row["worked"]))
 
     def progress_line(self, task, elapsed):
         ops = self.all("SELECT tool FROM operations o JOIN tasks t ON t.id=o.task_id WHERE t.root_task_id=? AND o.status='succeeded'", (task["root_task_id"],))
