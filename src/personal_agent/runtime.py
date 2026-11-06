@@ -162,7 +162,7 @@ class Runtime:
             task = self.store.task(run["task_id"]) if run["task_id"] else None
             remaining = task["spec"]["max_seconds"] - task["active_seconds"] if task else 90
             if remaining <= 0:
-                self.end(run, "paused", "time_budget", "已达到任务时间预算，进度已保存。")
+                self.end(run, "paused", "time_budget", "卡住了：这件事用完了约定的时间，还没做完。进度已保存，你说一声「继续」我就接着做。")
                 return
             async with asyncio.timeout(remaining):
                 await self.loop(run)
@@ -172,13 +172,13 @@ class Runtime:
             raise
         except TimeoutError:
             if self.runnable(run):
-                self.end(run, "paused", "timeout", "执行超时，已有结果已保存；尚未通过验收。")
+                self.end(run, "paused", "timeout", "卡住了：这一轮执行超时，还没做完。进度已保存，说「继续」我会接着做。")
         except Exception as exc:
             if self.runnable(run):
                 # SDK exceptions may include keys or response bodies; persist only type/status.
                 error = {"type": type(exc).__name__, "status_code": getattr(exc, "status_code", None)}
                 self.store.step(run, "error", error)
-                self.end(run, "failed", "model_or_runtime_error", "执行遇到错误，尚未完成。可在任务详情查看错误类型。")
+                self.end(run, "failed", "model_or_runtime_error", "卡住了：执行时出错，还没做完。说「继续」我会再试一次；如果还不行，任务详情里有错误记录。")
 
     def end(self, run, status, reason, content, **kwargs):
         if self.runnable(run):
@@ -204,7 +204,7 @@ class Runtime:
                 if not self.runnable(run):
                     return {"halt": True}
                 if toolset and not self.store.reserve(run, "model"):
-                    self.end(run, "paused", "model_budget", "模型调用预算已用完，进度已保存，任务尚未完成。")
+                    self.end(run, "paused", "model_budget", "卡住了：这件事的调用次数用完了，还没做完。进度已保存，你确认要继续我再接着做。")
                     return {"halt": True}
                 start = time.monotonic()
                 messages = list(params["messages"])
@@ -242,7 +242,7 @@ class Runtime:
                 # Pi validates unknown tools/schema before execute. Retain that
                 # failed attempt without giving rejected input tool authority.
                 if not self.store.reserve(run, "tool"):
-                    self.end(run, "paused", "tool_budget", "工具调用预算已用完，任务尚未完成。")
+                    self.end(run, "paused", "tool_budget", "卡住了：这件事的操作次数用完了，还没做完。进度已保存，你确认要继续我再接着做。")
                     return {}
                 call = params["call"]
                 name = call["function"]["name"]
@@ -257,13 +257,13 @@ class Runtime:
                     return {"action": "end"}
                 task = self.store.task(run["task_id"])
                 if max(task["stagnant_tools"], task["failure_streak"]) >= task["spec"].get("max_stagnant_tools", 20):
-                    self.end(run, "paused", "stagnation_budget", "连续操作没有带来足够的新进展，已停止重复尝试；证据和待办已保存。")
+                    self.end(run, "paused", "stagnation_budget", "卡住了：试了几次都没有新进展，我先停下，不再重复。可能缺资料或权限，你补充后说「继续」。")
                     return {"action": "end"}
                 if params.get("finish_reason") == "length":
                     count = self.store.one("SELECT COUNT(*) AS n FROM steps WHERE task_id=? AND kind='output_limit'", (run["task_id"],))["n"]
                     self.store.step(run, "output_limit", {"tool_calls_dispatched": 0})
                     if count or not params.get("tool_call_count"):
-                        self.end(run, "paused", "output_limit", "模型输出被截断，已停止重试；未执行不完整工具参数。")
+                        self.end(run, "paused", "output_limit", "卡住了：回答被截断，我没有执行不完整的操作。说「继续」我会换个方式再做。")
                         return {"action": "end"}
                 elif not params.get("tool_call_count"):
                     if pending_children := self.store.waiting_children_at_end(run):
@@ -287,7 +287,7 @@ class Runtime:
         if not self.runnable(run):
             return {"result": {"error": "inactive_run"}, "is_error": True, "terminate": True}
         if not self.store.reserve(run, "tool"):
-            self.end(run, "paused", "tool_budget", "工具调用预算已用完，进度已保存，任务尚未完成。")
+            self.end(run, "paused", "tool_budget", "卡住了：这件事的操作次数用完了，还没做完。进度已保存，你确认要继续我再接着做。")
             return {"result": {"error": "tool_budget"}, "is_error": True, "terminate": True}
         name, op_id = call["function"]["name"], uid()
         raw, args = call["function"].get("arguments", "{}"), {}

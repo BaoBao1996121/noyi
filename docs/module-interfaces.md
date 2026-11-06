@@ -33,6 +33,8 @@ modules = ["my_notes"]
 
 系统提示按任务拼装（`Runtime.system_prompt`）：核心规则 `SYSTEM` 总是发送；委派、持续跟进、目标、回顾四段说明只在对应工具可用或任务属于目标时追加。普通任务看到 19 个工具、约 7.9K 字符系统提示。
 
+对话中由代码负责的话（「已开跑」、20 分钟进度、交付格式、回执检查、明确「记住」）集中在 `speech.py`；模型写的回执和交付摘要都先经过这里检查。
+
 管理类工具（`record_goal_progress`、`propose_policy_adjustment`、`review_policy_proposal`、`record_goal_review`、`record_investigation`、`handoff_task`、`observe_following`）对模型隐藏（`builtin_plugins.HIDDEN_TOOLS`）。目标进度改由账本在任务结束时写 `ledger_progress` 事件；回顾是普通报告任务：先用 `read_review_evidence` 读冻结证据，再写报告提交，不再要求模型填结构化评估。对应 store 方法仍保留，供以后的程序化入口使用。
 
 | 边界 | 当前实现与替换方式 | 保持不变的约束 |
