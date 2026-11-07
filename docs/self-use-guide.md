@@ -8,7 +8,9 @@
 
 首次安装：准备 Python 3.11+、Node.js 22.19+，双击仓库根目录的 `Install.cmd`。依赖版本保存在 `requirements-lock.txt` 和 Pi 的 `package-lock.json`。
 
-日常双击 `Start Personal Agent.cmd`，会在后台启动服务并打开 <http://127.0.0.1:8765>。重复启动会打开同一份服务。关闭浏览器后仍会继续工作；双击 `Stop Personal Agent.cmd` 才会停止服务。停止会保存执行状态，下次启动继续处理已接收的工作；想让某件事不再继续，可以先在对话中明确说“暂停这件事”或“取消这件事”。没有注册开机自启，也没有开放公网访问。
+日常使用桌面快捷方式「启动 Noyi」「停止 Noyi」即可；也可以在仓库根目录执行 `noyi start`、`noyi stop`、`noyi restart`，或双击 `Start Personal Agent.cmd` / `Stop Personal Agent.cmd`（两者等价）。启动会在后台开启服务并打开 <http://127.0.0.1:8765>，重复启动会打开同一份服务。关闭浏览器后仍会继续工作，需要显式停止才会结束。停止会保存执行状态，下次启动继续处理已接收的工作；想让某件事不再继续，可以先在对话中明确说“暂停这件事”或“取消这件事”。没有注册开机自启，也没有开放公网访问。
+
+执行 `noyi status` 可随时查看服务是否在运行、访问地址与进程号；`noyi restart` 等同于先停止再启动。
 
 模型凭据在左下角设置中保存，或沿用本机 `DASHSCOPE_API_KEY` 环境变量。设置页不会回显密钥。配置与选型说明见 [模型配置](model-configuration.md)。真实调用会使用你的账号额度。
 

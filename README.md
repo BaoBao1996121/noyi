@@ -4,7 +4,7 @@
 
 一个可以直接交代事情的个人 Agent。**0.6.0 使用统一的对话入口**：你说需求、补充信息、询问进展，助理判断如何处理；任务拆分、持续职责、检查安排和执行额度由内部管理。日常界面呈现对话、进展、成果和需要你回答的问题，“正在跟进”是可选的进展查看页。
 
-Windows 首次双击 `Install.cmd`，日常双击 `Start Personal Agent.cmd`，在浏览器打开 `http://127.0.0.1:8765`。首次使用在设置中配置自己的 Qwen 官网凭据，随后直接在输入框说需求，也可附上文本资料。关闭浏览器后后台服务仍运行，双击 `Stop Personal Agent.cmd` 停止。完整操作见 [自用指南](docs/self-use-guide.md)。
+Windows 首次双击 `Install.cmd`，日常使用桌面快捷方式「启动 Noyi」「停止 Noyi」，或在仓库根目录执行 `noyi start` / `noyi stop` / `noyi restart` / `noyi status`，在浏览器打开 `http://127.0.0.1:8765`。首次使用在设置中配置自己的 Qwen 官网凭据，随后直接在输入框说需求，也可附上文本资料。关闭浏览器后后台服务仍运行；`noyi status` 可随时查看服务是否在运行、地址与进程号。完整操作见 [自用指南](docs/self-use-guide.md)。
 
 持续使用见 [让助理跟进一件事](docs/ongoing-goals.md)，实现替换边界见 [模块接口](docs/module-interfaces.md)。执行循环继续使用 Pi，默认模型为 Qwen 官网 `qwen3.7-plus`；SQLite 保存任务、输入责任、用量、工具回执、调度和投递记录。
 
