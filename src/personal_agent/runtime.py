@@ -96,6 +96,10 @@ class Runtime:
             parts.append(WEB_GUIDE)
         return "".join(parts)
 
+    def capabilities(self):
+        """What the execution assistant can actually do now, from ready plugins."""
+        return self.plugins.capabilities(self)
+
     def runnable(self, run):
         return self.store.current(run) and self.store.control_reason(run) is None
 

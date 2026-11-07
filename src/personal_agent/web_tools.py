@@ -4,8 +4,11 @@ Search goes through a replaceable backend: DeepSeek's Search API (structured
 results from its own engine), or the Bailian Responses API web_search tool,
 because Bailian compatible-mode search returns no sources. A desktop instance
 searches with the same account as its model, so a key never goes to another
-vendor. Pages are fetched and cleaned here, never by the provider, so every
-read is in the ledger with its URL and content digest.
+vendor. Pages are read through a replaceable reader too: directly from this
+machine (with an SSRF guard), or through DeepSeek's Fetch API for a DeepSeek
+instance, because many sites are unreachable from a restricted local network.
+Either way the text is cached and paged here, so every read is in the ledger
+with its URL and content digest, and only pages actually read can be cited.
 
 Budgets: searches per root task and per local day. Over budget, the call fails
 and the model is told to ask the user; nothing is spent silently.
@@ -30,6 +33,7 @@ from .tools import PAGE_CHARS, atomic_write, safe_child, tool
 
 SEARCH_URL = "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1/responses"
 DEEPSEEK_SEARCH_URL = "https://api.deepseek.com/v1/tools/search"
+DEEPSEEK_FETCH_URL = "https://api.deepseek.com/v1/tools/fetch"
 MAX_PAGE_BYTES = 2_000_000
 MAX_PAGE_CHARS = 120_000
 MAX_REDIRECTS = 3
@@ -54,13 +58,20 @@ class WebConfig:
     task_search_limit: int = 30
     daily_search_limit: int = 200
     timeout_seconds: float = 90
+    # Who reads pages: "local" (this machine, SSRF-guarded) or "deepseek"
+    # (DeepSeek Fetch API with the search key).
+    page_reader: str = "local"
+    fetch_url: str = DEEPSEEK_FETCH_URL
 
     def __post_init__(self):
         if self.backend not in BACKENDS:
             raise ValueError("web backend must be one of: " + ", ".join(BACKENDS))
-        parsed = urlparse(self.search_url)
-        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-            raise ValueError("web search_url must be an HTTPS URL without credentials")
+        if self.page_reader not in READERS:
+            raise ValueError("web page_reader must be one of: " + ", ".join(READERS))
+        for name in ("search_url", "fetch_url"):
+            parsed = urlparse(getattr(self, name))
+            if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+                raise ValueError(f"web {name} must be an HTTPS URL without credentials")
         for name in ("task_search_limit", "daily_search_limit"):
             value = getattr(self, name)
             if type(value) is not int or not 0 <= value <= 10_000:
@@ -205,15 +216,20 @@ def public_address(host):
             raise ValueError("only public web pages can be read")
 
 
+def check_page_url(url):
+    """Every reader only takes http(s) URLs with a host and no credentials."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("page URL must be http(s) without credentials")
+
+
 class PageFetcher:
     async def fetch(self, url):
         async with httpx.AsyncClient(timeout=20, follow_redirects=False, trust_env=False,
                                      headers={"User-Agent": "PersonalAgent/0.6 (+page reader)"}) as client:
             for _ in range(MAX_REDIRECTS + 1):
-                parsed = urlparse(url)
-                if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
-                    raise ValueError("page URL must be http(s) without credentials")
-                public_address(parsed.hostname)
+                check_page_url(url)
+                public_address(urlparse(url).hostname)
                 async with client.stream("GET", url) as response:
                     if response.is_redirect:
                         url = urljoin(url, response.headers.get("location", ""))
@@ -228,10 +244,49 @@ class PageFetcher:
         raise ValueError("too many redirects")
 
 
+class LocalPageReader:
+    """Reads directly from this machine; the fetcher enforces the SSRF guard."""
+    name = "local"
+
+    def __init__(self, config=None, fetcher=None):
+        self.fetcher = fetcher or PageFetcher()
+
+    async def read(self, url):
+        final, content_type, raw = await self.fetcher.fetch(url)
+        title, text = page_text(raw, content_type)
+        return final, title, text
+
+
+class DeepSeekPageReader:
+    """DeepSeek Fetch API: the page as Markdown, read by DeepSeek's servers."""
+    name = "deepseek"
+
+    def __init__(self, config: WebConfig):
+        self.config = config
+
+    async def read(self, url):
+        check_page_url(url)
+        key = self.config.key()
+        if not key:
+            raise ValueError("page reading is not configured")
+        async with httpx.AsyncClient(timeout=self.config.timeout_seconds, follow_redirects=False, trust_env=False) as client:
+            response = await client.post(self.config.fetch_url, headers={"Authorization": "Bearer " + key}, json={"url": url})
+            response.raise_for_status()
+            data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError("page reader returned no page")
+        return url, " ".join(str(data.get("title") or "").split()), str(data.get("content") or "")
+
+
+READERS = {"local": LocalPageReader, "deepseek": DeepSeekPageReader}
+
+
 class WebTools:
-    def __init__(self, config: WebConfig, *, backend=None, fetcher=None, clock=time.time):
+    def __init__(self, config: WebConfig, *, backend=None, fetcher=None, reader=None, clock=time.time):
         self.config, self.backend = config, backend or BACKENDS[config.backend](config)
-        self.fetcher, self.clock = fetcher or PageFetcher(), clock
+        self.reader = reader or (LocalPageReader(fetcher=fetcher) if fetcher else READERS[config.page_reader](config))
+        self.fetcher = getattr(self.reader, "fetcher", None)
+        self.clock = clock
 
     def _counted(self, store, where, params, current):
         rows = store.all("SELECT o.id,o.result FROM operations o JOIN tasks t ON t.id=o.task_id WHERE o.tool='web_search' AND " + where, params)
@@ -263,8 +318,7 @@ class WebTools:
         root = call.toolset.root / "web"
         cache = safe_child(root, page_id + ".txt")
         if not cache.exists():
-            final, content_type, raw = await self.fetcher.fetch(url)
-            title, text = page_text(raw, content_type)
+            final, title, text = await self.reader.read(url)
             if not text.strip():
                 raise ValueError("page has no readable text")
             root.mkdir(parents=True, exist_ok=True)
@@ -274,15 +328,20 @@ class WebTools:
             raise ValueError("offset past end")
         end = min(offset + PAGE_CHARS, len(text))
         return {"page_id": page_id, "url": url, "final_url": final, "title": title, "text": text[offset:end],
-                "start": offset, "end": end, "total": len(text), "eof": end == len(text), "sha256": digest(text.encode())}
+                "start": offset, "end": end, "total": len(text), "eof": end == len(text), "sha256": digest(text.encode()),
+                "reader": self.reader.name}
 
 
 def web_plugin(web: WebTools):
     """An installed (non-core) plugin: unexpected errors fail only that call."""
     def available(runtime, run):
         return web.config.enabled and bool(run.get("task_id"))
+    def describe(runtime):
+        if not web.config.enabled:
+            return []
+        return ["Search the web for current, live or external information and read public web pages, citing what was read."]
     return Plugin("web", "1", [ToolSpec(SEARCH, web.search, effect="read", available=available),
-                               ToolSpec(FETCH, web.fetch, effect="read", available=available)])
+                               ToolSpec(FETCH, web.fetch, effect="read", available=available)], describe=describe)
 
 
 def web_plugins(config_path=None, data=None):
@@ -300,10 +359,10 @@ def _explicit_web(config_path):
 
 
 def desktop_search(config: WebConfig, data: Path, explicit=frozenset()):
-    """A desktop instance whose saved model is DeepSeek official searches with
-    that same account and key; otherwise it keeps a separate search-only key
-    (search.key, Bailian). Settings written in [web] are kept. Neither key
-    enters backups."""
+    """A desktop instance whose saved model is DeepSeek official searches and
+    reads pages with that same account and key; otherwise it keeps a separate
+    search-only key (search.key, Bailian) and reads pages directly. Settings
+    written in [web] are kept. Neither key enters backups."""
     model = data / "model.json"
     provider = None
     if model.is_file():
@@ -322,6 +381,8 @@ def desktop_search(config: WebConfig, data: Path, explicit=frozenset()):
             config.api_key_env = saved.api_key_env
         if "key_file" not in explicit:
             config.key_file = str(data / "credentials.key")
+        if "page_reader" not in explicit:
+            config.page_reader = "deepseek"
     elif config.key_file is None:
         config.key_file = str(data / "search.key")
     config.__post_init__()

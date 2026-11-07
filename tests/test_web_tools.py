@@ -167,3 +167,57 @@ def test_desktop_deepseek_model_searches_with_its_own_account(tmp_path, monkeypa
     kept = WebConfig()
     desktop_search(kept, other)
     assert kept.backend == "bailian" and kept.key_file == str(other / "search.key")
+    assert config.page_reader == "deepseek" and kept.page_reader == "local"
+
+
+class Call:
+    def __init__(self, root):
+        self.toolset = type("T", (), {"root": root})()
+
+
+def deepseek_web(tmp_path, monkeypatch, handler):
+    import httpx
+    from personal_agent.web_tools import desktop_search
+    monkeypatch.delenv("PA_DS_TEST", raising=False)
+    write_model(tmp_path, name="deepseek-flash", base_url="https://api.deepseek.com", api_key_env="PA_DS_TEST")
+    (tmp_path / "credentials.key").write_text("unit-test-only", encoding="utf-8")
+    real = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    config = WebConfig()
+    desktop_search(config, tmp_path)
+    return WebTools(config)
+
+
+def test_deepseek_instance_reads_pages_through_deepseek_fetch(tmp_path, monkeypatch):
+    # The local network cannot reach many sites; a DeepSeek instance reads pages
+    # through DeepSeek Fetch, with the same page_id, cache, paging and digest.
+    import asyncio, httpx
+    seen = []
+    def handler(request):
+        seen.append({"url": str(request.url), "body": json.loads(request.content), "auth": request.headers.get("authorization")})
+        return httpx.Response(200, json={"title": "Release notes", "content": "# v2.0\n\nReleased 2026-11-01."})
+    web = deepseek_web(tmp_path, monkeypatch, handler)
+    call = Call(tmp_path / "task")
+    page = asyncio.run(web.fetch(call, {"url": "https://github.com/example/repo"}))
+    assert seen == [{"url": "https://api.deepseek.com/v1/tools/fetch", "body": {"url": "https://github.com/example/repo"}, "auth": "Bearer unit-test-only"}]
+    assert page["page_id"].startswith("page_") and page["title"] == "Release notes" and "Released 2026-11-01." in page["text"]
+    assert page["reader"] == "deepseek" and page["eof"] and len(page["sha256"]) == 64
+    again = asyncio.run(web.fetch(call, {"url": "https://github.com/example/repo", "offset": 3}))
+    assert len(seen) == 1 and again["page_id"] == page["page_id"] and again["start"] == 3
+
+
+@pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://example.org/a", "https://user:pw@example.org/a", "https:///nohost"])
+def test_deepseek_fetch_refuses_non_http_or_credentialed_urls(tmp_path, monkeypatch, url):
+    import asyncio
+    def handler(request):
+        raise AssertionError("must not call DeepSeek for a refused URL")
+    web = deepseek_web(tmp_path, monkeypatch, handler)
+    with pytest.raises(ValueError, match="http"):
+        asyncio.run(web.fetch(Call(tmp_path / "task"), {"url": url}))
+
+
+def test_deepseek_fetch_without_text_fails_visibly(tmp_path, monkeypatch):
+    import asyncio, httpx
+    web = deepseek_web(tmp_path, monkeypatch, lambda request: httpx.Response(200, json={"title": "x", "content": "  "}))
+    with pytest.raises(ValueError, match="no readable text"):
+        asyncio.run(web.fetch(Call(tmp_path / "task"), {"url": "https://example.org/empty"}))

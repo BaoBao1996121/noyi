@@ -54,10 +54,17 @@ def _submit_result(call, args):
     return result
 
 
+def _describe_artifacts(runtime):
+    lines = ["Read the files and documents the user authorizes, and write a checked result document."]
+    if getattr(getattr(runtime.model, "config", None), "vision", False):
+        lines.append("Look at images in authorized files and describe or analyze them.")
+    return lines
+
+
 def artifacts_plugin():
     def validator(name):
         return lambda args: validate_arguments(name, args)
-    return Plugin("core.artifacts", "1", [
+    return Plugin("core.artifacts", "1", describe=_describe_artifacts, tools=[
         ToolSpec(_schema("read_source"), _read_source, validator("read_source")),
         ToolSpec(_schema("write_artifact"), _write_artifact, validator("write_artifact"), effect="local_write"),
         ToolSpec(_schema("read_artifact"), _read_artifact, validator("read_artifact")),
@@ -155,7 +162,8 @@ def following_plugin():
                         lambda args: validate_conversation_goal_arguments(name, args),
                         effect="local_write", available=visible)
     return Plugin("core.following", "1", [spec(s) for s in CONVERSATION_GOAL_SCHEMAS] + [
-        ToolSpec(ACTION_COMPLETION, _complete_action, _validate_complete_action, exclusive=True, available=available)])
+        ToolSpec(ACTION_COMPLETION, _complete_action, _validate_complete_action, exclusive=True, available=available)],
+        describe=lambda runtime: ["Keep following something over time: scheduled reminders, recurring checks and long-term monitoring."])
 
 
 def _validate_report_unable(args):

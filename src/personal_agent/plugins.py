@@ -58,6 +58,11 @@ class Plugin:
     version: str
     tools: list[ToolSpec] = field(default_factory=list)
     prompt: str = ""
+    # What this plugin lets the execution assistant do right now, as short
+    # plain sentences: describe(runtime) -> list[str]. Conversation intake sees
+    # only these, so it hands work over instead of claiming it cannot be done.
+    # Return nothing when the capability is not configured or not usable.
+    describe: Callable[[Any], list[str]] | None = None
 
 
 def validate_schema_arguments(schema: dict, args: dict) -> None:
@@ -125,6 +130,14 @@ class PluginRegistry:
 
     def prompt(self) -> str:
         return "\n".join(p.prompt.strip() for p in self.plugins if p.prompt.strip())
+
+    def capabilities(self, runtime) -> list[str]:
+        found = []
+        for plugin in self.plugins:
+            for line in (plugin.describe(runtime) if plugin.describe else None) or []:
+                if isinstance(line, str) and line.strip() and line.strip() not in found:
+                    found.append(line.strip())
+        return found
 
     def identities(self) -> list[str]:
         return [f"{p.name}@{p.version}" for p in self.plugins]

@@ -66,6 +66,46 @@ async def test_actual_pi_reply_has_no_artifact_task_and_accounts_request(store,t
     assert store.one("SELECT data FROM steps WHERE kind='engine'")
 
 
+def intake_context_seen(store, tmp_path, plugins, model_config=None):
+    """Run real intake once and return the room context the model was shown."""
+    seen = {}
+    def reply(messages, tools):
+        seen.update(json.loads(messages[1]["content"].split(": ", 1)[1]))
+        seen["system"] = messages[0]["content"]
+        return tool_reply('resolve_conversation', {'action': 'reply', 'text': '好的'})
+    model = ScriptedModel([reply])
+    if model_config:
+        model.config = model_config
+    runtime = Runtime(store, tmp_path/'data', model, plugins=plugins)
+    return runtime, seen
+
+
+@pytest.mark.asyncio
+async def test_intake_is_told_what_execution_can_actually_do(store, tmp_path, monkeypatch):
+    # Intake must not answer "I cannot get live information" when execution
+    # has a working web capability; the list comes from installed, ready plugins.
+    from personal_agent.web_tools import WebConfig, WebTools, web_plugin
+    monkeypatch.setenv("WEB_TEST_KEY", "unit-test-only")
+    incoming(store, "今天美元汇率多少")
+    runtime, seen = intake_context_seen(store, tmp_path, [web_plugin(WebTools(WebConfig(api_key_env="WEB_TEST_KEY")))],
+                                        type("C", (), {"vision": True})())
+    await runtime.execute(claim_intake(store))
+    capabilities = " ".join(seen["execution_capabilities"])
+    assert "web" in capabilities.lower() and "page" in capabilities.lower() and "image" in capabilities.lower()
+    assert "execution_capabilities" in seen["system"]
+
+
+@pytest.mark.asyncio
+async def test_intake_capabilities_omit_what_is_not_ready(store, tmp_path, monkeypatch):
+    from personal_agent.web_tools import WebConfig, WebTools, web_plugin
+    monkeypatch.delenv("WEB_TEST_KEY", raising=False)
+    incoming(store, "某某股票现在多少钱")
+    runtime, seen = intake_context_seen(store, tmp_path, [web_plugin(WebTools(WebConfig(api_key_env="WEB_TEST_KEY")))])
+    await runtime.execute(claim_intake(store))
+    capabilities = " ".join(seen["execution_capabilities"]).lower()
+    assert "web" not in capabilities and "image" not in capabilities and capabilities
+
+
 def test_selected_finished_or_active_task_is_only_a_hint_for_new_request(store,source):
     old = store.submit(TaskSpec('准备项目甲文档',[source]),nonce='old')['task_id']
     incoming(store,'帮我写一份新的聚会邀请',task_id=old)
