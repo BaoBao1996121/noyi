@@ -13,8 +13,11 @@ enable_thinking = false
 # effort = "medium"       # work turns
 # chat_effort = "low"     # replying to the user (intake)
 
-# Web search (optional). Uses its own key; key_file is read when the env var is unset.
+# Web search (optional). backend = "deepseek" (DeepSeek Search API) or "bailian".
+# A desktop instance whose model is DeepSeek official searches with that same key
+# automatically; otherwise search uses its own key (key_file is read when the env var is unset).
 # [web]
+# backend = "bailian"
 # api_key_env = "DASHSCOPE_API_KEY"
 # key_file = "~/.personal-agent/search.key"
 # task_search_limit = 30

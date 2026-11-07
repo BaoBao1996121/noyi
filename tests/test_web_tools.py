@@ -128,3 +128,42 @@ def test_search_key_can_come_from_its_own_file(tmp_path, monkeypatch):
     assert not config.enabled
     key.write_text("unit-test-only\n", encoding="utf-8")
     assert config.enabled and config.key() == "unit-test-only"
+
+
+def test_deepseek_search_backend_maps_results(monkeypatch):
+    import asyncio, httpx
+    from personal_agent.web_tools import DeepSeekSearch
+    seen = {}
+    def handler(request):
+        seen["url"], seen["body"] = str(request.url), json.loads(request.content)
+        return httpx.Response(200, json={"results": [
+            {"url": "https://example.org/a", "title": "A", "summary": "long excerpt", "date": "2026-11-06T00:00:00+00:00"},
+            {"url": "https://example.org/a", "title": "dup"}, {"url": "javascript:x", "title": "bad"}]})
+    real = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    monkeypatch.setenv("WEB_TEST_KEY", "unit-test-only")
+    found = asyncio.run(DeepSeekSearch(WebConfig(backend="deepseek", search_url="https://api.deepseek.com/v1/tools/search", api_key_env="WEB_TEST_KEY")).search("北京天气"))
+    assert seen["url"] == "https://api.deepseek.com/v1/tools/search" and seen["body"]["query"] == "北京天气"
+    assert found["urls"] == ["https://example.org/a"] and found["results"][0]["excerpt"] == "long excerpt"
+
+
+def write_model(data, **values):
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "model.json").write_text(json.dumps(values), encoding="utf-8")
+
+
+def test_desktop_deepseek_model_searches_with_its_own_account(tmp_path, monkeypatch):
+    # One vendor account: the instance never needs a second (Bailian) key.
+    from personal_agent.web_tools import desktop_search
+    monkeypatch.delenv("PA_DS_TEST", raising=False)
+    write_model(tmp_path, name="deepseek-flash", base_url="https://api.deepseek.com", api_key_env="PA_DS_TEST")
+    (tmp_path / "credentials.key").write_text("unit-test-only", encoding="utf-8")
+    config = WebConfig()
+    desktop_search(config, tmp_path)
+    assert config.backend == "deepseek" and config.search_url.startswith("https://api.deepseek.com/")
+    assert config.key() == "unit-test-only"
+    other = tmp_path / "gateway"
+    write_model(other, name="claude-opus-5-5", base_url="http://127.0.0.1:3425/v1", api_key_env="PA_GW_TEST")
+    kept = WebConfig()
+    desktop_search(kept, other)
+    assert kept.backend == "bailian" and kept.key_file == str(other / "search.key")
