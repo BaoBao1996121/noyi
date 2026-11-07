@@ -50,6 +50,9 @@ class TaskSpec:
     review_workers: bool = False
     max_handoffs: int = 2
     result_kind: str = 'artifact'
+    # The room dialogue that led to this request, oldest first. It explains
+    # what a short request refers to; it is context, never new authority.
+    conversation: list[dict] = field(default_factory=list)
 
     def validate(self) -> None:
         if self.result_kind not in {'artifact', 'action_receipt'}:
@@ -100,3 +103,8 @@ class TaskSpec:
         if (not isinstance(self.required_text, list)
                 or any(not isinstance(t, str) or not t.strip() for t in self.required_text)):
             raise ValueError("required_text entries must be nonempty strings")
+        if (not isinstance(self.conversation, list) or len(self.conversation) > 16
+                or any(not isinstance(t, dict) or t.get("speaker") not in {"user", "assistant"}
+                       or not isinstance(t.get("content"), str) or len(t["content"]) > 2200
+                       or set(t) - {"speaker", "content"} for t in self.conversation)):
+            raise ValueError("conversation must be a short list of user/assistant turns")

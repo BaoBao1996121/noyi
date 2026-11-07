@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from personal_agent.contracts import ModelReply, TaskSpec
+from personal_agent.contracts import ModelReply, TaskSpec, encode
 from personal_agent.conversation import ConversationRouter
 from personal_agent.runtime import Runtime
 from personal_agent.service import Service
@@ -661,3 +661,36 @@ async def test_refused_or_persistent_provider_fault_is_not_retried_forever(store
     incoming(store,"在吗",nonce="second")
     await Runtime(store,tmp_path/'data',ScriptedModel([transport_fault()]*3)).execute(claim_intake(store))
     assert store.one("SELECT state FROM conversation_inputs ORDER BY created DESC LIMIT 1")['state'] == 'failed'
+
+
+def test_new_task_carries_the_conversation_it_came_from_to_execution(store, tmp_path):
+    # The request that starts work can be a short answer ("html的吧") whose
+    # meaning lives in earlier turns; execution must receive those turns.
+    incoming(store, "去写个贪吃蛇", nonce="snake-1")
+    store.apply_conversation(claim_intake(store), {"action": "clarify", "text": "做成什么形式？单个 HTML 文件还是 Python 脚本？"})
+    incoming(store, "html的吧", nonce="snake-2")
+    receipt = "好，我写一个单文件 HTML 版贪吃蛇，写完发你。"
+    result = store.apply_conversation(claim_intake(store), {"action": "new_task", "receipt": receipt})
+    spec = store.task(result["task_id"])["spec"]
+    assert spec["objective"] == "html的吧"
+    assert [(t["speaker"], t["content"]) for t in spec["conversation"]] == [
+        ("user", "去写个贪吃蛇"), ("assistant", "做成什么形式？单个 HTML 文件还是 Python 脚本？"),
+        ("user", "html的吧"), ("assistant", receipt)]
+    run = store.claim()
+    assert run["task_id"] == result["task_id"]
+    seen = encode(Runtime(store, tmp_path / "data", ScriptedModel([])).context(run))
+    assert "去写个贪吃蛇" in seen and receipt in seen
+
+
+def test_conversation_handed_to_execution_is_bounded_and_room_scoped(store):
+    other = store.create_bot("另一位", "别的房间")["private_room"]
+    incoming(store, "别的房间的秘密", nonce="other", room=other)
+    store.apply_conversation(claim_intake(store), {"action": "reply", "text": "好"})
+    for i in range(20):
+        incoming(store, f"第{i}句" + "长" * 3000, nonce=f"talk-{i}")
+        store.apply_conversation(claim_intake(store), {"action": "reply", "text": f"回{i}"})
+    incoming(store, "就按刚才说的做", nonce="go")
+    result = store.apply_conversation(claim_intake(store), {"action": "new_task"})
+    turns = store.task(result["task_id"])["spec"]["conversation"]
+    assert len(turns) <= 14 and all(len(t["content"]) <= 2200 for t in turns) and len(encode(turns)) <= 20000
+    assert "秘密" not in encode(turns) and "回19" in encode(turns)

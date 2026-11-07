@@ -288,27 +288,49 @@ class ConversationStore:
                 "authorized_sources": [{key: value for key, value in source.items() if key != "location"} for source in sources],
                 "basis": "All same-room tasks with original material share this one authorized source set. If the user refers to earlier material, its identity is resolved, not missing information."}
 
+    def _conversation_history(self, item, room):
+        """Room dialogue before this turn, oldest first, bounded.
+
+        One source for both intake and the work it hands to execution, so the
+        executor sees exactly the dialogue the request was understood in.
+        """
+        users = self.all("""SELECT m.id AS ref,m.content,'user' AS speaker,m.task_id,
+            COALESCE(c.created,f.created,MIN(e.created),0) AS message_time
+            FROM messages m LEFT JOIN conversation_inputs c ON c.message_id=m.id
+            LEFT JOIN followups f ON f.message_id=m.id LEFT JOIN events e ON e.message_id=m.id
+            WHERE m.room_id=? AND m.account=? AND m.kind='user' AND m.source IN ('web','cli')
+            GROUP BY m.id HAVING message_time>=? AND message_time<? ORDER BY message_time DESC LIMIT 8""",
+            (item["room_id"], item["account"], room["context_floor"], item["created"]))
+        for message in users:
+            message["created"] = message.pop("message_time")
+        turn = set(json.loads(item["batch"])) if item.get("batch") else set()
+        users = [m for m in users if m["ref"] not in turn]
+        answers = self.all("SELECT id AS ref,content,'assistant' AS speaker,task_id,created FROM deliveries WHERE room_id=? AND created>=? AND created<? AND kind!='question' ORDER BY created DESC LIMIT 8", (item["room_id"], room["context_floor"], item["created"]))
+        history = sorted(users + answers, key=lambda row: row["created"])[-12:]
+        for row in history:
+            row["content"] = row["content"][:2200]
+        return history
+
+    def _handoff_conversation(self, item, receipt_text):
+        """The dialogue a new task came from: earlier turns, this request and
+        the receipt intake gives, which states how the request was understood."""
+        room = self.one("SELECT * FROM rooms WHERE id=?", (item["room_id"],))
+        turns = [{"speaker": row["speaker"], "content": row["content"]} for row in self._conversation_history(item, room)]
+        turns.append({"speaker": "user", "content": item["content"][:2200]})
+        turns.append({"speaker": "assistant", "content": receipt_text[:2200]})
+        while len(encode(turns)) > 20000 and len(turns) > 2:
+            turns.pop(0)
+        return turns
+
     def conversation_context(self, run):
         if not self.current(run):
             raise ValueError("接收范围已变化")
         item = self.conversation_input(run)
         room = self.owned_room(item["room_id"], item["account"])
         tasks = [self.task(row["id"]) for row in self.all("SELECT id FROM tasks WHERE room_id=? AND parent_task_id IS NULL ORDER BY created DESC LIMIT 16", (item["room_id"],))]
-        recent_users = self.all("""SELECT m.id,m.content,'user' AS speaker,m.task_id,
-            COALESCE(c.created,f.created,MIN(e.created),0) AS message_time
-            FROM messages m LEFT JOIN conversation_inputs c ON c.message_id=m.id
-            LEFT JOIN followups f ON f.message_id=m.id LEFT JOIN events e ON e.message_id=m.id
-            WHERE m.room_id=? AND m.account=? AND m.kind='user' AND m.source IN ('web','cli')
-            GROUP BY m.id HAVING message_time>=? AND message_time<? ORDER BY message_time DESC LIMIT 8""",
-            (item["room_id"],item["account"],room["context_floor"],item["created"]))
-        turn = set(json.loads(item["batch"])) if item.get("batch") else set()
-        recent_users = [m for m in recent_users if m.pop("id") not in turn]
-        for message in recent_users:
-            message["created"]=message.pop("message_time")
-        recent_answers = self.all("SELECT content,'assistant' AS speaker,task_id,created FROM deliveries WHERE room_id=? AND created>=? AND created<? AND kind!='question' ORDER BY created DESC LIMIT 8", (item["room_id"], room["context_floor"], item["created"]))
-        history = sorted(recent_users + recent_answers, key=lambda row: row["created"])[-12:]
-        for row in history:
-            row["content"] = row["content"][:2200]
+        history = self._conversation_history(item, room)
+        recent_users = [row for row in history if row["speaker"] == "user"]
+        history = [{k: v for k, v in row.items() if k != "ref"} for row in history]
         questions = self.all("SELECT a.id,a.task_id,a.question,a.options,a.revision FROM attentions a JOIN tasks t ON t.id=a.task_id WHERE t.room_id=? AND a.account=? AND a.state='pending' AND a.revision=t.requirement_revision AND t.cancel_state='active' ORDER BY a.created DESC LIMIT 12", (item["room_id"], item["account"]))
         context = {"room": {"id": room["id"], "name": room["name"], "kind": room["kind"]}, "members": self.members(room["id"]), "selected_task_hint": item["task_hint"], "reply_reference": self._conversation_reply(room["id"], item["account"], item["reply_to"]) if item["reply_to"] else None,
                    "tasks": [{"id": t["id"], "actor_id": t["actor_id"], "objective": t["spec"]["objective"][:1600], "status": t["status"], "revision": t["requirement_revision"], "reason": t["reason"], "goal_id": t["goal_id"], "last_activity": local_now(self.one("SELECT MAX(COALESCE(ended,started)) t FROM runs WHERE task_id=?", (t["id"],))["t"] or t["created"]), "authorized_sources":[{**{k:v for k,v in source.items() if k != 'location'},'derived_prior_result':source['id'].startswith('previous_result_')} for source in t['spec']['sources']]} for t in tasks],
@@ -318,7 +340,7 @@ class ConversationStore:
         context["responding_actor"] = next({key: bot[key] for key in ("id", "name", "role")} for bot in context["members"] if bot["id"] == item["actor_id"])
         for goal in context["goals"]:
             goal["arrangements"] = [{**row,"schedule":json.loads(row["schedule"])} for row in self.all("SELECT schedule,state,next_due FROM routine_policies WHERE goal_id=? ORDER BY created",(goal["id"],))]
-        focused_task=next((m["task_id"] for m in recent_users if m["task_id"]),None)
+        focused_task=next((m["task_id"] for m in reversed(recent_users) if m["task_id"]),None)
         context["recent_work_task_id"]=focused_task
         context["unique_source_reference"] = self._conversation_unique_source(item, self._conversation_source_candidates(item, tasks), focused_task)
         self.db.execute("UPDATE runs SET context_manifest=? WHERE id=?", (encode({"prompt_version": "conversation-3", "prompt_sha256": digest(INTAKE_PROMPT.encode()), "room": room["id"], "scope_revision": room["revision"], "task_revisions": {t["id"]:t["requirement_revision"] for t in tasks}, "goal_revisions":{g["id"]:g["revision"] for g in context["goals"]}, "current_message_id": item["message_id"],"focused_task_id":focused_task,"source_reference_task_ids":(context["unique_source_reference"] or {}).get("equivalent_source_task_ids", [])}), run["id"]))
@@ -563,9 +585,13 @@ class ConversationStore:
                         raise ValueError("所指事项没有可沿用的原始资料，请核对上下文中的其他已授权来源")
                     spec = self._conversation_sources(spec,reused)
                     self.identity_audit("conversation_source_reuse",item["id"],{"source_task_id":prior["id"],"source_ids":[s["id"] for s in reused],"authority":"current_user_reference_to_own_prior_work","basis":decision.get("source_basis"),"old_requirements_inherited":False,"exclude_prior_results":exclude,"delivered_result":bool(delivered)})
+                content = check_receipt(decision.get("receipt")) or "这件事我接下了，处理好后把结果给你；需要补充信息时我会问你。"
+                # The request was understood in its dialogue; execution gets
+                # the same dialogue instead of the last message alone.
+                spec.conversation = self._handoff_conversation(item, content)
+                spec.validate()
                 receipt = self.submit(spec, text=item["content"], nonce="conversation:" + item["id"], source="conversation-route", account=item["account"], actor=actor, room=item["room_id"])
                 receipt = self._conversation_rebind(item, receipt, actor)
-                content = check_receipt(decision.get("receipt")) or "这件事我接下了，处理好后把结果给你；需要补充信息时我会问你。"
             elif action == "status" and not decision.get("task_id"):
                 tasks = self.all("SELECT id,status,spec FROM tasks WHERE room_id=? AND parent_task_id IS NULL ORDER BY created DESC LIMIT 8", (item["room_id"],))
                 content = self._conversation_status(tasks)
