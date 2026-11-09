@@ -49,7 +49,8 @@ modules = ["my_notes"]
 | 模型 | `Model.complete/close`，默认 `QwenModel`；传入 `Service(model=...)` | 请求和用量计入持久预算；无隐藏重试 |
 | 来源读取 | `SourceReader.read`，默认精确文件/HTTP 来源读取；`source_reader=...` | 只读取已授权描述符；结果仍受大小、快照、哈希和引用检查 |
 | 投递 | `DeliveryChannel.send`，默认本地文件收件箱；`channel=...` | 按 delivery ID 幂等，明确接受回执；接受不等于人已阅读 |
-| 记忆值加载 | `MemoryProvider.load`；注入 Store | 成员、集合、版本、删除和用途由账本控制，加载器不能绕过受众边界 |
+| 记忆值加载 | `MemoryProvider.load`；注入 Store | 成员、集合（私聊共用 `personal:<账号>`，群聊各自一份）、版本、删除、到期和用途由账本控制，加载器不能绕过受众边界 |
+| 记忆整理 | `MemoryCurator.run/tick`（`memory_curation.py`），走 `Runtime.request` | 只产出提议；证据、门槛、版本和拒绝记录由账本核对，不直接改已确认记忆 |
 | 变化观察 | `ObservationSource.observe`；`Service(observer=..., clock=...)` | 观察器不能注册策略或启动任务；修订、游标、去重和准入由运行时控制 |
 | 新工具 | 写插件模块并在 `[plugins]` 登记（见上节）；`Service(plugins=...)` 可直接注入 | 所有副作用先记意图与回执；新证据需定义“新进展”判定，不能靠重复成功绕过停滞限制 |
 
