@@ -71,6 +71,10 @@ def parser():
     s.add_argument("--config", type=Path)
     s = sub.add_parser("backup", help="Back up managed data without credentials (stop the service first)")
     s.add_argument("--output", type=Path, required=True)
+    s = sub.add_parser("memory-import", help="Add memories from a JSON list as pending suggestions; nothing is active until confirmed")
+    s.add_argument("file", type=Path)
+    s.add_argument("--origin", required=True, help="Shown on each suggestion, e.g. 从 Codex / Claude Code 导入")
+    s.add_argument("--room", default="local")
     s = sub.add_parser("restore", help="Restore into a new directory with work paused")
     s.add_argument("archive", type=Path)
     s.add_argument("--destination", type=Path, required=True)
@@ -155,6 +159,9 @@ def main():
                 print(encode(result))
             else:
                 print(encode(store.all("SELECT id,status,reason,acceptance,calls_used,tools_used FROM tasks ORDER BY created")))
+        elif args.command == "memory-import":
+            items = json.loads(args.file.read_text(encoding="utf-8-sig"))
+            print(encode(store.import_memory_proposals(args.room, items, origin=args.origin)))
         elif args.command == "inbox":
             print(encode(store.all("SELECT id,task_id,content,artifact,state,receipt FROM deliveries ORDER BY rowid")))
     except KeyboardInterrupt:

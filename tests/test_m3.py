@@ -94,8 +94,9 @@ async def test_t14_private_sources_artifacts_and_memory_never_enter_group_or_oth
     with pytest.raises(ValueError):
         store.spawn_worker(group_run, worker_key="foreign", objective="Get private facts", source_ids=[], target_actor_id="default")
     store.finish(group_run, status="succeeded", reason="test", content="group output")
+    # Personal memory is shared by the user's private chats; the group's stays in the group.
     other = begin(store, b["id"], b["private_room"], nonce="other")
-    assert "PRIVATE_FACT_731" not in encode(rt.context(other)) and "GROUP_FACT_652" not in encode(rt.context(other))
+    assert "PRIVATE_FACT_731" in encode(rt.context(other)) and "GROUP_FACT_652" not in encode(rt.context(other))
 
 
 def test_t15_copy_and_team_template_include_configuration_only(store):
@@ -104,7 +105,10 @@ def test_t15_copy_and_team_template_include_configuration_only(store):
     store.submit(None, text="DO_NOT_COPY_CHAT", nonce="chat", actor=a["id"], room=a["private_room"])
     copied = store.copy_bot(a["id"])
     assert copied["role"] == a["role"] and copied["private_room"] != a["private_room"]
-    assert not store.memory_items(copied["private_room"])
+    # Copying a Bot copies no memory: the copy's private chat reads the same
+    # personal collection, which still holds only the one original record.
+    assert [m["value"] for m in store.memory_items(copied["private_room"])] == ["DO_NOT_COPY"]
+    assert store.one("SELECT COUNT(*) n FROM memories")["n"] == 1
     assert not store.all("SELECT * FROM messages WHERE room_id=?", (copied["private_room"],))
     template = store.save_team_template(group["id"], "检查团队")
     new_group = store.instantiate_team(template["id"], name="另一套资料")
@@ -265,7 +269,7 @@ async def test_web_bot_group_memory_copy_and_cross_room_guessed_ids(store, tmp_p
         assert bad_reply.status == 400
         copied = await (await client.post("/api/manage/copy_bot", json={"id": bot["id"]})).json()
         copied_state = await (await client.get("/api/state?room=" + copied["private_room"])).json()
-        assert not copied_state["messages"] and not copied_state["memories"]
+        assert not copied_state["messages"] and [m["id"] for m in copied_state["memories"]] == [saved["id"]]
 
 
 @pytest.mark.asyncio
@@ -288,7 +292,7 @@ async def test_persistent_peer_delegation_uses_real_pi_and_one_shared_budget(sto
                 return tool_reply("write_artifact", {"name": "result.md", "content": scope["self"]["name"] + " completed scoped work."})
             return submit_written_artifact(messages, tools)
     store.save_memory(a["private_room"], key="隐藏背景", value="PRIVATE_A", purpose="私聊")
-    store.save_memory(b["private_room"], key="隐藏背景", value="PRIVATE_B", purpose="私聊")
+    store.save_memory(b["private_room"], key="隐藏背景B", value="PRIVATE_B", purpose="私聊")
     tid = store.submit(TaskSpec("Work as peers", max_calls=20, max_tools=40), nonce="peers", actor=a["id"], room=group["id"])["task_id"]
     await Service(store, tmp_path / "data", PeerModel()).serve(once=True)
     assert store.task(tid)["status"] == "succeeded"

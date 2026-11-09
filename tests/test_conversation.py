@@ -49,7 +49,8 @@ def test_intake_keeps_responding_bot_identity_without_private_scope(store, selec
     context = store.conversation_context(claim_intake(store))
     assert context["responding_actor"] == {"id": bot["id"], "name": bot["name"], "role": bot["role"]}
     assert "private_room" not in json.dumps(context)
-    assert "memory" not in context
+    # Private chats carry the shared personal memory; groups only their own.
+    assert context["memory"]["scope"] == ("personal" if selection == "private" else "group")
 
 
 @pytest.mark.asyncio
@@ -201,9 +202,11 @@ def test_resume_uses_bounded_allowance_and_keeps_history(store):
 
 
 def test_scope_change_invalidates_pending_interpretation(store):
+    first=store.save_memory('local',key='称呼',value='小明',purpose='对话')
     incoming(store,'帮我整理一下')
     run=claim_intake(store)
-    store.save_memory('local',key='称呼',value='小明',purpose='对话')
+    # Correcting a memory changes scope; merely adding one does not.
+    store.save_memory('local',key='称呼',value='小明同学',purpose='对话',expected_version=first['version'])
     assert not store.current(run)
     with pytest.raises(ValueError,match='权限'):
         store.apply_conversation(run,{'action':'new_task'})
@@ -513,12 +516,13 @@ async def test_actual_pi_conversation_review_owns_original_request_until_accepte
 @pytest.mark.parametrize('change',['goal_revision','room_scope'])
 def test_conversation_review_rechecks_authority_before_creating_task(store,change):
     goal=store.create_goal(room='local',actor_id='default',title='项目资料',objective='跟进资料')
+    saved=store.save_memory('local',key='纠正',value='采用资料',purpose='安排工作')
     incoming(store,'请回顾项目资料的跟进情况')
     run=claim_intake(store)
     if change=='goal_revision':
         store.set_goal_state(goal['id'],'paused',expected_revision=goal['revision'])
     else:
-        store.save_memory('local',key='纠正',value='采用最新资料',purpose='安排工作')
+        store.save_memory('local',key='纠正',value='采用最新资料',purpose='安排工作',expected_version=saved['version'])
     with pytest.raises(ValueError):
         store.apply_conversation(run,{'action':'goal_review','goal_id':goal['id'],'reference':'项目资料'})
     assert not store.all('SELECT * FROM goal_review_requests')

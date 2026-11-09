@@ -164,7 +164,7 @@ def restore_backup(archive, destination):
             with closing(sqlite3.connect(temp / "state.sqlite")) as connection:
                 if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise ValueError("备份数据库完整性检查失败")
-                if connection.execute("PRAGMA user_version").fetchone()[0] > 8:
+                if connection.execute("PRAGMA user_version").fetchone()[0] > Store.SCHEMA_VERSION:
                     raise ValueError("此备份由较新版本创建，请先升级程序")
             restored = Store(temp / "state.sqlite")
             try:

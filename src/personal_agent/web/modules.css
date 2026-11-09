@@ -38,3 +38,10 @@
 .main{min-height:0}
 @media(max-width:600px){.recipient-row>span{display:none}.keyboard-hint{display:none}.new-options{flex-direction:column}.member-options{grid-template-columns:1fr}.room-list{max-height:40vh}}
 .table-scroll{overflow-x:auto;margin:14px 0}.table-scroll table{border-collapse:collapse;width:100%;font-size:12px;line-height:1.7}.table-scroll th,.table-scroll td{text-align:left;border:1px solid #e5e5e5;padding:9px 12px;min-width:100px}.table-scroll th{background:#f7f7f7;font-weight:500}
+.memory-column,.memory-group{margin:0 0 18px}
+.memory-column h3,.memory-group h3{font-size:13px;margin:0 0 8px}
+.memory-group h3 .muted,.memory-column h3 .muted{font-weight:normal;font-size:11px}
+.memory-source{display:block;font-size:11px;line-height:1.6;margin-top:4px;overflow-wrap:anywhere}
+.memory-badge{display:inline-block;font-size:11px;color:#8a5a00;background:#fff4dc;border-radius:4px;padding:1px 6px;margin-top:4px}
+.memory-target{font-size:12px;line-height:1.6;margin:4px 0;overflow-wrap:anywhere}
+.memory-proposal p{font-size:13px;line-height:1.7}

@@ -19,6 +19,8 @@ from .service import Service, ServiceLock
 from .store import Store
 from .tools import Toolset, MAX_SOURCE_BYTES, MAX_IMAGE_BYTES, atomic_write, image_type, safe_child
 from .goal_api import goal_snapshot, goal_action
+from .memory_curation import MemoryCurator
+from .memory_store import KINDS
 
 
 WEB = Path(__file__).with_name("web")
@@ -79,6 +81,7 @@ class Console:
         self.instance_id = uuid.uuid4().hex
         self.shutdown_event = shutdown_event
         self.service = Service(store, self.data, model, plugins=plugins)
+        self.curator = MemoryCurator(self.service.runtime)
         self.run_service = run_service
         self.service_error = None
         self.store.db.execute("CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY,room_id TEXT NOT NULL,account TEXT NOT NULL,name TEXT NOT NULL,path TEXT NOT NULL,sha256 TEXT NOT NULL,bytes INTEGER NOT NULL,created REAL NOT NULL)")
@@ -126,7 +129,10 @@ class Console:
                 "team_templates": [{**t, "configuration": json.loads(t["configuration"])} for t in self.store.all("SELECT * FROM team_templates WHERE owner='local-user' ORDER BY created")],
                 "pending_routes": self.store.all("SELECT p.id,p.mode,p.actor_id,p.message_id,m.content FROM pending_routes p JOIN messages m ON m.id=p.message_id WHERE p.room_id=? AND p.state='unassigned' ORDER BY p.created", (room,)),
                 "memories": self.store.memory_items(room),
-                "memory_proposals": self.store.all("SELECT * FROM memory_proposals WHERE room_id=? AND state='pending' ORDER BY created", (room,))}
+                "memory_scope": "personal" if self.store.memory_collection(room).startswith("personal:") else "group",
+                "memory_kinds": KINDS,
+                "memory_proposals": self.store.memory_proposals(room),
+                "memory_curation": self.store.one("SELECT state,trigger,proposals,error,created,ended FROM memory_curations WHERE collection_id=? ORDER BY created DESC LIMIT 1", (self.store.memory_collection(room),))}
 
     def detail(self, task_id):
         task = self.task(task_id)
@@ -293,11 +299,18 @@ async def manage(request):
     elif name == "instantiate_team":
         result = s.instantiate_team(b["id"], name=b["name"])
     elif name == "save_memory":
-        result = s.save_memory(b["room"], key=b["key"], value=b["value"], purpose=b["purpose"], expected_version=b.get("version", 0), source_ref=b.get("source_ref"), restore=b.get("restore", False))
+        result = s.save_memory(b["room"], key=b["key"], value=b["value"], purpose=b["purpose"], expected_version=b.get("version", 0), source_ref=b.get("source_ref"), restore=b.get("restore", False),
+                               kind=b.get("kind"), expires_at=b.get("expires") or None, keywords=b.get("keywords"), subject=b.get("subject") or None)
+    elif name == "renew_memory":
+        result = s.renew_memory(b["room"], b["id"], expected_version=b["version"])
     elif name == "delete_memory":
         result = s.delete_memory(b["room"], b["id"], expected_version=b["version"])
     elif name == "decide_memory":
-        result = s.decide_memory(b["id"], accept=b["accept"])
+        result = s.decide_memory(b["id"], accept=b["accept"], choice=b.get("choice"))
+    elif name == "run_memory_curation":
+        if not getattr(c.model, "ready", True):
+            raise ValueError("模型还没配置好，暂时不能整理")
+        result = await c.curator.run(s.memory_collection(b["room"]), trigger="manual")
     else:
         raise ValueError("未知管理操作")
     return web.json_response(result)
@@ -422,9 +435,19 @@ async def lifecycle(app):
                         # Stop on a scheduler fault; do not repeatedly run an inconsistent ledger.
                         return
                 await asyncio.sleep(0.3)
+        async def curate():
+            # Daily tidy; it only proposes, so a failure leaves nothing half-done.
+            while True:
+                await asyncio.sleep(300)
+                if getattr(c.model, "ready", True):
+                    try:
+                        await c.curator.tick()
+                    except Exception as exc:
+                        c.service_error = c.service_error or "memory_curation:" + type(exc).__name__
         if c.run_service:
             job = asyncio.create_task(run())
             trigger_job = asyncio.create_task(c.service.triggers.run())
+            curate_job = asyncio.create_task(curate())
         try:
             yield
         finally:
@@ -433,7 +456,8 @@ async def lifecycle(app):
                 await asyncio.gather(job, return_exceptions=True)
             if trigger_job:
                 trigger_job.cancel()
-                await asyncio.gather(trigger_job, return_exceptions=True)
+                curate_job.cancel()
+                await asyncio.gather(trigger_job, curate_job, return_exceptions=True)
 
 
 def create_app(store, data, model, *, run_service=True, shutdown_event=None, plugins=None):

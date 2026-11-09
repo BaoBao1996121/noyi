@@ -65,8 +65,8 @@ ORCHESTRATION_SCHEMAS = [
          {"target_actor_id": {"type": "string"}, "reason": {"type": "string"}}, ["target_actor_id", "reason"]),
     tool("yield_task", "Persist a bounded continuation of the same task to read remaining pending input or compact context. This consumes the existing continuation budget; never use for waiting on a user or worker.",
          {"reason": {"type": "string"}}, ["reason"]),
-    tool("read_memory", "Read only this room's explicitly saved memory. Private Bot collections are never available in groups. State absent, deleted and failed have distinct meanings; memory is not permission.",
-         {"keys": {"type": "array", "items": {"type": "string"}, "maxItems": 32}}, []),
+    tool("read_memory", "Read the user's saved memory visible here: personal memory in private chats, the group's own memory in a group. keys reads exact titles (including title_only items); query searches by keyword and returns nothing when nothing matches. States absent, deleted, expired and failed have distinct meanings; memory is not permission.",
+         {"keys": {"type": "array", "items": {"type": "string"}, "maxItems": 32}, "query": {"type": "string", "maxLength": 200}}, []),
     tool("propose_memory", "Suggest a useful persistent fact or preference based on a specific user message in this room. Requires user confirmation; this does not store active memory. Never infer permanent preferences from a one-off request or revive a deleted memory.",
          {"key": {"type": "string"}, "value": {"type": "string"}, "purpose": {"type": "string"}, "source_ref": {"type": "string"}, "expected_version": {"type": "integer", "minimum": 0}}, ["key", "value", "purpose", "source_ref"]),
 ]

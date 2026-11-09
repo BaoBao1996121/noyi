@@ -329,3 +329,9 @@ from .speech import SpeechStore
 
 class Store(SpeechStore, ConversationStore, ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
     """Durable task ledger with versioned collaboration protocols."""
+
+    SCHEMA_VERSION = 9  # 9: shared personal memory, kinds, candidates, curation
+
+    def __init__(self, path):
+        super().__init__(path)
+        self.db.execute(f"PRAGMA user_version={self.SCHEMA_VERSION}")
