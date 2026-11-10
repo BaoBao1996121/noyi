@@ -325,14 +325,17 @@ from .admission_store import AdmissionStore
 from .review_store import ReviewStore
 from .conversation import ConversationStore
 from .speech import SpeechStore
-from .commitment_store import CommitmentStore
+from .commitment_store import CommitmentStore, backup_before_upgrade
+from .replay import ReplayStore
 
 
-class Store(CommitmentStore, SpeechStore, ConversationStore, ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
+class Store(ReplayStore, CommitmentStore, SpeechStore, ConversationStore, ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
     """Durable task ledger with versioned collaboration protocols."""
 
-    SCHEMA_VERSION = 10  # 10: commitment ledger; 9: shared personal memory, kinds, candidates, curation
+    SCHEMA_VERSION = 11  # 11: operations.ended for replay; 10: commitment ledger; 9: shared personal memory
 
     def __init__(self, path):
+        # Any older ledger is copied aside before any version changes it.
+        self.upgrade_backup = backup_before_upgrade(path, self.SCHEMA_VERSION)
         super().__init__(path)
         self.db.execute(f"PRAGMA user_version={self.SCHEMA_VERSION}")

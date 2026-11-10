@@ -84,7 +84,7 @@ class CommitmentStore:
     COMMITMENT_VERSION = 10
 
     def __init__(self, path):
-        self.upgrade_backup = backup_before_upgrade(path, self.COMMITMENT_VERSION)
+        # The backup before upgrading is taken by Store for every schema version.
         super().__init__(path)
         with self.transaction():
             tables = {r["name"] for r in self.all("SELECT name FROM sqlite_master WHERE type='table'")}

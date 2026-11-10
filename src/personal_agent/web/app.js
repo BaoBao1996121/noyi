@@ -1,4 +1,5 @@
 import {installGoals} from './goals.js';
+import {installReplay} from './replay.js';
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => [...root.querySelectorAll(q)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -123,6 +124,7 @@ async function detailView(force=false){
   const box=$('#detail-content');
   if(state.tab==='memory'){memoryView(box);return;}
   if(state.tab==='commitments'){commitmentView(box);return;}
+  if(state.tab==='replay'){replayUI.mount(box);return;}
   if(state.tab==='library'){
     box.innerHTML='<div class="detail-heading">已交付的成果</div>'+ (artifacts.slice().reverse().map(artifactCard).join('')||'<div class="empty-detail">完成的清单、报告和资料<br>都会收在这里。</div>');return;
   }
@@ -317,6 +319,8 @@ document.addEventListener('submit',async e=>{
   if(e.target.id==='url-form'){e.preventDefault();state.urls.push(new FormData(e.target).get('url'));renderAttachments();saveDraft();$('#modal').close();}
 });
 $$('.resizer').forEach(r=>r.addEventListener('pointerdown',e=>{r.setPointerCapture(e.pointerId);const move=e=>{const width=r.dataset.panel==='left'?e.clientX:innerWidth-e.clientX;document.documentElement.style.setProperty(r.dataset.panel==='left'?'--left':'--right',Math.max(220,Math.min(440,width))+'px');};r.addEventListener('pointermove',move);r.addEventListener('pointerup',()=>r.removeEventListener('pointermove',move),{once:true});}));
+const replayUI=installReplay({state,api,esc,timeLabel});
+document.addEventListener('replay:closed',()=>detailView(true));
 const goalsUI=installGoals({state,api,modal,toast,refresh,esc,timeLabel,chooseTask,compose:composeAbout,request:sendIntent});
 async function poll(){await refresh();setTimeout(poll,document.hidden?5000:1500);}
 try{const boot=await api('/api/bootstrap');switchWorkspace(boot);await refresh(true);setTimeout(poll,1500);}catch(e){toast('无法连接本地服务，请确认启动窗口仍在运行。');}

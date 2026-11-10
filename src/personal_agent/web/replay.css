@@ -1,0 +1,30 @@
+.detail-tabs{flex-wrap:wrap}
+.replay{display:flex;flex-direction:column;gap:10px}
+.replay-bar{display:flex;gap:6px;align-items:center}
+.replay-task{flex:1;min-width:0;border:1px solid #dededb;border-radius:8px;padding:6px 8px;background:#fff;font-size:12px}
+.replay-outcome{font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;background:#f2f4f8;color:#3b5aa8}
+.replay-outcome.ok{background:#eaf6f0;color:#1f7a50}
+.replay-outcome.warn{background:#fbf3e2;color:#93650b}
+.replay-outcome.bad{background:#fbeaea;color:#b23434}
+.replay-canvas{width:100%;display:block;border:1px solid #ebebe7;border-radius:10px;background:#fbfbf9}
+.replay-controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.replay-controls .button{white-space:nowrap;min-width:78px}
+.replay-seek{flex:1 1 100%;order:-1;width:100%;min-width:0;height:18px;padding:0;accent-color:#292927}
+.replay-speed{border:1px solid #dededb;border-radius:6px;background:#fff;font-size:12px;padding:3px}
+.replay-step-label{font-size:11px}
+.replay-card{border:1px solid #ebebe7;border-radius:10px;padding:12px;background:#fff;font-size:13px;line-height:1.7;min-height:96px}
+.replay-card p{white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0}
+.replay-card time{font-size:11px;display:block}
+.replay-card .detail-row strong{overflow-wrap:anywhere;font-weight:500}
+.replay-card-head{display:flex;gap:8px;align-items:center}
+.replay-card-head .muted{margin-left:auto;font-size:11px}
+.replay-links{margin-top:8px;font-size:12px}
+.replay-tone{display:inline-block;width:9px;height:9px;border-radius:50%;background:#5b7fd6;flex:none}
+.replay-tone.ok{background:#2f9e6b}.replay-tone.warn{background:#d39518}.replay-tone.bad{background:#d64545}
+.replay-log ol{list-style:none;padding:0;margin:8px 0 0;max-height:260px;overflow:auto}
+.replay-log li button{display:flex;gap:8px;align-items:center;width:100%;text-align:left;padding:5px 6px;border-radius:6px;font-size:12px}
+.replay-log li button small{margin-left:auto;color:#999;font-size:10px;white-space:nowrap}
+.replay-log li.current button{background:#efefec;font-weight:600}
+.replay-log summary{font-size:12px;color:#777;cursor:pointer}
+.replay.full{position:fixed;inset:0;z-index:50;background:#fcfcfc;padding:28px 48px;overflow:auto}
+.replay.full .replay-card{max-width:880px}

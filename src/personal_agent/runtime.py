@@ -264,8 +264,9 @@ class Runtime:
                 name = call["function"]["name"]
                 result = {"error": "ValueError", "detail": "unknown tool" if name not in {t["function"]["name"] for t in schemas} else "tool arguments rejected by Pi schema validation"}
                 rejected_id = uid()
-                self.store.db.execute("INSERT INTO operations(id,task_id,run_id,tool,arguments,status,result,created) VALUES(?,?,?,?,?,?,?,?)",
-                                      (rejected_id, run["task_id"], run["id"], name, encode(call["function"].get("arguments", {})), "failed", encode(result), time.time()))
+                now = time.time()
+                self.store.db.execute("INSERT INTO operations(id,task_id,run_id,tool,arguments,status,result,created,ended) VALUES(?,?,?,?,?,?,?,?,?)",
+                                      (rejected_id, run["task_id"], run["id"], name, encode(call["function"].get("arguments", {})), "failed", encode(result), now, now))
                 self.store.record_activity(run, rejected_id)
                 return {}
             if method == "turn_end":
@@ -349,7 +350,7 @@ class Runtime:
         if not self.store.one("SELECT id FROM operations WHERE id=?", (op_id,)):
             self.store.db.execute("INSERT INTO operations(id,task_id,run_id,tool,arguments,status,created) VALUES(?,?,?,?,?,?,?)",
                                   (op_id, run["task_id"], run["id"], name, encode(args), status, time.time()))
-        self.store.db.execute("UPDATE operations SET status=?,result=? WHERE id=?", (status, encode(result), op_id))
+        self.store.db.execute("UPDATE operations SET status=?,result=?,ended=? WHERE id=?", (status, encode(result), time.time(), op_id))
         self.store.record_activity(run, op_id)
         if self.runnable(run) and name == "submit_result" and result.get("passed"):
             self.store.step(run, "acceptance", result)

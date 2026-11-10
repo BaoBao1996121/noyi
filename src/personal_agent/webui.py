@@ -256,6 +256,12 @@ async def detail(request):
     return web.json_response(request.app[CONSOLE].detail(request.match_info["task_id"]))
 
 
+async def timeline(request):
+    c = request.app[CONSOLE]
+    task = c.task(request.match_info["task_id"])
+    return web.json_response(c.store.task_timeline(task["id"]))
+
+
 async def submit(request):
     return web.json_response(request.app[CONSOLE].submit(await json_body(request)))
 
@@ -415,7 +421,7 @@ async def shutdown(request):
 
 async def static(request):
     name = request.match_info.get("name", "index.html")
-    if name not in {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js"}:
+    if name not in {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css"}:
         raise web.HTTPNotFound()
     return web.FileResponse(WEB / name)
 
@@ -465,7 +471,7 @@ def create_app(store, data, model, *, run_service=True, shutdown_event=None, plu
     app = web.Application(middlewares=[security], client_max_size=MAX_IMAGE_BYTES + 20000)
     app[CONSOLE] = Console(store, data, model, run_service=run_service, shutdown_event=shutdown_event, plugins=plugins)
     app.add_routes([web.get("/", static), web.get("/assets/{name}", static), web.get("/api/bootstrap", boot),
-                    web.get("/api/state", snapshot), web.get("/api/tasks/{task_id}", detail), web.post("/api/messages", submit),
+                    web.get("/api/state", snapshot), web.get("/api/tasks/{task_id}", detail), web.get("/api/tasks/{task_id}/timeline", timeline), web.post("/api/messages", submit),
                     web.post("/api/actions/{name}", action), web.post("/api/uploads", upload),
                     web.get("/api/artifacts/{delivery_id}", artifact), web.post("/api/settings", settings),
                     web.post("/api/backup", backup),

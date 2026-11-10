@@ -70,3 +70,12 @@ modules = ["my_notes"]
 - 时间：`tick_waits` 每轮调 `tick_commitments`（逾期、卡住、未告知收口）；`commitment_clock` 记上次检查，用来判断服务是否停过。
 - 界面：`/api/state` 的 `commitments`，详情栏「承诺」页，交付下方的「兑现了…」一行。
 
+
+## 账本回放（2026-11-10 起）
+
+`replay.py` 的 `ReplayStore` 混入 `Store`（版本 11 给 `operations` 加 `ended`），`task_timeline(task_id)` 由 `ReplayView` 从已有表拼出事件，只读。
+
+- 接口：`GET /api/tasks/{id}/timeline` → `{task, stations[7], outcome, unknown_times, events[]}`；事件字段 `seq, station, kind, tone(ok/warn/bad/info), at, time(known/unknown), end, end_time, order(time/inferred), title, text, facts[[名, 值]], links[{label,url}]`。
+- 每站来源：回复层判断 ← `conversation_inputs` + `commitment_events.unregistered_refused` + `steps.conversation_rejected`；登记承诺/兑现 ← `commitment_events`；开工 ← `runs`；模型请求 ← `model_requests` + `steps.kind='model'`（数量对不上时 token 记未知）；工具调用 ← `operations`；交付 ← `steps.kind='acceptance'` + `deliveries`。
+- 前端：`web/replay.js` 分数据、播放器、皮肤三层；`registerSkin({name, layout, background, track, station, lamp, token, burst, caption})` 注册新皮肤，`setSkin(name)` 切换。
+- 演示数据：`scripts/demo-replay.py build|serve --data <目录>`，拒绝写入 `.pa/personal`。

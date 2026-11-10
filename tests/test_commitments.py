@@ -249,6 +249,6 @@ def test_upgrade_backs_up_then_backfills_existing_work(tmp_path, source, success
         assert sqlite3.connect(backups[0]).execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 1
         [c] = commitments(upgraded)
         assert c["quote"] == "好，我去整理。" and c["state"] == "open" and c["origin"] == "backfill" and c["said_delivery_id"]
-        assert upgraded.one("PRAGMA user_version")["user_version"] == 10
+        assert upgraded.one("PRAGMA user_version")["user_version"] == Store.SCHEMA_VERSION
     finally:
         upgraded.close()
