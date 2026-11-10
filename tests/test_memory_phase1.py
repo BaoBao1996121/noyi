@@ -311,3 +311,34 @@ async def test_web_memory_page_groups_by_kind_and_accepts_with_versions(store, t
         assert decided["stored_as_memory"]
         again = await client.post("/api/manage/decide_memory", json={"id": proposal["id"], "accept": True})
         assert again.status == 400
+
+
+@pytest.mark.asyncio
+async def test_galaxy_view_gives_history_superseded_wrecks_links_and_candidates_read_only(store, tmp_path):
+    from test_webui import client_for
+    mid = say(store, "以后汇报先给结论，用中文")
+    store.save_memory("local", key="先给结论", value="汇报先给结论", purpose="回复", kind="rule", source_ref=mid, keywords=["汇报"])
+    store.save_memory("local", key="用中文", value="回复用中文", purpose="回复", kind="rule", source_ref=mid)
+    store.save_memory("local", key="周报格式", value="周报三段", purpose="写周报", kind="preference", keywords=["汇报"])
+    old = store.save_memory("local", key="住址旧", value="A 区", purpose="寄快递", kind="reference")
+    first = store.save_memory("local", key="住址", value="B 区", purpose="寄快递", kind="reference")
+    second = store.save_memory("local", key="住址", value="C 区", purpose="寄快递", kind="reference", expected_version=1)
+    pid = store._proposal("personal:local-user", op="merge", key="住址", value="C 区", targets=[{"id": old["id"], "version": 1, "key": "住址旧"}, {"id": first["id"], "version": 2, "key": "住址"}], reason="重复")
+    store.decide_memory(pid, accept=True)
+    store.import_memory_proposals("local", [{"kind": "ongoing", "key": "搬家", "value": "这个月在搬家", "expires": "2099-01-01"}], origin="导入")
+    async with client_for(store, tmp_path) as client:
+        before = store.db.total_changes
+        galaxy = await (await client.get("/api/memory/galaxy?room=local")).json()
+        assert store.db.total_changes == before
+        assert (await client.post("/api/memory/galaxy?room=local", json={})).status == 405
+    stars = {s["key"]: s for s in galaxy["stars"]}
+    assert stars["住址"]["state"] == "active" and [h["action"] for h in stars["住址"]["history"]] == ["create", "correct", "correct"]
+    assert stars["住址旧"]["state"] == "deleted" and stars["住址旧"]["value"] is None
+    assert {"kind": "supersedes", "from": second["id"], "to": old["id"]} in galaxy["links"]
+    shared = {(l["kind"], frozenset((l["from"], l["to"]))) for l in galaxy["links"]}
+    assert ("source", frozenset((stars["先给结论"]["id"], stars["用中文"]["id"]))) in shared
+    assert ("keyword", frozenset((stars["先给结论"]["id"], stars["周报格式"]["id"]))) in shared
+    assert stars["先给结论"]["quote"].startswith("以后汇报先给结论")
+    candidate = stars["搬家"]
+    assert candidate["state"] == "pending" and candidate["kind"] == "ongoing" and candidate["expires_at"] and candidate["origin"] == "导入"
+    assert galaxy["kinds"] == {"rule": "规则", "preference": "偏好", "about_me": "关于我", "ongoing": "进行中", "reference": "常用信息"}

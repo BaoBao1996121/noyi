@@ -254,6 +254,62 @@ class MemoryStore:
             row["last_used"] = used.get(row["id"])
         return sorted(rows, key=lambda r: order.get(r["kind"], 9))
 
+    def memory_galaxy(self, room, *, account="local-user"):
+        """Read-only map of one collection for the galaxy view.
+
+        Stars are every memory (tombstones included, value withheld) plus
+        pending ``add`` proposals as unconfirmed stars. Links are facts already
+        in the rows: ``supersedes`` pointers, a shared source message, a shared
+        keyword. Shared groups are chained in creation order (n-1 links, not a
+        clique) so a few hundred stars stay a few hundred links.
+        """
+        collection = self.memory_collection(room, account)
+        now = time.time()
+        history = {}
+        for change in self.all("SELECT memory_id,version,action,created FROM memory_changes WHERE memory_id IN (SELECT id FROM memories WHERE collection_id=?) ORDER BY created,id", (collection,)):
+            history.setdefault(change["memory_id"], []).append({"version": change["version"], "action": change["action"], "at": change["created"]})
+        used = self.memory_last_used(collection)
+        stars = []
+        for row in self.all("SELECT * FROM memories WHERE collection_id=? ORDER BY created,id", (collection,)):
+            item = self._decorate(row, now)
+            stars.append({"id": row["id"], "key": row["key"], "value": row["value"], "kind": row["kind"], "state": row["state"], "version": row["version"],
+                          "expired": item["expired"], "expires_at": row["expires_at"], "source_type": row["source_type"], "origin": row["origin"],
+                          "quote": item["quote"], "evidence": item["evidence"], "keywords": item["keywords"], "subject": row["subject"], "supersedes": item["supersedes"],
+                          "created": row["created"], "updated": row["updated"], "last_used": used.get(row["id"]), "history": history.get(row["id"], [])})
+        for p in self.all("SELECT * FROM memory_proposals WHERE collection_id=? AND state='pending' AND op='add' ORDER BY created,id", (collection,)):
+            evidence = json.loads(p["evidence"] or "[]")
+            stars.append({"id": p["id"], "key": p["key"], "value": p["value"], "kind": p["kind"] or "preference", "state": "pending", "version": 0,
+                          "expired": False, "expires_at": p["expires_at"], "source_type": "proposal", "origin": p["origin"], "reason": p["reason"],
+                          "quote": next((e.get("quote") for e in evidence if e.get("quote")), None), "evidence": evidence,
+                          "keywords": json.loads(p["keywords"]) if p["keywords"] else [], "subject": p["subject"], "supersedes": [],
+                          "created": p["created"], "updated": p["created"], "last_used": None, "history": []})
+        known = {s["id"] for s in stars}
+        links, seen = [], set()
+
+        def link(kind, a, b, label=None):
+            pair = (kind, frozenset((a, b)))
+            if a != b and pair not in seen:
+                seen.add(pair)
+                links.append({"kind": kind, "from": a, "to": b, **({"label": label} if label else {})})
+
+        for star in stars:
+            for old in star["supersedes"]:
+                if old in known:
+                    link("supersedes", star["id"], old)
+        groups = {}
+        for star in stars:
+            if star["state"] == "deleted":
+                continue  # a wreck only points to what replaced it
+            sources = {e.get("message_id") for e in star["evidence"] if e.get("message_id")}
+            for source in sources:
+                groups.setdefault(("source", source), []).append(star["id"])
+            for word in {k.strip().lower() for k in star["keywords"] if k.strip()}:
+                groups.setdefault(("keyword", word), []).append(star["id"])
+        for (kind, label), members in groups.items():
+            for a, b in zip(members, members[1:]):
+                link(kind, a, b, label if kind == "keyword" else None)
+        return {"now": now, "kinds": KINDS, "stars": stars, "links": links}
+
     def memory_last_used(self, collection, since=None):
         """When each item was last actually handed to a model (from load manifests)."""
         since = time.time() - 90 * DAY if since is None else since

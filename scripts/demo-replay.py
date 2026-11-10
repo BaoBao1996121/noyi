@@ -1,6 +1,7 @@
 """Demo data for the ledger replay video, in its own data directory.
 
-    python scripts/demo-replay.py build --data .pa/demo-replay    # create the two demo tasks
+    python scripts/demo-replay.py build --data .pa/demo-replay     # four tasks + demo memories
+    python scripts/demo-replay.py memories --data .pa/demo-replay  # add only the demo memories
     python scripts/demo-replay.py serve --data .pa/demo-replay    # read-only WebUI on port 8790
 
 build runs the real pipeline (conversation layer, Pi runtime, ledger, deadline
@@ -17,6 +18,11 @@ Four tasks:
   3. 每天七点打电话: the assistant cannot do it and says so; the promise closes as unable.
   4. 测试组通知, due 16:00: the user moves it to 17:00 (改约), then it is kept.
 
+Demo memories (~44, for the memory galaxy): all five kinds, three superseded
+memories, a corrected one, an expired and several near-expiry 进行中 items, and
+five pending proposals. They go through the real memory API; their clock is the
+real clock a day back, so expiry reads relative to today.
+
 serve opens the WebUI with the background service off: nothing runs, nothing
 is sent. It never touches .pa/personal.
 """
@@ -28,6 +34,8 @@ import json
 from pathlib import Path
 import sys
 import time
+
+REAL_TIME = time.time  # demo staging replaces time.time; memory expiry is measured against the real clock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -172,9 +180,118 @@ def build(data):
 
     try:
         first, second, third, fourth = asyncio.run(story())
+        memories = seed_memories(store, clock)
     finally:
         store.close()
-    print(json.dumps({"data": str(data), "kept_task": first, "overdue_task": second, "unable_task": third, "rescheduled_task": fourth}, ensure_ascii=False))
+    print(json.dumps({"data": str(data), "kept_task": first, "overdue_task": second, "unable_task": third, "rescheduled_task": fourth, "memories": memories}, ensure_ascii=False))
+
+
+def add_memories(data):
+    """Add the demo memories to an existing demo library that has none yet."""
+    from personal_agent.store import Store
+    if data == (ROOT / ".pa" / "personal").resolve() or not (data / "state.sqlite").is_file():
+        raise SystemExit("只给已有的演示库补记忆。")
+    store = Store(data / "state.sqlite")
+    try:
+        if store.one("SELECT COUNT(*) n FROM memories")["n"]:
+            raise SystemExit("这个演示库已经有记忆了。")
+        clock = Clock(REAL_TIME() - 86400)
+        time.time = clock
+        try:
+            print(json.dumps({"data": str(data), "memories": seed_memories(store, clock)}, ensure_ascii=False))
+        finally:
+            time.time = REAL_TIME
+    finally:
+        store.close()
+
+
+# Demo memory for the galaxy video. All invented; nothing comes from the
+# user's own library. (said, [(kind, key, value, keywords, days_to_expiry)])
+# — one sentence can hold several memories, which become a "same source" link.
+MEMORY_TALK = [
+    ("以后汇报先说结论，再说原因，用中文。", [("rule", "先给结论", "汇报先说结论，再说原因", ["汇报"], None), ("rule", "用中文", "回复一律用中文", ["语言"], None)]),
+    ("发我的文件都用 Markdown，表格别超过五列。", [("rule", "文件用 Markdown", "交付文件用 Markdown", ["文件", "格式"], None), ("preference", "表格不超过五列", "表格最多五列，再多就拆", ["表格", "格式"], None)]),
+    ("改动我没确认之前不要发给别人。", [("rule", "外发先确认", "任何外发内容先给我看", ["外发"], None)]),
+    ("周末别给我发提醒，除非真的很急。", [("rule", "周末免打扰", "周末不发提醒，紧急除外", ["提醒", "周末"], None)]),
+    ("数字一律写阿拉伯数字，金额带单位。", [("rule", "数字写法", "数字用阿拉伯数字，金额带单位", ["格式", "金额"], None)]),
+    ("引用资料要标出处，没出处的别写成事实。", [("rule", "标出处", "引用必须标出处，没出处不写成事实", ["出处"], None)]),
+    ("我喝咖啡只喝美式，不加糖。", [("preference", "咖啡", "美式，不加糖", ["咖啡", "饮品"], None)]),
+    ("早上脑子最清楚，难的事排上午。", [("preference", "难事排上午", "需要专注的事安排在上午", ["日程"], None), ("about_me", "作息", "早起型，上午效率最高", ["作息", "日程"], None)]),
+    ("开会我喜欢 25 分钟一节，别排满。", [("preference", "会议时长", "会议 25 分钟一节，中间留空", ["会议", "日程"], None)]),
+    ("清单比长段落好读，能列就列。", [("preference", "多用清单", "能列清单就别写长段落", ["格式"], None)]),
+    ("周报我习惯分三段：做了什么、卡在哪、下周做什么。", [("preference", "周报三段", "周报分三段：完成、卡点、下周", ["周报", "汇报"], None)]),
+    ("提醒提前一天就够了，别提前一周。", [("preference", "提醒提前量", "提醒提前一天", ["提醒"], None)]),
+    ("图表配色用低饱和的，别太花。", [("preference", "图表配色", "低饱和配色", ["图表"], None)]),
+    ("我在杭州上班，用的是 Windows 电脑。", [("about_me", "城市", "在杭州上班", ["城市"], None), ("about_me", "电脑", "日常用 Windows", ["电脑"], None)]),
+    ("我是做产品的，带一个四个人的小组。", [("about_me", "职业", "产品经理，带四人小组", ["工作"], None)]),
+    ("我对花生过敏，订餐要避开。", [("about_me", "过敏", "花生过敏", ["饮食", "订餐"], None)]),
+    ("我女儿上小学二年级，周三下午要去接。", [("about_me", "家人", "女儿小学二年级", ["家人"], None), ("about_me", "周三接娃", "每周三下午接女儿", ["家人", "日程"], None)]),
+    ("我英语读写可以，口语一般。", [("about_me", "英语", "读写可以，口语一般", ["语言"], None)]),
+    ("这周在准备季度复盘，相关的先帮我盯着。", [("ongoing", "季度复盘", "这周准备季度复盘", ["复盘", "汇报"], 3)]),
+    ("这个月在搬家，快递先寄公司。", [("ongoing", "搬家", "本月搬家，快递寄公司", ["快递", "地址"], 5)]),
+    ("我在学 Python，遇到相关的可以顺带讲讲。", [("ongoing", "学 Python", "正在学 Python", ["学习"], 40)]),
+    ("下个月去成都出差三天。", [("ongoing", "成都出差", "下月去成都出差三天", ["出差", "日程"], 25)]),
+    ("这两周在控糖，推荐吃的注意一下。", [("ongoing", "控糖", "这两周控糖", ["饮食"], 2)]),
+    ("新版安装包这周四前要交测试组。", [("ongoing", "安装包交付", "周四前交测试组", ["工作"], 1)]),
+    ("公司地址是西湖区文三路 100 号。", [("reference", "公司地址", "西湖区文三路 100 号", ["地址", "快递"], None)]),
+    ("报销走财务系统，链接是 finance.example.com。", [("reference", "报销入口", "finance.example.com", ["报销"], None)]),
+    ("周会固定周一十点，会议室 3 楼 A。", [("reference", "周会", "周一 10:00，3 楼 A", ["会议"], None)]),
+    ("常用的快递是顺丰。", [("reference", "快递", "常用顺丰", ["快递"], None)]),
+    ("测试组的联系人是阿周。", [("reference", "测试组联系人", "阿周", ["工作"], None)]),
+    ("设计稿放在团队网盘的「设计」文件夹。", [("reference", "设计稿位置", "团队网盘 / 设计", ["文件"], None)]),
+]
+MEMORY_LATER = [  # the user changes their mind: old version → wreck with an arrow to the new one
+    ("周报改成两段吧，卡点合并进做了什么。", "周报三段", "preference", "周报两段", "周报分两段：进展（含卡点）、下周", ["周报", "汇报"]),
+    ("快递以后改用京东了。", "快递", "reference", "快递（新）", "常用京东", ["快递"]),
+    ("咖啡我现在改喝拿铁了，少糖。", "咖啡", "preference", "咖啡（新）", "拿铁，少糖", ["咖啡", "饮品"]),
+]
+MEMORY_PENDING = [  # waiting for the user: dim, dashed stars
+    {"kind": "preference", "key": "回复长度", "value": "日常回复别超过一屏", "keywords": ["格式"]},
+    {"kind": "about_me", "key": "通勤", "value": "地铁通勤约 40 分钟", "keywords": ["日程"]},
+    {"kind": "rule", "key": "截图打码", "value": "截图里的人名要打码", "keywords": ["外发"]},
+    {"kind": "reference", "key": "打印机", "value": "3 楼打印机叫 HZ-3F", "keywords": ["文件"]},
+    {"kind": "ongoing", "key": "体检", "value": "下周三体检，前一天别排晚饭局", "keywords": ["日程"], "expires": None},
+]
+
+
+def seed_memories(store, clock):
+    """~40 demo memories through the real memory API (save, merge, import).
+
+    Memories are said over the last day of real time, so "进行中" items expire
+    a few days after the library is built: rebuild before recording if the
+    blinking ones have run out.
+    """
+    clock.now = REAL_TIME() - 86400  # about 14 hours of talk, ending before now
+    say = lambda text, nonce: store.submit(None, text=text, nonce=nonce, room="local")["message_id"]
+    saved = {}
+    for i, (text, items) in enumerate(MEMORY_TALK):
+        clock.now += 1200
+        mid = say(text, f"mem-{i}")
+        for kind, key, value, keywords, days in items:
+            expires = clock.now + days * 86400 if days else None
+            saved[key] = store.save_memory("local", key=key, value=value, purpose="演示记忆", kind=kind, source_ref=mid, keywords=keywords,
+                                           expires_at=expires, evidence=[{"message_id": mid, "quote": text[:200]}])
+    # One expired ongoing item stays as a dim star.
+    clock.now += 600
+    mid = say("上周在赶年中报告，先别安排别的。", "mem-expired")
+    store.save_memory("local", key="赶年中报告", value="上周在赶年中报告", purpose="演示记忆", kind="ongoing", source_ref=mid, keywords=["汇报"],
+                      expires_at=clock.now - 86400, evidence=[{"message_id": mid, "quote": "上周在赶年中报告，先别安排别的。"}])
+    for i, (text, old_key, kind, key, value, keywords) in enumerate(MEMORY_LATER):
+        clock.now += 3600
+        mid = say(text, f"mem-later-{i}")
+        new = store.save_memory("local", key=key, value=value, purpose="演示记忆", kind=kind, source_ref=mid, keywords=keywords,
+                                evidence=[{"message_id": mid, "quote": text}])
+        old = saved[old_key]
+        # Confirmed tidy-sheet merge: the old item becomes a tombstone the new one supersedes.
+        pid = store._proposal("personal:local-user", op="merge", key=key, value=value, kind=kind,
+                              targets=[{"id": old["id"], "version": old["version"], "key": old_key}, {"id": new["id"], "version": new["version"], "key": key}],
+                              reason="你后来换了说法", evidence=[{"message_id": mid, "quote": text}])
+        store.decide_memory(pid, accept=True)
+    # A corrected value gives a star more than one version.
+    store.save_memory("local", key="会议时长", value="会议 30 分钟一节，中间留 10 分钟", purpose="演示记忆", expected_version=1)
+    pending = [{**p, "expires": time.strftime("%Y-%m-%d", time.localtime(clock.now + 9 * 86400))} if p["kind"] == "ongoing" else p for p in MEMORY_PENDING]
+    store.import_memory_proposals("local", pending, origin="演示：整理单建议")
+    return store.one("SELECT COUNT(*) n FROM memories")["n"] + len(pending)
 
 
 class ReadOnlyModel:
@@ -205,11 +322,11 @@ def serve(data, port):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["build", "serve"])
+    parser.add_argument("command", choices=["build", "serve", "memories"])
     parser.add_argument("--data", type=Path, default=ROOT / ".pa" / "demo-replay")
     parser.add_argument("--port", type=int, default=8790)
     args = parser.parse_args()
     data = args.data.resolve()
     if data == (ROOT / ".pa" / "personal").resolve():
         raise SystemExit("演示数据不能放进自用库 .pa/personal。")
-    build(data) if args.command == "build" else serve(data, args.port)
+    {"build": build, "memories": add_memories}.get(args.command, lambda d: serve(d, args.port))(data)

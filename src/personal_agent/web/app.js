@@ -1,6 +1,7 @@
 import {installGoals} from './goals.js';
 import {installReplay,registerSkin} from './replay.js';
 import {pixelSkin} from './replay-pixel.js';
+import {installGalaxy} from './galaxy.js';
 registerSkin(pixelSkin);
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => [...root.querySelectorAll(q)];
@@ -222,9 +223,15 @@ function commitmentView(box){
 }
 function memoryView(box){
   const d=state.data,group=d.memory_scope==='group';
+  const switcher=`<div class="memory-switch" role="tablist"><button data-memory-mode="list" aria-selected="${state.memoryMode!=='galaxy'}">列表</button><button data-memory-mode="galaxy" aria-selected="${state.memoryMode==='galaxy'}">星系</button></div>`;
+  if(state.memoryMode==='galaxy'){
+    box.innerHTML=`<div class="detail-heading">${group?'群共享记忆':'它对我了解多少'}</div>${switcher}<p class="memory-note">五类记忆各成一个星团。亮星已确认，虚线是待确认，灰色残骸是被取代的旧记忆。拖动平移、滚轮缩放，点星看原话和版本。这里只读。</p>`;
+    galaxyUI.mount(box,state.room,JSON.stringify([state.room,d.memories.map(m=>[m.id,m.version,m.state]),d.memory_proposals.map(p=>p.id)]));
+    return;
+  }
   const pending=d.memory_proposals.filter(p=>p.column!=='tidy'),tidy=d.memory_proposals.filter(p=>p.column==='tidy');
   const curation=d.memory_curation;
-  box.innerHTML=`<div class="detail-heading">${group?'群共享记忆':'它对我了解多少'} <button class="small-link" data-new-memory>＋ 添加</button></div><p class="memory-note">${group?'只在这个群里使用，不读取你的私聊记忆。':'你所有私聊共用这份记忆，群聊不会带过去。'}只有你保存或确认的内容才会长期记住。</p>`;
+  box.innerHTML=`<div class="detail-heading">${group?'群共享记忆':'它对我了解多少'} <button class="small-link" data-new-memory>＋ 添加</button></div>${switcher}<p class="memory-note">${group?'只在这个群里使用，不读取你的私聊记忆。':'你所有私聊共用这份记忆，群聊不会带过去。'}只有你保存或确认的内容才会长期记住。</p>`;
   box.innerHTML+=`<section class="memory-column"><h3>待确认 <span class="muted">${pending.length}</span></h3>${pending.map(proposalCard).join('')||'<p class="muted">没有待确认的记忆。</p>'}</section>`;
   if(!group)box.innerHTML+=`<section class="memory-column"><h3>整理单 <span class="muted">${tidy.length}</span> <button class="small-link" data-run-curation>现在整理</button></h3><p class="memory-note">每天空闲时整理一次，只提建议，不会自己改已确认的记忆。${curation?`上次：${esc(timeLabel(curation.ended||curation.created))}${curation.state==='failed'?'（没成功，明天再试）':curation.state==='skipped'?'（没有新内容）':''}`:''}</p>${tidy.map(proposalCard).join('')||'<p class="muted">整理单是空的。</p>'}</section>`;
   const memories=d.memories;
@@ -295,6 +302,7 @@ document.addEventListener('click',async e=>{
     if(b.dataset.useTeam){const template=state.data.team_templates.find(t=>t.id===b.dataset.useTeam);const group=await manageAction('instantiate_team',{id:template.id,name:template.name+' 新会话'});await chooseRoom(group.id);}
   }catch(error){toast(error.message);}
   if(b.dataset.tab){state.tab=b.dataset.tab;await detailView(true);}
+  if(b.dataset.memoryMode){state.memoryMode=b.dataset.memoryMode;try{localStorage.setItem('pa.memory.mode',state.memoryMode);}catch{}await detailView(true);}
   if(b.dataset.suggestion){$('#message-input').value=b.dataset.suggestion;saveDraft();$('#message-input').focus();}
   if(b.hasAttribute('data-clear-task'))chooseTask(null);
   if(b.hasAttribute('data-compose-followup')){saveDraft();$('#message-input').focus();}
@@ -323,6 +331,9 @@ document.addEventListener('submit',async e=>{
 $$('.resizer').forEach(r=>r.addEventListener('pointerdown',e=>{r.setPointerCapture(e.pointerId);const move=e=>{const width=r.dataset.panel==='left'?e.clientX:innerWidth-e.clientX;document.documentElement.style.setProperty(r.dataset.panel==='left'?'--left':'--right',Math.max(220,Math.min(440,width))+'px');};r.addEventListener('pointermove',move);r.addEventListener('pointerup',()=>r.removeEventListener('pointermove',move),{once:true});}));
 const replayUI=installReplay({state,api,esc,timeLabel});
 document.addEventListener('replay:closed',()=>detailView(true));
+const galaxyUI=installGalaxy({state,api,esc,timeLabel});
+try{state.memoryMode=localStorage.getItem('pa.memory.mode')||'list';}catch{state.memoryMode='list';}
+document.addEventListener('galaxy:closed',()=>detailView(true));
 const goalsUI=installGoals({state,api,modal,toast,refresh,esc,timeLabel,chooseTask,compose:composeAbout,request:sendIntent});
 async function poll(){await refresh();setTimeout(poll,document.hidden?5000:1500);}
 try{const boot=await api('/api/bootstrap');switchWorkspace(boot);await refresh(true);setTimeout(poll,1500);}catch(e){toast('无法连接本地服务，请确认启动窗口仍在运行。');}
