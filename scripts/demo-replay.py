@@ -9,11 +9,13 @@ real use. No model API is called and the model name in the ledger says so
 ("demo-scripted"). The clock is staged so the story reads like one working
 day; that is demo staging, not ledger data of real use.
 
-Two tasks:
+Four tasks:
   1. 周会纪要 → three action items: a spoken promise is refused, the work is
      taken on, sources read, artifact accepted, promise fulfilled with its sha256.
   2. 报价对比表, due 15:00: the run stops on an error, the user is told it is
      stuck, and after 15:00 the ledger reminds them once that the promise is overdue.
+  3. 每天七点打电话: the assistant cannot do it and says so; the promise closes as unable.
+  4. 测试组通知, due 16:00: the user moves it to 17:00 (改约), then it is kept.
 
 serve opens the WebUI with the background service off: nothing runs, nothing
 is sent. It never touches .pa/personal.
@@ -102,12 +104,15 @@ def build(data):
     from personal_agent.store import Store
     store = Store(data / "state.sqlite")
 
-    async def say(text, nonce, source_file, intake_steps, work_steps):
+    async def say(text, nonce, source_file, intake_steps, work_steps, before_work=None):
         spec = TaskSpec(text, [{"id": source_file.stem, "kind": "file", "location": str(source_file.resolve()), "required": True, "description": source_file.name}],
                         max_calls=40, max_tools=100, max_seconds=900)
         store.accept_conversation(spec, text=text, nonce=nonce)
         await Runtime(store, data, Scripted(intake_steps)).execute(store.claim_conversation())
         clock.now += 20
+        if before_work:
+            task = store.one("SELECT id FROM tasks WHERE parent_task_id IS NULL ORDER BY created DESC,rowid DESC LIMIT 1")
+            await before_work(task["id"])
         run = store.claim()
         await Runtime(store, data, Scripted(work_steps)).execute(run)
         return run["task_id"]
@@ -135,13 +140,41 @@ def build(data):
         ])
         clock.at("15:01")
         store.tick_commitments()
-        return first, second
+
+        async def reschedule(task_id):
+            # Before the work starts the user moves the deadline in the same chat.
+            clock.at("15:50")
+            promise = store.one("SELECT id FROM commitments WHERE task_id=? AND state='open'", (task_id,))
+            store.accept_conversation(TaskSpec("改到五点吧，四点有个会。", [], max_calls=40, max_tools=100, max_seconds=900), text="改到五点吧，四点有个会。", nonce="demo-4b")
+            await Runtime(store, data, Scripted([call("resolve_conversation", {"action": "commitment", "commitment_id": promise["id"], "commitment_op": "reschedule",
+                                                                                "due_at": f"{DAY} 17:00", "basis": "改到五点吧"}, "c6", (2260, 46))])).execute(store.claim_conversation())
+            clock.at("16:30")
+
+        # 3. Unable: something this machine cannot do is closed honestly, not left hanging.
+        clock.at("15:20")
+        third = await say("每天早上七点打电话叫我起床。", "demo-3", notes, [
+            call("resolve_conversation", {"action": "new_task", "receipt": "好，我看看能不能每天七点打电话叫你。", "result_kind": "artifact"}, "c4", (2050, 44)),
+        ], [
+            call("report_unable", {"explanation": "我没有打电话的能力，这台电脑上也没接电话服务，没法每天七点叫你。可以用手机闹钟，我帮你把作息写成提醒清单。"}, "unable", (1320, 76)),
+        ])
+        # 4. Rescheduled, then kept: the user moves the deadline; the new promise is fulfilled.
+        clock.at("15:40")
+        fourth = await say("帮我把周会纪要改写成给测试组的通知，下午四点前给我。", "demo-4", notes, [
+            call("resolve_conversation", {"action": "new_task", "receipt": "好，四点前写好通知发你。", "result_kind": "artifact",
+                                          "due_at": f"{DAY} 16:00", "due_basis": "下午四点前"}, "c5", (2180, 52)),
+        ], [
+            call("read_source", {"source_id": "weekly-notes"}, "read", (1170, 30)),
+            call("write_artifact", {"name": "notice.md", "content": "# 致测试组\n\n新版安装包周四前交给你们试用（小林负责）[weekly-notes]。\n"}, "write", (1310, 120)),
+            lambda messages: call("submit_result", {"artifact_ref": next(json.loads(m["content"]) for m in reversed(messages) if m["role"] == "tool" and "artifact_ref" in json.loads(m["content"]))["artifact_ref"],
+                                                    "summary": "给测试组的通知写好了。", "limitations": []}, "submit", (1400, 40)),
+        ], before_work=reschedule)
+        return first, second, third, fourth
 
     try:
-        first, second = asyncio.run(story())
+        first, second, third, fourth = asyncio.run(story())
     finally:
         store.close()
-    print(json.dumps({"data": str(data), "kept_task": first, "overdue_task": second}, ensure_ascii=False))
+    print(json.dumps({"data": str(data), "kept_task": first, "overdue_task": second, "unable_task": third, "rescheduled_task": fourth}, ensure_ascii=False))
 
 
 class ReadOnlyModel:

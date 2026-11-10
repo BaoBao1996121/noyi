@@ -421,7 +421,7 @@ async def shutdown(request):
 
 async def static(request):
     name = request.match_info.get("name", "index.html")
-    if name not in {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css"}:
+    if name not in {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css", "replay-pixel.js"}:
         raise web.HTTPNotFound()
     return web.FileResponse(WEB / name)
 

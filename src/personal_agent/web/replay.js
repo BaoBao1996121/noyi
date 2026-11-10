@@ -54,8 +54,11 @@ export const geometricSkin = {
     ctx.fillText(shown, 14, 12);
   },
 };
+geometricSkin.label = '简洁';
 const SKINS = {geometry: geometricSkin};
-export function registerSkin(skin) {SKINS[skin.name] = skin;}
+const skinListeners = new Set();
+export function registerSkin(skin) {SKINS[skin.name] = skin; skinListeners.forEach(f => f());}
+const SKIN_KEY = 'pa.replay.skin';
 
 // ---- player: pure state over the event list ----
 function createPlayer(onChange) {
@@ -83,7 +86,7 @@ function createPlayer(onChange) {
 export function installReplay({state, api, esc, timeLabel}) {
   const root = document.createElement('div');
   root.className = 'replay';
-  root.innerHTML = `<div class="replay-bar"><select class="replay-task" aria-label="选一件事"></select><button class="small-link" data-replay-reload>刷新</button><button class="small-link" data-replay-full>全屏回放</button></div>
+  root.innerHTML = `<div class="replay-bar"><select class="replay-task" aria-label="选一件事"></select><select class="replay-skin" aria-label="画风"></select><button class="small-link" data-replay-reload>刷新</button><button class="small-link" data-replay-full>全屏回放</button></div>
     <div class="replay-outcome"></div><canvas class="replay-canvas" aria-label="账本回放画面"></canvas>
     <div class="replay-controls"><button class="button replay-play" data-replay-play aria-label="播放">▶ 播放</button><button class="icon" data-replay-step="-1" aria-label="上一步">‹</button><input class="replay-seek" type="range" min="0" max="0" step="0.01" value="0" aria-label="回放进度"><button class="icon" data-replay-step="1" aria-label="下一步">›</button><select class="replay-speed" aria-label="速度"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></div>
     <div class="replay-step-label muted"></div><article class="replay-card"></article><details class="replay-log"><summary>全部经过</summary><ol></ol></details>`;
@@ -92,7 +95,28 @@ export function installReplay({state, api, esc, timeLabel}) {
   let timeline = null, taskId = null, followed = null, skin = geometricSkin, frame = 0, shownCard = -2;
   const player = createPlayer(() => {draw(); controls();});
 
-  function setSkin(name) {skin = SKINS[name] || geometricSkin; draw();}
+  function skinOptions() {
+    const select = $('.replay-skin');
+    select.innerHTML = Object.values(SKINS).map(s => `<option value="${esc(s.name)}">${esc(s.label || s.name)}</option>`).join('');
+    select.value = skin.name;
+  }
+  function setSkin(name) {
+    skin = SKINS[name] || geometricSkin; root.dataset.skin = skin.name;
+    try {localStorage.setItem(SKIN_KEY, skin.name);} catch {}
+    skinOptions(); draw(); idle();
+  }
+  // Animated skins keep moving (conveyor, blinking lamps) while paused, at a low frame rate.
+  let idleFrame = 0, idleLast = 0;
+  function idle() {
+    if (idleFrame || !skin.animated) return;
+    const step = now => {
+      idleFrame = 0;
+      if (!root.isConnected || !skin.animated) return;
+      if (!player.playing && now - idleLast > 66) {idleLast = now; draw();}
+      idleFrame = requestAnimationFrame(step);
+    };
+    idleFrame = requestAnimationFrame(step);
+  }
   function when(e) {return e.at ? timeLabel(e.at) : '时间未知';}
   function card(e) {
     if (!e) return '<p class="muted">按 ▶ 开始，或拖动进度条。</p>';
@@ -129,25 +153,30 @@ export function installReplay({state, api, esc, timeLabel}) {
   function draw() {
     if (!root.isConnected) return;
     const view = resize();
+    view.now = performance.now();
     skin.background(ctx, view);
     if (!timeline) {skin.caption(ctx, view, '选一件事开始回放', 'info'); return;}
     const stations = timeline.stations, index_of = id => stations.findIndex(s => s.id === id);
     const pos = skin.layout(view.width, view.height, stations.length, view.vertical);
     const {index, fraction} = player.current(), arrived = fraction >= TRAVEL || player.position >= player.length();
-    const seen = stations.map(() => ({count: 0, tone: null, bad: false}));
+    const seen = stations.map(() => ({count: 0, tone: null, bad: false, kinds: []}));
+    // Skins may read what has happened so far (events already arrived) and the event in hand.
+    view.history = [];
     timeline.events.forEach((e, i) => {
-      if (i < index || (i === index && arrived && player.position > 0)) {const s = seen[index_of(e.station)]; s.count++; s.tone = e.tone; s.bad = s.bad || e.tone === 'bad';}
+      if (i < index || (i === index && arrived && player.position > 0)) {const s = seen[index_of(e.station)]; s.count++; s.tone = e.tone; s.bad = s.bad || e.tone === 'bad'; s.kinds.push(e.kind); view.history.push(e);}
     });
     const reached = Math.max(-1, ...seen.map((s, i) => s.count ? i : -1));
     for (let i = 0; i < stations.length - 1; i++) skin.track(ctx, view, pos[i], pos[i + 1], i < reached);
     const current = timeline.events[index];
-    stations.forEach((s, i) => skin.station(ctx, view, {index: i, label: s.label, pos: pos[i], visited: seen[i].count > 0, count: seen[i].count, tone: seen[i].tone, bad: seen[i].bad,
+    view.event = player.position > 0 ? current : null;
+    view.progress = arrived ? Math.min(1, (fraction - TRAVEL) / (1 - TRAVEL)) : 0;
+    stations.forEach((s, i) => skin.station(ctx, view, {index: i, id: s.id, label: s.label, pos: pos[i], visited: seen[i].count > 0, count: seen[i].count, tone: seen[i].tone, bad: seen[i].bad, kinds: seen[i].kinds,
       active: current && index_of(current.station) === i && arrived && player.position > 0}));
     if (current && player.position > 0) {
       const to = pos[index_of(current.station)], prev = index > 0 ? pos[index_of(timeline.events[index - 1].station)] : to;
       const t = Math.min(1, fraction / TRAVEL), ease = t * t * (3 - 2 * t);
       skin.token(ctx, view, {x: prev.x + (to.x - prev.x) * ease, y: prev.y + (to.y - prev.y) * ease}, current.tone);
-      if (arrived) skin.burst(ctx, view, to, current.tone, Math.min(1, (fraction - TRAVEL) / (1 - TRAVEL)));
+      if (arrived) skin.burst(ctx, view, to, current.tone, view.progress);
       skin.caption(ctx, view, `${current.title} · ${when(current)}`, current.tone);
     } else skin.caption(ctx, view, timeline.task.title, 'info');
   }
@@ -199,12 +228,13 @@ export function installReplay({state, api, esc, timeLabel}) {
     const wanted = state.task && state.task !== followed ? state.task : taskId || tasks[0]?.id;
     followed = state.task;
     if (wanted && wanted !== taskId) load(wanted); else draw();
+    idle();
   }
   function toggleFull(on) {
     root.classList.toggle('full', on);
     if (on) document.body.append(root); else {root.remove(); state.detailSignature = ''; document.dispatchEvent(new CustomEvent('replay:closed'));}
     $('[data-replay-full]').textContent = on ? '退出全屏' : '全屏回放';
-    draw();
+    draw(); idle();
   }
 
   root.addEventListener('click', e => {
@@ -221,6 +251,10 @@ export function installReplay({state, api, esc, timeLabel}) {
   });
   $('.replay-seek').addEventListener('input', e => {const value = Number(e.target.value); player.pause(); player.seek(value);});
   $('.replay-speed').addEventListener('change', e => {player.speed = Number(e.target.value);});
+  $('.replay-skin').addEventListener('change', e => setSkin(e.target.value));
+  skinListeners.add(() => {skinOptions(); let saved = null; try {saved = localStorage.getItem(SKIN_KEY);} catch {} if (saved && saved !== skin.name && SKINS[saved]) setSkin(saved);});
+  let saved = null; try {saved = localStorage.getItem(SKIN_KEY);} catch {}
+  setSkin(saved && SKINS[saved] ? saved : skin.name);
   $('.replay-task').addEventListener('change', e => {if (e.target.value) {player.pause(); load(e.target.value);}});
   document.addEventListener('keydown', e => {if (e.key === 'Escape' && root.classList.contains('full')) toggleFull(false);});
   new ResizeObserver(() => draw()).observe(canvas);

@@ -134,3 +134,15 @@ async def test_timeline_endpoint_is_read_only_and_scoped_to_the_users_tasks(stor
         assert (await client.get("/api/tasks/nope/timeline")).status == 400
         assert (await client.post(f"/api/tasks/{result['task_id']}/timeline", json={})).status == 405
         assert (await client.get("/assets/replay.js")).status == 200
+
+
+@pytest.mark.asyncio
+async def test_pixel_skin_is_served_and_draws_only_from_code(store, tmp_path):
+    async with client_for(store, tmp_path) as client:
+        response = await client.get("/assets/replay-pixel.js")
+        assert response.status == 200
+        text = await response.text()
+    # Self-drawn: grids and a palette in code, no image files or outside URLs.
+    assert "const PAL" in text and "const SPRITES" in text
+    for banned in ("http://", "https://", ".png", ".gif", "new Image", "import "):
+        assert banned not in text

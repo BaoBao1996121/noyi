@@ -77,5 +77,5 @@ modules = ["my_notes"]
 
 - 接口：`GET /api/tasks/{id}/timeline` → `{task, stations[7], outcome, unknown_times, events[]}`；事件字段 `seq, station, kind, tone(ok/warn/bad/info), at, time(known/unknown), end, end_time, order(time/inferred), title, text, facts[[名, 值]], links[{label,url}]`。
 - 每站来源：回复层判断 ← `conversation_inputs` + `commitment_events.unregistered_refused` + `steps.conversation_rejected`；登记承诺/兑现 ← `commitment_events`；开工 ← `runs`；模型请求 ← `model_requests` + `steps.kind='model'`（数量对不上时 token 记未知）；工具调用 ← `operations`；交付 ← `steps.kind='acceptance'` + `deliveries`。
-- 前端：`web/replay.js` 分数据、播放器、皮肤三层；`registerSkin({name, layout, background, track, station, lamp, token, burst, caption})` 注册新皮肤，`setSkin(name)` 切换。
-- 演示数据：`scripts/demo-replay.py build|serve --data <目录>`，拒绝写入 `.pa/personal`。
+- 前端：`web/replay.js` 分数据、播放器、皮肤三层；`registerSkin({name, layout, background, track, station, lamp, token, burst, caption})` 注册新皮肤，`setSkin(name)` 切换。皮肤绘制时的 `view` 另带 `now`（毫秒，用于动画）、`history`（已到站的事件）、`event`/`progress`（当前事件和到站后进度），站点对象带 `id` 与 `kinds`；皮肤可设 `animated: true` 让暂停时传送带也动。像素皮肤见 `web/replay-pixel.js`，由 `app.js` 注册。
+- 演示数据：`scripts/demo-replay.py build|serve --data <目录>`，拒绝写入 `.pa/personal`；四件事覆盖兑现、逾期、做不到、改约后兑现。

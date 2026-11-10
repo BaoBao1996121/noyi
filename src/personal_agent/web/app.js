@@ -1,5 +1,7 @@
 import {installGoals} from './goals.js';
-import {installReplay} from './replay.js';
+import {installReplay,registerSkin} from './replay.js';
+import {pixelSkin} from './replay-pixel.js';
+registerSkin(pixelSkin);
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => [...root.querySelectorAll(q)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

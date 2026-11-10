@@ -2,6 +2,8 @@
 .replay{display:flex;flex-direction:column;gap:10px}
 .replay-bar{display:flex;gap:6px;align-items:center}
 .replay-task{flex:1;min-width:0;border:1px solid #dededb;border-radius:8px;padding:6px 8px;background:#fff;font-size:12px}
+.replay-skin{border:1px solid #dededb;border-radius:8px;padding:6px 4px;background:#fff;font-size:12px;flex:none}
+.replay[data-skin="pixel"] .replay-canvas{background:#ece6d6;border-color:#cbc1aa;image-rendering:pixelated}
 .replay-outcome{font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;background:#f2f4f8;color:#3b5aa8}
 .replay-outcome.ok{background:#eaf6f0;color:#1f7a50}
 .replay-outcome.warn{background:#fbf3e2;color:#93650b}
