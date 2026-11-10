@@ -235,6 +235,8 @@ class ConversationGoals:
                         enable_nudge=True, review_workers=True)
         goal = self.store.create_goal(room=room["id"], actor_id=run["actor_id"], title=args["title"], objective=args["objective"], calls_limit=120, tools_limit=400, account=room["owner"])
         policy = self.store.create_policy(goal["id"], schedule=schedule, template=spec, account=room["owner"])
+        # The promise this task made now rests on a registered arrangement (C-4).
+        self.store.bind_commitment_schedule(task["root_task_id"], goal_id=goal["id"], policy_id=policy["id"], schedule=policy["schedule"])
         return {"goal": self._public_goal(self.store.goal(goal["id"])), "registration_receipt": policy["registration_receipt"]}
 
     def _manage(self, run, task, room, args):

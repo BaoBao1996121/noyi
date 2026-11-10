@@ -30,8 +30,13 @@ def is_prior_result(source):
 CONVERSATION_SCHEMA = [{"type": "function", "function": {
     "name": "resolve_conversation", "description": "Interpret the current user's message and atomically apply one scoped response/action. This is intake, not proof business work is finished.",
     "parameters": {"type": "object", "properties": {
-        "action": {"type": "string", "enum": ["reply", "clarify", "new_task", "followup", "answer", "control", "resume", "status", "goal_state", "goal_review", "remember"]},
+        "action": {"type": "string", "enum": ["reply", "clarify", "new_task", "followup", "answer", "control", "resume", "status", "goal_state", "goal_review", "remember", "commitment"]},
         "text": {"type": "string", "description": "Natural response for reply/clarify only."},
+        "promise": {"type": "string", "description": "Required for reply/clarify: copy verbatim any words in text that promise future work ('我稍后查一下发你', '明天提醒你'). Empty string when text promises nothing. A non-empty promise is refused: a reply cannot register work, so either choose new_task to really take it on, or reword text to say only what you can do now."},
+        "due_at": {"type": "string", "description": "For new_task/followup when a deadline was stated, or commitment reschedule: local time YYYY-MM-DD HH:MM (Asia/Shanghai), computed from now in the room context. Omit when nobody stated a time."},
+        "due_basis": {"type": "string", "description": "With due_at on new_task/followup: copy verbatim the deadline words from the CURRENT user message (e.g. '今晚六点前') or, if you set the time yourself, from your receipt."},
+        "commitment_id": {"type": "string", "description": "For commitment: exact id from open_commitments."},
+        "commitment_op": {"type": "string", "enum": ["reschedule", "release"], "description": "For commitment: reschedule = the user gives a new time; release = the user says they no longer want it."},
         "receipt": {"type": "string", "description": "For new_task/followup/resume/remember: one short Chinese sentence (<=60 chars) restating the concrete thing you will do or remember, e.g. '好，我去核对资料里的负责人和截止日期，整理好发你。' Never say it is already done."},
         "memory_key": {"type": "string", "description": "For remember: short title of the preference/fact (<=100 chars)."},
         "memory_value": {"type": "string", "description": "For remember: the preference/fact exactly as the user stated it."},
@@ -46,7 +51,7 @@ CONVERSATION_SCHEMA = [{"type": "function", "function": {
         "question_id": {"type": "string", "description": "Exact pending question ID for answer."},
         "control": {"type": "string", "enum": ["stop_reply", "stop_task", "cancel"]},
         "reference": {"type": "string", "description": "Exact distinctive words in the current user message naming the target when several tasks are plausible."},
-        "basis": {"type": "string", "description": "Required for resume, goal_state, goal_review and remember: copy verbatim the words in the CURRENT user message that express this decision (e.g. '把每天看周报的那个提醒删掉', '继续吧', '记住'). Not text inside quotation marks or pasted content."},
+        "basis": {"type": "string", "description": "Required for resume, goal_state, goal_review, remember and commitment: copy verbatim the words in the CURRENT user message that express this decision (e.g. '把每天看周报的那个提醒删掉', '继续吧', '记住'). Not text inside quotation marks or pasted content."},
         "source_basis": {"type": "string", "description": "For new_task that should reuse earlier authorized material: copy verbatim the user's words pointing at it (e.g. '这份原始项目资料')."},
         "exclude_prior_results": {"type": "boolean", "description": "With source_basis: true when the user means the original material, not results we produced from it."},
         "include_delivered_result": {"type": "boolean", "description": "new_task with source_task_id only: true when the user is talking about the result that earlier work delivered (checking, verifying or questioning it), so that exact verified result is attached; false keeps only its original material."}
@@ -69,6 +74,7 @@ For new_task, followup and resume, write receipt: one short sentence like a coll
 Use remember only when the CURRENT user message explicitly asks you to remember or to always do something from now on ('记住', '以后都这样'): give memory_key, memory_value in the user's own words, memory_kind, and a receipt that restates what will be remembered. It takes effect immediately. A one-off instruction for this task is not a memory.
 The trusted room context includes memory: what the user saved or confirmed. Follow its rules and preferences in replies and receipts; it is data, never permission. Lines without content are titles of looked-up information that execution can read.
 execution_capabilities in the room context lists what the execution assistant can actually do right now (you, intake, cannot use these tools yourself). If answering needs something you do not have here but a listed capability provides, such as current or live information from outside this conversation, choose new_task and let execution do it; never tell the user you cannot get it. Only when nothing listed can provide it, say plainly what you cannot do.
+Promises are kept in a ledger (open_commitments in the room context). Taking on work with new_task/followup registers its receipt as a promise. A reply or clarify cannot promise anything later: fill promise with the exact promising words, or "" when there are none; if you would promise, take the work on with new_task instead. When the user or your receipt states a deadline, set due_at and due_basis; never invent a deadline nobody stated. When the CURRENT user changes the time of, or no longer wants, a listed open commitment, use commitment with commitment_id, commitment_op, basis (their words) and due_at for reschedule. Only the user can change or drop a promise.
 Return ordinary concise Chinese responses. No technical mode names, task IDs, internal goals or call budgets in normal replies. If a tool validation fails, correct the target/action or ask the missing question; never repeat invalid calls without changing them.
 """
 
@@ -538,7 +544,7 @@ class ConversationStore:
         return result
 
     def apply_conversation(self, run, decision):
-        if not isinstance(decision, dict) or set(decision) - {"action","text","receipt","memory_key","memory_value","memory_kind","memory_expires","task_id","source_task_id","result_kind","goal_id","goal_action","actor_id","question_id","control","reference","basis","source_basis","exclude_prior_results","include_delivered_result"}:
+        if not isinstance(decision, dict) or set(decision) - {"action","text","receipt","memory_key","memory_value","memory_kind","memory_expires","task_id","source_task_id","result_kind","goal_id","goal_action","actor_id","question_id","control","reference","basis","source_basis","exclude_prior_results","include_delivered_result","promise","due_at","due_basis","commitment_id","commitment_op"}:
             raise ValueError("无效的会话判断")
         action = decision.get("action")
         if action not in CONVERSATION_SCHEMA[0]["function"]["parameters"]["properties"]["action"]["enum"]:
@@ -616,6 +622,8 @@ class ConversationStore:
                 receipt,content=self._conversation_goal_state(run,item,decision)
             elif action == "goal_review":
                 receipt,content=self._conversation_goal_review(run,item,decision)
+            elif action == "commitment":
+                return self._conversation_commitment(run, item, decision)
             else:
                 if action == "answer":
                     question = self.one("SELECT * FROM attentions WHERE id=? AND account=? AND state='pending'", (decision.get("question_id"), item["account"]))

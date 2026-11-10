@@ -285,7 +285,7 @@ def test_legacy_room_memories_migrate_into_shared_personal_collection(tmp_path):
         proposal = store.one("SELECT * FROM memory_proposals WHERE id='p1'")
         assert proposal["collection_id"] == "personal:local-user" and proposal["op"] == "add" and proposal["state"] == "pending"
         assert json.loads(proposal["evidence"]) == [{"message_id": "msg1"}]
-        assert store.one("PRAGMA user_version")["user_version"] == 9
+        assert store.one("PRAGMA user_version")["user_version"] == Store.SCHEMA_VERSION
         assert store.save_memory("private-b", key="称呼", value="林", purpose="对话", expected_version=2)["version"] == 3
     finally:
         store.close()

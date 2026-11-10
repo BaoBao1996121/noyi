@@ -56,7 +56,7 @@ def test_intake_keeps_responding_bot_identity_without_private_scope(store, selec
 @pytest.mark.asyncio
 async def test_actual_pi_reply_has_no_artifact_task_and_accounts_request(store,tmp_path):
     incoming(store,"你好")
-    model = ScriptedModel([tool_reply('resolve_conversation',{'action':'reply','text':'你好，今天想让我帮你处理什么？'})])
+    model = ScriptedModel([tool_reply('resolve_conversation',{'action':'reply','text':'你好，今天想让我帮你处理什么？', 'promise': ''})])
     runtime = Runtime(store,tmp_path/'data',model)
     await runtime.execute(claim_intake(store))
     assert not store.all('SELECT id FROM tasks')
@@ -73,7 +73,7 @@ def intake_context_seen(store, tmp_path, plugins, model_config=None):
     def reply(messages, tools):
         seen.update(json.loads(messages[1]["content"].split(": ", 1)[1]))
         seen["system"] = messages[0]["content"]
-        return tool_reply('resolve_conversation', {'action': 'reply', 'text': '好的'})
+        return tool_reply('resolve_conversation', {'action': 'reply', 'text': '好的', 'promise': ''})
     model = ScriptedModel([reply])
     if model_config:
         model.config = model_config
@@ -124,7 +124,7 @@ def test_multiple_possible_tasks_require_natural_clarification(store):
     run=claim_intake(store)
     with pytest.raises(ValueError,match='多个可能事项'):
         store.apply_conversation(run,{'action':'control','task_id':first,'control':'stop_task'})
-    store.apply_conversation(run,{'action':'clarify','text':'你想暂停资料核对，还是会议准备？'})
+    store.apply_conversation(run,{'action':'clarify','text':'你想暂停资料核对，还是会议准备？', 'promise': ''})
     assert store.task(first)['status']=='ready'
     assert '还是' in store.one('SELECT content FROM deliveries')['content']
 
@@ -441,7 +441,7 @@ def test_resolved_source_still_allows_a_genuinely_missing_requirement_question(s
     incoming(store,'检查这份资料，按我们约定但没有告诉你的风险阈值判断')
     run=claim_intake(store)
     assert store.conversation_context(run)['unique_source_reference']
-    store.apply_conversation(run,{'action':'clarify','text':'判断风险需要用什么阈值？'})
+    store.apply_conversation(run,{'action':'clarify','text':'判断风险需要用什么阈值？', 'promise': ''})
     assert store.one('SELECT content FROM deliveries')['content']=='判断风险需要用什么阈值？'
 
 
@@ -593,7 +593,7 @@ def test_a_message_arriving_mid_understanding_restarts_with_the_whole_turn(store
     incoming(store, "预算三千", nonce="b")
     assert not store.current(run)
     with pytest.raises(ValueError):
-        store.apply_conversation(run, {"action": "reply", "text": "好的"})
+        store.apply_conversation(run, {"action": "reply", "text": "好的", "promise": ""})
     store.ack_control(run, store.control_reason(run))
     again = claim_intake(store)
     assert store.conversation_input(again)["content"] == "帮我挑个硬盘\n预算三千"
@@ -602,7 +602,7 @@ def test_a_message_arriving_mid_understanding_restarts_with_the_whole_turn(store
 def test_a_message_after_the_reply_is_a_new_turn(store):
     incoming(store, "你好", nonce="a")
     run = claim_intake(store)
-    store.apply_conversation(run, {"action": "reply", "text": "你好"})
+    store.apply_conversation(run, {"action": "reply", "text": "你好", "promise": ""})
     incoming(store, "帮我查天气", nonce="b")
     nxt = claim_intake(store)
     assert store.conversation_input(nxt)["content"] == "帮我查天气"
@@ -646,7 +646,7 @@ async def test_transient_provider_fault_is_retried_as_a_recorded_request(store,t
     import personal_agent.runtime as rt
     monkeypatch.setattr(rt, "RETRY_DELAYS", (0, 0))
     incoming(store,"你好")
-    model = ScriptedModel([transport_fault(), tool_reply('resolve_conversation',{'action':'reply','text':'你好，在的。'})])
+    model = ScriptedModel([transport_fault(), tool_reply('resolve_conversation',{'action':'reply','text':'你好，在的。', 'promise': ''})])
     await Runtime(store,tmp_path/'data',model).execute(claim_intake(store))
     assert store.one('SELECT content FROM deliveries')['content'] == '你好，在的。'
     assert [r['state'] for r in store.all('SELECT state FROM model_requests ORDER BY sequence')] == ['unknown','completed']
@@ -671,7 +671,7 @@ def test_new_task_carries_the_conversation_it_came_from_to_execution(store, tmp_
     # The request that starts work can be a short answer ("html的吧") whose
     # meaning lives in earlier turns; execution must receive those turns.
     incoming(store, "去写个贪吃蛇", nonce="snake-1")
-    store.apply_conversation(claim_intake(store), {"action": "clarify", "text": "做成什么形式？单个 HTML 文件还是 Python 脚本？"})
+    store.apply_conversation(claim_intake(store), {"action": "clarify", "text": "做成什么形式？单个 HTML 文件还是 Python 脚本？", "promise": ""})
     incoming(store, "html的吧", nonce="snake-2")
     receipt = "好，我写一个单文件 HTML 版贪吃蛇，写完发你。"
     result = store.apply_conversation(claim_intake(store), {"action": "new_task", "receipt": receipt})
@@ -689,10 +689,10 @@ def test_new_task_carries_the_conversation_it_came_from_to_execution(store, tmp_
 def test_conversation_handed_to_execution_is_bounded_and_room_scoped(store):
     other = store.create_bot("另一位", "别的房间")["private_room"]
     incoming(store, "别的房间的秘密", nonce="other", room=other)
-    store.apply_conversation(claim_intake(store), {"action": "reply", "text": "好"})
+    store.apply_conversation(claim_intake(store), {"action": "reply", "text": "好", "promise": ""})
     for i in range(20):
         incoming(store, f"第{i}句" + "长" * 3000, nonce=f"talk-{i}")
-        store.apply_conversation(claim_intake(store), {"action": "reply", "text": f"回{i}"})
+        store.apply_conversation(claim_intake(store), {"action": "reply", "text": f"回{i}", "promise": ""})
     incoming(store, "就按刚才说的做", nonce="go")
     result = store.apply_conversation(claim_intake(store), {"action": "new_task"})
     turns = store.task(result["task_id"])["spec"]["conversation"]

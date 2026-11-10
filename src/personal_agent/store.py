@@ -325,12 +325,13 @@ from .admission_store import AdmissionStore
 from .review_store import ReviewStore
 from .conversation import ConversationStore
 from .speech import SpeechStore
+from .commitment_store import CommitmentStore
 
 
-class Store(SpeechStore, ConversationStore, ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
+class Store(CommitmentStore, SpeechStore, ConversationStore, ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
     """Durable task ledger with versioned collaboration protocols."""
 
-    SCHEMA_VERSION = 9  # 9: shared personal memory, kinds, candidates, curation
+    SCHEMA_VERSION = 10  # 10: commitment ledger; 9: shared personal memory, kinds, candidates, curation
 
     def __init__(self, path):
         super().__init__(path)

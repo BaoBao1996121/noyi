@@ -59,3 +59,14 @@ modules = ["my_notes"]
 任务账本目前使用 SQLite，是一致性和授权的权威。更换持久化后端需要实现相同事务/版本语义并迁移数据；不是改一个类名即可任意热切。内核可替换与外围可扩展都成立，但状态协议本身需要保持稳定。
 
 未来可在这些边界外增加 Cordis/DSH 或 Pi extension 适配层，将它们的生命周期、服务和工具能力映射进本系统。第三方模块需要声明能力范围、配置、版本、停止与恢复行为，并经过合同测试；进程内可信扩展不等于安全隔离。生态适配器属于后续增量，不是当前可用性闭环的依赖。
+
+## 承诺账本（2026-11-09 起）
+
+`commitment_store.py` 的 `CommitmentStore` 混入 `Store`，表 `commitments` 与 `commitment_events`。接入点都在既有钩子上，不另开路径：
+
+- 登记：`apply_conversation` 的 new_task/followup（followup 让旧承诺变 superseded）；`ConversationGoals._start` 调 `bind_commitment_schedule`，once 改为 scheduled（时限为提醒时间），其余改为 standing。
+- 收口：`finish` 里验收通过即兑现（成果、操作作为出处）；`unable_reported` 记做不到；`request_control(cancel)` 与 `set_goal_state(retired/achieved)` 记不再继续；其余暂停记 `blocked_since`，重新开跑时清掉。
+- 执行层：`submit_result` 可选 `promise` 字段，经 `executor_promise_errors` 核对本次是否登记了安排。
+- 时间：`tick_waits` 每轮调 `tick_commitments`（逾期、卡住、未告知收口）；`commitment_clock` 记上次检查，用来判断服务是否停过。
+- 界面：`/api/state` 的 `commitments`，详情栏「承诺」页，交付下方的「兑现了…」一行。
+

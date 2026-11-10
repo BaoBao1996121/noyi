@@ -47,7 +47,7 @@ def _read_artifact(call, args):
 def _submit_result(call, args):
     store, run = call.runtime.store, call.run
     result = verify(call.toolset, store.operations(run["task_id"]), args)
-    errors = store.completion_errors(run) + store.artifact_version_errors(run, args["artifact_ref"]) + store.review_artifact_errors(run, args["artifact_ref"])
+    errors = store.completion_errors(run) + store.artifact_version_errors(run, args["artifact_ref"]) + store.review_artifact_errors(run, args["artifact_ref"]) + store.executor_promise_errors(run, args.get("promise"))
     if errors:
         result["passed"] = False
         result.setdefault("errors", []).extend(errors)

@@ -45,3 +45,9 @@
 .memory-badge{display:inline-block;font-size:11px;color:#8a5a00;background:#fff4dc;border-radius:4px;padding:1px 6px;margin-top:4px}
 .memory-target{font-size:12px;line-height:1.6;margin:4px 0;overflow-wrap:anywhere}
 .memory-proposal p{font-size:13px;line-height:1.7}
+.commitment{border:1px solid var(--line,#e6e6e6);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;line-height:1.6}
+.commitment.overdue{border-color:#e0a030;background:#fff8ea}
+.commitment-quote{overflow-wrap:anywhere}
+.commitment-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:11px;color:#777;margin-top:2px}
+.commitment-end{font-size:12px;margin-top:4px;color:#3a6b35;overflow-wrap:anywhere}
+.fulfilled-line{font-size:11px;color:#3a6b35;margin-top:4px}

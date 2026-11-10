@@ -47,7 +47,8 @@ TOOL_SCHEMAS = [
     tool("submit_result", "Request independent acceptance of an artifact. A claim alone never completes the task.",
          {"artifact_ref": {"type": "string"}, "summary": {"type": "string"},
           "limitations": {"type": "array", "items": {"type": "string"},
-                          "description": "IDs of unavailable optional sources; each must have literal UNAVAILABLE [source_id] in artifact"}},
+                          "description": "IDs of unavailable optional sources; each must have literal UNAVAILABLE [source_id] in artifact"},
+          "promise": {"type": "string", "description": "Optional: copy verbatim any words in summary that promise the user future work (e.g. '之后资料有变化我会再告诉你'). Such a promise is accepted only if this run registered it with start_following; otherwise leave it out of summary."}},
          ["artifact_ref", "summary", "limitations"]),
 ]
 

@@ -41,7 +41,7 @@ async def test_desktop_shutdown_requires_token_and_signals_only_its_own_instance
 
 @pytest.mark.asyncio
 async def test_unified_message_replies_without_task_and_retry_does_not_rebill(store, tmp_path):
-    model = ScriptedModel([tool_reply('resolve_conversation', {'action':'reply','text':'你好，有什么事情需要我帮忙？'})])
+    model = ScriptedModel([tool_reply('resolve_conversation', {'action':'reply','text':'你好，有什么事情需要我帮忙？', 'promise': ''})])
     async with client_for(store, tmp_path, model, run_service=True) as client:
         payload = {'text':'你好','nonce':'ordinary-conversation'}
         first = await (await client.post('/api/messages', json=payload)).json()

@@ -128,6 +128,7 @@ class Console:
                 "bots": self.store.all("SELECT * FROM bots WHERE owner='local-user' ORDER BY created,id"),
                 "team_templates": [{**t, "configuration": json.loads(t["configuration"])} for t in self.store.all("SELECT * FROM team_templates WHERE owner='local-user' ORDER BY created")],
                 "pending_routes": self.store.all("SELECT p.id,p.mode,p.actor_id,p.message_id,m.content FROM pending_routes p JOIN messages m ON m.id=p.message_id WHERE p.room_id=? AND p.state='unassigned' ORDER BY p.created", (room,)),
+                "commitments": self.store.commitment_items(room),
                 "memories": self.store.memory_items(room),
                 "memory_scope": "personal" if self.store.memory_collection(room).startswith("personal:") else "group",
                 "memory_kinds": KINDS,

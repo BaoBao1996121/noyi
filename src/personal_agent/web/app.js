@@ -99,7 +99,7 @@ function messageView(force=false){
   const originHtml=before.length?`<details class="task-origin" open><summary>这件事是从这段对话来的</summary>${before.map(t=>`<article class="message ${t.speaker==='user'?'user':'assistant'}"><div class="bubble ${t.speaker==='user'?'':'rich'}">${t.speaker==='user'?esc(t.content):rich(t.content)}</div></article>`).join('')}</details>`:'';
   // The intake receipt is a room reply, not task output; show it from the
   // task's origin right after the request it answered.
-  const items=[...(originHtml?[{sort:-1,html:originHtml}]:[]),...(receipt&&asked?[{sort:(asked.created||0)+0.001,html:`<article class="message assistant"><div class="message-label">${esc(botName(task.actor_id))}</div><div class="bubble rich">${rich(receipt.content)}</div></article>`}]:[]),...messages.map(m=>({sort:m.created||0,html:`<article class="message user"><div class="message-label">你 ${m.actor_id!=='unassigned'?'→ '+esc(botName(m.actor_id)):''}<time>${esc(timeLabel(m.created))}</time><button class="small-link" data-reply="${m.id}" data-tid="${m.task_id||''}" data-actor="${m.actor_id}">回复</button></div><div class="bubble">${esc(m.content)}</div></article>`})),...deliveries.map(d=>({sort:d.created||0,html:`<article class="message ${d.kind==='system'||d.kind==='clarification'?'system':'assistant'}"><div class="message-label">${d.kind==='result'?esc(botName(d.actor_id)):''} <time>${esc(timeLabel(d.created))}</time>${d.actor_id?`<button class="small-link" data-reply="${d.id}" data-tid="${d.task_id||''}" data-actor="${d.actor_id}">回复</button>`:''}</div><div class="bubble rich">${rich(d.content)}</div>${d.artifact?artifactCard(d):''}</article>`}))].sort((a,b)=>a.sort-b.sort);
+  const items=[...(originHtml?[{sort:-1,html:originHtml}]:[]),...(receipt&&asked?[{sort:(asked.created||0)+0.001,html:`<article class="message assistant"><div class="message-label">${esc(botName(task.actor_id))}</div><div class="bubble rich">${rich(receipt.content)}</div></article>`}]:[]),...messages.map(m=>({sort:m.created||0,html:`<article class="message user"><div class="message-label">你 ${m.actor_id!=='unassigned'?'→ '+esc(botName(m.actor_id)):''}<time>${esc(timeLabel(m.created))}</time><button class="small-link" data-reply="${m.id}" data-tid="${m.task_id||''}" data-actor="${m.actor_id}">回复</button></div><div class="bubble">${esc(m.content)}</div></article>`})),...deliveries.map(d=>({sort:d.created||0,html:`<article class="message ${d.kind==='system'||d.kind==='clarification'||d.kind==='commitment'?'system':'assistant'}"><div class="message-label">${d.kind==='result'?esc(botName(d.actor_id)):''} <time>${esc(timeLabel(d.created))}</time>${d.actor_id?`<button class="small-link" data-reply="${d.id}" data-tid="${d.task_id||''}" data-actor="${d.actor_id}">回复</button>`:''}</div><div class="bubble rich">${rich(d.content)}</div>${d.artifact?artifactCard(d):''}${fulfilledLine(d)}</article>`}))].sort((a,b)=>a.sort-b.sort);
   if(!items.length&&!questions.length){
     box.innerHTML='<div class="empty"><div class="hero-mark">✳</div><h2>把事情交给我，慢慢腾出手。</h2><p>整理资料、拆解任务、跟进进度。<br>你可以随时补充、暂停，或查看每一份成果。</p><div class="suggestions"><button class="suggestion" data-suggestion="帮我把这些资料整理成一份行动清单，标明优先级和待确认事项。"><span>▤</span>从一份资料开始<br><span class="muted">整理重点和下一步行动</span></button><button class="suggestion" data-suggestion="帮我规划接下来一周的个人工作，先问我需要了解的关键信息。"><span>☷</span>理清手头的事情<br><span class="muted">把想法变成可执行的计划</span></button></div></div>';
   }else{
@@ -115,11 +115,14 @@ async function detailView(force=false){
   const task=selected(), data=state.data, artifacts=data.deliveries.filter(d=>d.artifact);
   $('#artifact-count').textContent=artifacts.length||'';
   $$('.detail-tabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===state.tab)));
-  const signature=JSON.stringify({tab:state.tab,task,artifacts,controls:data.controls,room:currentRoom(),memories:data.memories,proposals:data.memory_proposals});
+  const promises=data.commitments||[];
+  $('#commitment-count').textContent=promises.filter(c=>c.overdue).length||'';
+  const signature=JSON.stringify({tab:state.tab,task,artifacts,controls:data.controls,room:currentRoom(),memories:data.memories,proposals:data.memory_proposals,promises});
   if(!force&&signature===state.detailSignature)return;
   state.detailSignature=signature;
   const box=$('#detail-content');
   if(state.tab==='memory'){memoryView(box);return;}
+  if(state.tab==='commitments'){commitmentView(box);return;}
   if(state.tab==='library'){
     box.innerHTML='<div class="detail-heading">已交付的成果</div>'+ (artifacts.slice().reverse().map(artifactCard).join('')||'<div class="empty-detail">完成的清单、报告和资料<br>都会收在这里。</div>');return;
   }
@@ -199,6 +202,19 @@ function proposalCard(p){
   else if(p.op==='renew'){title='已到期';body=t.map(item).join('');buttons=btn('续 30 天',true,null,true)+btn('不用了',false);}
   else {title=p.op==='delete'?'可能不再需要':'整理建议';body=t.map(item).join('')+(p.value?`<p>${esc(p.value)}</p>`:'');buttons=btn(p.op==='delete'?'删除':'接受',true,null,true)+btn('保留',false);}
   return `<article class="question memory-proposal"><div class="question-label">${title}</div>${body}${reason}${proposalEvidence(p)}${p.origin?`<small class="muted">${esc(p.origin)}</small>`:''}<div class="task-buttons">${buttons}</div></article>`;
+}
+const COMMITMENT_GROUPS=[['进行中',c=>c.state==='open'&&!c.overdue],['已逾期',c=>c.overdue],['已兑现',c=>c.state==='fulfilled'],['没做成',c=>['unable','released'].includes(c.state)]];
+function commitmentCard(c){
+  const ending={fulfilled:'已兑现',unable:'做不到，已如实告诉你',released:'不再继续'}[c.state];
+  const due=c.due_at?`<span class="muted">约在 ${esc(timeLabel(c.due_at))}${c.due_basis==='user'?'（你说的）':c.due_basis==='assistant'?'（我说的）':''}</span>`:c.kind==='standing'?'<span class="muted">长期跟进</span>':'';
+  const source=(c.evidence||[]).filter(e=>e.kind==='artifact').map(e=>`<a href="${esc(e.url)}" target="_blank" rel="noopener">查看成果</a>`).join(' ');
+  return `<article class="commitment ${c.overdue?'overdue':''}"><div class="commitment-quote">「${esc(c.quote)}」</div><div class="commitment-meta"><time>${esc(timeLabel(c.said_at))} 答应</time>${due}${c.task_id?`<button class="small-link" data-task="${c.task_id}">看这件事</button>`:''}</div>${ending?`<div class="commitment-end">${ending}${c.closed?' · '+esc(timeLabel(c.closed)):''}${source?' · '+source:''}${c.closing_text&&c.state!=='fulfilled'?`<div class="muted">${esc(c.closing_text.slice(0,140))}</div>`:''}</div>`:''}</article>`;
+}
+function fulfilledLine(d){const kept=(state.data.commitments||[]).filter(c=>c.state==='fulfilled'&&c.closing_delivery_id===d.id);return kept.map(c=>`<div class="fulfilled-line">兑现了 ${esc(timeLabel(c.said_at))} 答应的「${esc(c.quote.slice(0,40))}」</div>`).join('');}
+function commitmentView(box){
+  const items=state.data.commitments||[];
+  box.innerHTML='<div class="detail-heading">我答应过你的事</div><p class="memory-note">每一句「我去做」都记在这里，做完会附上能核对的出处；没做成的会如实告诉你。</p>'+
+    (items.length?COMMITMENT_GROUPS.map(([label,match])=>{const group=items.filter(match);return group.length?`<section class="memory-group"><h3>${label} <span class="muted">${group.length}</span></h3>${group.map(commitmentCard).join('')}</section>`:'';}).join(''):'<div class="empty-detail">还没有答应过的事。<br>交代给我的事会出现在这里。</div>');
 }
 function memoryView(box){
   const d=state.data,group=d.memory_scope==='group';
