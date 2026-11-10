@@ -1,1 +1,1 @@
-"""Personal Agent: durable state, replaceable model, bounded tools."""
+"""Noyi: durable state, replaceable model, bounded tools."""

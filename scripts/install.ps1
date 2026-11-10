@@ -17,4 +17,4 @@ if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Application installation failed.' }
 & npm.cmd ci --prefix ./src/personal_agent/pi_bridge --ignore-scripts
 if ($LASTEXITCODE -ne 0) { throw 'Pi installation failed.' }
-Write-Host 'Installation complete. Open Start Personal Agent.cmd.'
+Write-Host 'Installation complete. Run: noyi start'

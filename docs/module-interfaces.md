@@ -35,7 +35,7 @@ modules = ["my_notes"]
 
 对话中由代码负责的话（「已开跑」、20 分钟进度、交付格式、回执检查、明确「记住」）集中在 `speech.py`；模型写的回执和交付摘要都先经过这里检查。
 
-模型可以走本机模型网关（如 Magpie，`base_url` 为 `http://127.0.0.1:<端口>/v1`，只接受本机回环地址）。走网关时按角色传档位：回复用户的接收层用 `chat_effort`，干活用 `effort`；网关上的 Claude 不支持强制工具调用，接收层没给出决定时由原有的重问逻辑处理。官方千问不传档位，接收层仍强制调用。
+模型可以走本机模型网关（`base_url` 为 `http://127.0.0.1:<端口>/v1`，只接受本机回环地址）。走网关时按角色传档位：回复用户的接收层用 `chat_effort`，干活用 `effort`；网关上的 Claude 不支持强制工具调用，接收层没给出决定时由原有的重问逻辑处理。官方千问不传档位，接收层仍强制调用。
 
 联网能力是插件 `web_tools.py`（`web_search`、`fetch_page`），有搜索密钥时自动启用。搜索后端由 `[web]` 的 `backend` 选：`deepseek`（DeepSeek Search API，按结果给标题、日期、摘录）或 `bailian`（默认）。桌面实例的模型是 DeepSeek 官网时，自动用同一个账号和密钥搜索，不需要第二家的密钥；其他模型仍读单独的 `search.key`。`[web]` 里写明的项优先。还可改 `search_url`、`search_model`、`api_key_env`、`task_search_limit`（默认每个任务 30 次）、`daily_search_limit`（默认每天 200 次）、`timeout`。后端是 `DeepSeekSearch` / `BailianSearch`，替换时实现同样的 `search(query)` 返回 `urls / summary / billed_searches`，可另带 `results`（每条 url、title、date、excerpt）。读网页只访问公网地址（每一跳重定向都检查），正文清洗后存在任务目录 `web/` 下，按页返回。交付里引用 `[page_id]` 必须对应本任务成功读过的页，否则验收不通过。
 

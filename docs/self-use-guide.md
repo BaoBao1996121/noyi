@@ -1,4 +1,4 @@
-# Personal Agent 0.6.0 自用指南
+# Noyi 0.6.0 自用指南
 
 直接把需求告诉助理，它负责理解、执行和跟进。目标、任务、检查计划和执行额度由系统内部管理；日常使用一个对话输入框即可。执行循环使用 Pi Agent Core，默认模型为 Qwen 官网 `qwen3.7-plus`。
 
@@ -8,7 +8,7 @@
 
 首次安装：准备 Python 3.11+、Node.js 22.19+，双击仓库根目录的 `Install.cmd`。依赖版本保存在 `requirements-lock.txt` 和 Pi 的 `package-lock.json`。
 
-日常使用桌面快捷方式「启动 Noyi」「停止 Noyi」即可；也可以在仓库根目录执行 `noyi start`、`noyi stop`、`noyi restart`，或双击 `Start Personal Agent.cmd` / `Stop Personal Agent.cmd`（两者等价）。启动会在后台开启服务并打开 <http://127.0.0.1:8765>，重复启动会打开同一份服务。关闭浏览器后仍会继续工作，需要显式停止才会结束。停止会保存执行状态，下次启动继续处理已接收的工作；想让某件事不再继续，可以先在对话中明确说“暂停这件事”或“取消这件事”。没有注册开机自启，也没有开放公网访问。
+日常使用桌面快捷方式「启动 Noyi」「停止 Noyi」即可；也可以在仓库根目录执行 `noyi start`、`noyi stop`、`noyi restart`，或双击 `Start Noyi.cmd` / `Stop Noyi.cmd`（两者等价）。启动会在后台开启服务并打开 <http://127.0.0.1:8765>，重复启动会打开同一份服务。关闭浏览器后仍会继续工作，需要显式停止才会结束。停止会保存执行状态，下次启动继续处理已接收的工作；想让某件事不再继续，可以先在对话中明确说“暂停这件事”或“取消这件事”。没有注册开机自启，也没有开放公网访问。
 
 执行 `noyi status` 可随时查看服务是否在运行、访问地址与进程号；`noyi restart` 等同于先停止再启动。
 
@@ -74,7 +74,7 @@
 换电脑时使用 `main` 分支的版本安装。恢复只写入不存在的新目录，不覆盖现有资料。在仓库目录运行：
 
 ```powershell
-& .\.venv\Scripts\python.exe -m personal_agent restore 'D:\Backups\personal-agent.zip' --destination '.pa\restored'
+& .\.venv\Scripts\python.exe -m personal_agent restore 'D:\Backups\noyi.zip' --destination '.pa\restored'
 & .\.venv\Scripts\python.exe .\scripts\desktop.py start --data .pa\restored
 ```
 
@@ -83,7 +83,7 @@
 命令行备份需先停服务：
 
 ```powershell
-& .\.venv\Scripts\python.exe -m personal_agent --data .pa\personal backup --output 'D:\Backups\personal-agent.zip'
+& .\.venv\Scripts\python.exe -m personal_agent --data .pa\personal backup --output 'D:\Backups\noyi.zip'
 ```
 
 ## 遇到问题

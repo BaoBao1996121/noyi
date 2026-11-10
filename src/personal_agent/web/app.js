@@ -343,7 +343,7 @@ async function downloadBackup(){
   if(response.status===403){const boot=await api('/api/bootstrap');if(boot.workspace_id!==state.workspace){switchWorkspace(boot);await refresh(true);throw new Error('资料库已切换，请重新选择备份');}state.token=boot.token;response=await fetch('/api/backup',{method:'POST',headers:{'X-PA-Token':state.token}});}
   if(!response.ok){let error;try{error=await response.json();}catch{}throw new Error(error?.error||'备份未完成，请稍后重试');}
   const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||'personal-agent-backup.zip';
+  a.href=url;a.download=response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||'noyi-backup.zip';
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);toast('备份包已生成，正在下载');
 }
 

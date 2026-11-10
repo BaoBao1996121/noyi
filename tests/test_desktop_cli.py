@@ -45,7 +45,7 @@ def test_describe_status_reports_stale_marker_when_stopped_with_leftover_file(tm
 def test_describe_status_reports_running_with_pid_when_marker_matches(tmp_path, monkeypatch):
     marker = tmp_path / "desktop-process.json"
     write_marker(marker, pid=4321, instance_id="inst-1")
-    monkeypatch.setattr(desktop, "status", lambda url: {"instance_id": "inst-1", "title": "Personal Agent"})
+    monkeypatch.setattr(desktop, "status", lambda url: {"instance_id": "inst-1", "title": "Noyi"})
 
     info = desktop.describe_status(URL, marker)
 
@@ -54,7 +54,7 @@ def test_describe_status_reports_running_with_pid_when_marker_matches(tmp_path, 
 
 def test_describe_status_reports_running_without_pid_when_no_marker(tmp_path, monkeypatch):
     marker = tmp_path / "desktop-process.json"
-    monkeypatch.setattr(desktop, "status", lambda url: {"instance_id": "inst-x", "title": "Personal Agent"})
+    monkeypatch.setattr(desktop, "status", lambda url: {"instance_id": "inst-x", "title": "Noyi"})
 
     info = desktop.describe_status(URL, marker)
 
@@ -64,7 +64,7 @@ def test_describe_status_reports_running_without_pid_when_no_marker(tmp_path, mo
 def test_describe_status_flags_stale_marker_when_instance_differs(tmp_path, monkeypatch):
     marker = tmp_path / "desktop-process.json"
     write_marker(marker, pid=111, instance_id="old-inst")
-    monkeypatch.setattr(desktop, "status", lambda url: {"instance_id": "new-inst", "title": "Personal Agent"})
+    monkeypatch.setattr(desktop, "status", lambda url: {"instance_id": "new-inst", "title": "Noyi"})
 
     info = desktop.describe_status(URL, marker)
 
@@ -76,7 +76,7 @@ def test_describe_status_flags_stale_marker_when_instance_differs(tmp_path, monk
 def test_run_status_prints_running_with_pid(tmp_path, monkeypatch, capsys):
     marker = tmp_path / "desktop-process.json"
     write_marker(marker, pid=4321, instance_id="inst-1")
-    monkeypatch.setattr(desktop, "status", lambda url: {"instance_id": "inst-1", "title": "Personal Agent"})
+    monkeypatch.setattr(desktop, "status", lambda url: {"instance_id": "inst-1", "title": "Noyi"})
     args = Namespace(data=tmp_path, port=8765)
 
     desktop.run_status(args)
@@ -126,3 +126,10 @@ def test_status_action_does_not_touch_start_or_stop(monkeypatch, tmp_path):
 class Namespace:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
+
+
+def test_service_titles_accept_new_name_and_old_running_service():
+    # A service started before the rename still answers "Personal Agent"; start must
+    # recognise both so `noyi restart` across the rename does not time out.
+    assert desktop.SERVICE_TITLES[0] == "Noyi"
+    assert "Personal Agent" in desktop.SERVICE_TITLES

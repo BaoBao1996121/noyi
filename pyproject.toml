@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "personal-agent-core"
+name = "noyi"
 version = "0.6.0"
-description = "A small durable personal agent runtime"
+description = "A personal AI agent that keeps its word: every promise is logged, every result cites its source."
 requires-python = ">=3.11"
 dependencies = ["openai>=1.60,<3", "httpx>=0.27,<1", "aiohttp>=3.14.5,<4", "tzdata>=2025.1,<2028"]
 
@@ -13,6 +13,7 @@ dependencies = ["openai>=1.60,<3", "httpx>=0.27,<1", "aiohttp>=3.14.5,<4", "tzda
 test = ["pytest>=8", "pytest-asyncio>=0.24"]
 
 [project.scripts]
+noyi-cli = "personal_agent.cli:main"
 pa = "personal_agent.cli:main"
 
 [tool.setuptools.packages.find]

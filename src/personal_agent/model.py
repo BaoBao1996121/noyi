@@ -20,7 +20,7 @@ EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 
 
 def is_local_gateway(value: str) -> bool:
-    """A model router on this machine (e.g. Magpie) speaking OpenAI-compatible /v1."""
+    """A model router on this machine speaking OpenAI-compatible /v1."""
     try:
         endpoint = urlparse(value)
         port = endpoint.port

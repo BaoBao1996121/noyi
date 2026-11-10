@@ -226,7 +226,7 @@ def check_page_url(url):
 class PageFetcher:
     async def fetch(self, url):
         async with httpx.AsyncClient(timeout=20, follow_redirects=False, trust_env=False,
-                                     headers={"User-Agent": "PersonalAgent/0.6 (+page reader)"}) as client:
+                                     headers={"User-Agent": "Noyi/0.6 (+page reader)"}) as client:
             for _ in range(MAX_REDIRECTS + 1):
                 check_page_url(url)
                 public_address(urlparse(url).hostname)

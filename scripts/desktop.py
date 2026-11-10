@@ -13,6 +13,9 @@ import urllib.request
 import webbrowser
 
 ROOT = Path(__file__).resolve().parents[1]
+# Bootstrap titles of this app; the old name still matches while an older
+# running service is being replaced.
+SERVICE_TITLES = ('Noyi', 'Personal Agent')
 
 
 def _ensure_utf8_console():
@@ -84,11 +87,11 @@ def run_status(args):
     info = describe_status(url, marker)
     if info['running']:
         if info['pid']:
-            print(f"Personal Agent 正在运行：{info['url']}（进程号 {info['pid']}）")
+            print(f"Noyi 正在运行：{info['url']}（进程号 {info['pid']}）")
         else:
-            print(f"Personal Agent 正在运行：{info['url']}（进程号未知，可能由其他方式启动）")
+            print(f"Noyi 正在运行：{info['url']}（进程号未知，可能由其他方式启动）")
     else:
-        print('Personal Agent 当前未运行。')
+        print('Noyi 当前未运行。')
         if info['stale_marker']:
             print('提示：发现残留的进程记录，可直接重新启动。')
 
@@ -154,7 +157,7 @@ def do_start(args):
             if proc.poll() is not None:
                 raise ValueError('启动未完成，请查看数据目录 logs/server.log。常见原因是端口占用或缺少依赖。')
             current = status(url)
-            if current and current.get('title') == 'Personal Agent':
+            if current and current.get('title') in SERVICE_TITLES:
                 marker.write_text(json.dumps({'pid': proc.pid, 'port': args.port, 'data': str(data), 'instance_id': current['instance_id']}, ensure_ascii=False), encoding='utf-8')
                 break
             time.sleep(0.2)
@@ -162,7 +165,7 @@ def do_start(args):
             raise ValueError('启动等待超时，请查看数据目录 logs/server.log。')
     if not args.no_browser:
         webbrowser.open(url)
-    print('Personal Agent 已就绪：' + url)
+    print('Noyi 已就绪：' + url)
 
 
 if __name__ == '__main__':

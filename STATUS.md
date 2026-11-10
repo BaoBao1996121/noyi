@@ -36,7 +36,7 @@
 4. [模型配置](docs/model-configuration.md)：Qwen 官网地址、准确型号、环境变量；不含凭据。
 5. [决策](docs/decisions.md)、[M0–M1 计划](docs/plan-m0-m1.md)、[融合方案](docs/deepseek-integration-review.md)。
 
-自用入口：[操作指南](docs/self-use-guide.md)，双击 `Start Personal Agent.cmd`。最新验证以 [0.6.0 报告](docs/validation/CONVERSATION_REPORT.md) 为准。历史 [M5 报告](docs/validation/M5_REPORT.md)记录 221 项 Python、12 项 Node、12 组真实对照、2 组提示调优、5 项浏览器发起的复盘任务，累计 294 次 Qwen 调用；不把旧版本成绩移作新版成绩。失败、恢复、措辞问题和未测边界均保留。
+自用入口：[操作指南](docs/self-use-guide.md)，用 `noyi start`（或双击 `Start Noyi.cmd`）。最新验证以 [0.6.0 报告](docs/validation/CONVERSATION_REPORT.md) 为准。历史 [M5 报告](docs/validation/M5_REPORT.md)记录 221 项 Python、12 项 Node、12 组真实对照、2 组提示调优、5 项浏览器发起的复盘任务，累计 294 次 Qwen 调用；不把旧版本成绩移作新版成绩。失败、恢复、措辞问题和未测边界均保留。
 
 各阶段：[M1](docs/validation/M1_REPORT.md)、[提前 UI](docs/validation/UI_EARLY_REPORT.md)、[M2](docs/validation/M2_REPORT.md)、[M3](docs/validation/M3_REPORT.md)、[M4](docs/validation/M4_REPORT.md)、[M5](docs/validation/M5_REPORT.md)。范围以 [完整计划](docs/plan-m1-m5.md) 为准。
 

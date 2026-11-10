@@ -245,7 +245,7 @@ async def json_body(request):
 
 async def boot(request):
     c = request.app[CONSOLE]
-    return web.json_response({"token": c.token, "instance_id": c.instance_id, "workspace_id": c.workspace_id, "version": "0.6.0", "title": "Personal Agent"})
+    return web.json_response({"token": c.token, "instance_id": c.instance_id, "workspace_id": c.workspace_id, "version": "0.6.0", "title": "Noyi"})
 
 
 async def snapshot(request):
@@ -411,7 +411,7 @@ async def backup(request):
     c = request.app[CONSOLE]
     # Synchronous snapshot runs between host tool commits, so the database and
     # its managed immutable files are captured without a concurrent writer.
-    path = c.data.parent / "backups" / ("personal-agent-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8] + ".zip")
+    path = c.data.parent / "backups" / ("noyi-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8] + ".zip")
     create_backup(c.store, c.data, path)
     return web.FileResponse(path, headers={"Content-Disposition": 'attachment; filename="' + path.name + '"'})
 
@@ -500,7 +500,7 @@ def serve_web(data, config=None, port=8765, plugins=None):
         try:
             await runner.setup()
             await web.TCPSite(runner, "127.0.0.1", port).start()
-            print(f"Personal Agent: http://127.0.0.1:{port}  （关闭浏览器后仍会运行；使用停止入口结束服务）", flush=True)
+            print(f"Noyi: http://127.0.0.1:{port}  （关闭浏览器后仍会运行；使用停止入口结束服务）", flush=True)
             await stopping.wait()
         finally:
             await runner.cleanup()

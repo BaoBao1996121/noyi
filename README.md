@@ -1,129 +1,132 @@
-# Personal Agent Core
+# Noyi
 
-`main` 是唯一正式交付分支，包含已完成验收的版本。日常使用、换电脑和后续接手都以 `main` 为准；后续功能可以使用临时开发分支，验收后合并回 `main` 并清理已合并分支。
+**A personal AI agent that keeps its word.** Every "I'll do it" is logged as a promise, every result cites where it came from, and anything the agent only *inferred* about you waits for your confirmation.
 
-一个可以直接交代事情的个人 Agent。**0.6.0 使用统一的对话入口**：你说需求、补充信息、询问进展，助理判断如何处理；任务拆分、持续职责、检查安排和执行额度由内部管理。日常界面呈现对话、进展、成果和需要你回答的问题，“正在跟进”是可选的进展查看页。
+English · [简体中文](README.zh-CN.md)
 
-Windows 首次双击 `Install.cmd`，日常使用桌面快捷方式「启动 Noyi」「停止 Noyi」，或在仓库根目录执行 `noyi start` / `noyi stop` / `noyi restart` / `noyi status`，在浏览器打开 `http://127.0.0.1:8765`。首次使用在设置中配置自己的 Qwen 官网凭据，随后直接在输入框说需求，也可附上文本资料。关闭浏览器后后台服务仍运行；`noyi status` 可随时查看服务是否在运行、地址与进程号。完整操作见 [自用指南](docs/self-use-guide.md)。
+The name comes from 一诺 (*yī nuò*, "a promise kept"), read backwards.
 
-持续使用见 [让助理跟进一件事](docs/ongoing-goals.md)，实现替换边界见 [模块接口](docs/module-interfaces.md)。执行循环继续使用 Pi，默认模型为 Qwen 官网 `qwen3.7-plus`；SQLite 保存任务、输入责任、用量、工具回执、调度和投递记录。
+![Ledger replay in the pixel-factory skin](docs/images/ledger-replay-pixel.jpg)
 
-当前版本状态见 [STATUS](STATUS.md)，新版证据见 [0.6.0 自然交办报告](docs/validation/CONVERSATION_REPORT.md)。[M5 报告](docs/validation/M5_REPORT.md)记录的是 **0.5.0 历史验收**，不作为 0.6.0 自然语言交办已经验证的证明；M1–M5 的基础范围见 [原阶段计划](docs/plan-m1-m5.md)。下文示例为虚构资料场景。
+## Why
 
-## 直接交代事情
+Chat assistants are good at saying "sure, I'll remind you" and bad at proving they did. Noyi is a learning project built around one idea: **an agent should be held to what it says**.
 
-进入“个人助理”，直接说，例如：
+- A promise is a database row, not a sentence. It is bound to the task or schedule that will fulfil it.
+- "Done" comes with evidence: the artifact, its sha256, and the sources that were actually read.
+- If it cannot do something, it says so and the promise closes as *unable*. If a deadline passes, you are told once.
+- Memories it guessed from conversation are only *candidates* until you accept them.
 
-- “对照这两份资料，整理现行负责人、日期和待确认事项。”
-- “刚才那份清单漏了采购部分，请补上。”
-- “以后帮我留意 `C:\Documents\项目进展.md`，有变化就更新行动清单。”
-- “项目资料先暂停跟进。”、“继续跟进项目资料。”、“项目资料改为每周五上午九点检查。”
+## Features
 
-助理在已有信息足够时执行；缺少必要资料、要求或权限时，直接在对话中问你。需要持续处理的安排会真实登记后再报告生效，写下一句“我会跟进”本身不代表已经启用。模型与工具有内部用量限制，调用会使用你的账号额度。
+**Commitment ledger.** Each promise made in a reply is registered and linked to the work that owns it. Promises with a stated deadline are reminded once when overdue; promises stuck for more than a day are reminded once. Only you can reschedule. A reply that promises something without registering it is blocked: the agent must either register the promise or rephrase.
 
-**上传的文件是一份副本，原文件变化不会自动同步。** 持续观察实时变化时，请在对话中明确提供原文件的完整本地路径，或无需登录的文本网址；也可以稍后直接发送新版本。当前支持文本资料，尚未连接邮箱、日历或通用电脑操作，也不支持单次定时提醒。关机或停止本机服务时不会执行。
+**Fulfilment with sources.** A task is accepted only after checks on the artifact, on read coverage of the authorized sources, and on citations. A kept promise links to the exact artifact version and hash.
 
-## 安装
+**Memory with a candidate area and a daily review sheet.** Five kinds of memory (rules, preferences, about me, ongoing, reference). Things you state explicitly are saved. Things the agent infers go to a candidate area with the original quotes as evidence. A daily review sheet only *proposes* merges and cleanups; nothing changes until you confirm. Newer memories can supersede older ones, and conflicts ask you to pick one.
 
-需要 Python 3.11 或以上、Node.js 22.19 或以上。核心循环使用固定版本的 Pi Agent，接口边界见 [Pi 核心接入](docs/pi-kernel.md)。以下命令在仓库根目录的 Windows PowerShell 中执行；无需激活虚拟环境。
+**Ledger replay.** Pick a task and replay its path through seven stations: intake decision, promise registered, work started, model requests, tool calls, delivery, promise kept. Overdue, unable, rescheduled, dropped, and blocked promises show as branches. You can play, pause, scrub, step, change speed, and go fullscreen. There are two skins, geometric and pixel factory, and both are drawn entirely in code.
 
-```powershell
-& .\scripts\install.ps1
-```
+**Memory galaxy.** A read-only star map of your memories. Confirmed memories are bright stars, pending ones are dashed, and superseded ones are wrecks linked to whatever replaced them. Ongoing items that expire within 7 days blink. Click a star to see its quote, source, and version history.
 
-## 配置 Qwen 官方模型
+| Overdue promise in the replay | Memory galaxy |
+|---|---|
+| ![Overdue promise](docs/images/ledger-overdue.jpg) | ![Memory galaxy](docs/images/memory-galaxy.jpg) |
 
-默认模型是 `qwen3.7-plus`，默认地址是 Qwen 官网开放平台的 `https://maas.qianwenaiapi.com/compatible-mode/v1`。具体配置、其他官方账号地址和选型依据见 [模型配置](docs/model-configuration.md)。配置不会自动切换到其他提供方。
+All screenshots come from the scripted demo database (`scripts/demo-replay.py`), not from real use.
 
-WebUI 可在设置中保存本机密钥；已有 `DASHSCOPE_API_KEY` 环境变量也可直接使用。命令行 `serve` 使用环境变量；可在当前窗口安全输入，不将密钥写进命令历史：
+## Quick start
 
-```powershell
-$env:DASHSCOPE_API_KEY = [System.Net.NetworkCredential]::new('', (Read-Host 'Qwen API Key' -AsSecureString)).Password
-& .\.venv\Scripts\python.exe -m personal_agent model-config --config .\pa.example.toml
-```
-
-`model-config` 只显示非敏感配置，不调用模型，也不创建任务数据库。`.env.example` 是变量说明，程序不会自动加载 `.env`。`PA_MODEL` 和 `PA_BASE_URL` 可以覆盖配置文件，应与本机账号一致；不要把密钥提交到仓库。
-
-## 高级：命令行任务接口
-
-以下供开发、诊断和脚本集成使用；日常交办使用上面的对话入口即可。命令行的显式 `submit/chat/followup` 接口保留原有语义。
-
-示例要求对比活动初稿与确认变更，生成最新执行清单、作废项及未确认事项。两份资料都是本地 UTF-8 文本，模型需要实际读取后交付，不能凭任务描述直接宣称完成。
-
-先提交任务。提交只保存请求，尚不调用模型：
+Requirements: Python 3.11+, Node.js 22.19+. The install script below targets Windows, the platform this project has been tested on. On other systems, follow the manual steps.
 
 ```powershell
-$submitted = & .\.venv\Scripts\python.exe -m personal_agent --data .\.pa\m0-demo submit --spec .\examples\m0-task.json --nonce demo-workshop-v1
-if ($LASTEXITCODE -ne 0) { throw '任务提交失败' }
-$taskId = ($submitted | ConvertFrom-Json).task_id
-$taskId
+git clone https://github.com/BaoBao1996121/noyi.git
+cd noyi
+.\Install.cmd
+.\noyi.cmd start
 ```
 
-相同 nonce 与相同内容重试提交，会返回同一任务；相同 nonce 携带不同内容会被拒绝。若修改了示例要求，使用新 nonce 创建另一项任务。JSON 中本地资料路径相对于任务 JSON 文件所在目录解析。
+`noyi start` opens `http://127.0.0.1:8765`. Use `noyi stop`, `noyi restart`, and `noyi status` to manage the background service. Data stays in `.pa/personal` inside the repository folder, which is ignored by Git.
 
-随后在已配置密钥的窗口执行服务。下面会处理当前可执行任务，完成后退出：
+Manual install (any OS, untested outside Windows):
+
+```bash
+python -m venv .venv
+.venv/bin/python -m pip install -r requirements-lock.txt
+.venv/bin/python -m pip install --no-deps -e .
+npm ci --prefix ./src/personal_agent/pi_bridge --ignore-scripts
+.venv/bin/python -m personal_agent --data .pa/personal web --port 8765
+```
+
+### Try the demo without an API key
+
+The demo database is built by the real pipeline using a scripted model. No model API is called.
 
 ```powershell
-& .\.venv\Scripts\python.exe -m personal_agent --data .\.pa\m0-demo serve --config .\pa.example.toml --once
+.\.venv\Scripts\python.exe scripts\demo-replay.py build --data .pa\demo-replay
+.\.venv\Scripts\python.exe scripts\demo-replay.py serve --data .pa\demo-replay
 ```
 
-如需持续接收任务，去掉 `--once`，让这个服务窗口保持运行。服务管理 Pi 的 Node 执行子进程。在另一个窗口可以继续 submit、status 或 inbox；关掉客户端不影响服务，退出服务才会停止执行。中断的任务在下次启动服务时恢复，已使用预算不会被重置。
+Then open `http://127.0.0.1:8790`, choose a task, and open the **账本回放** (ledger replay) tab or the **记忆** (memory) tab. The UI text is currently in Chinese.
 
-查看任务和本地投递：
+## Model configuration
 
-```powershell
-& .\.venv\Scripts\python.exe -m personal_agent --data .\.pa\m0-demo status $taskId --detail
-& .\.venv\Scripts\python.exe -m personal_agent --data .\.pa\m0-demo inbox
+Open the settings (bottom-left gear) and enter a model name, an endpoint, and an API key. The key is stored only in your local data folder and is never echoed back. To keep the key out of the data folder, put it in an environment variable and tell Noyi its name with `PA_API_KEY_ENV` (the default name is `DASHSCOPE_API_KEY`).
+
+| Provider | Endpoint | Model | Example key variable |
+|---|---|---|---|
+| DeepSeek official | `https://api.deepseek.com` | `deepseek-flash` (supports images) | `DEEPSEEK_API_KEY` |
+| Qwen official | `https://maas.qianwenaiapi.com/compatible-mode/v1` | `qwen3.7-plus` | `DASHSCOPE_API_KEY` |
+| Local gateway | `http://127.0.0.1:<port>/v1` (loopback only) | your gateway's model ID | `PA_GATEWAY_KEY` |
+
+Only registered official HTTPS hosts and loopback gateways ever receive a key. Requests to unknown hosts are refused before any network call. Before the first save in settings, `PA_MODEL`, `PA_BASE_URL`, and `PA_API_KEY_ENV` set the model; after that, the saved settings win. See [`.env.example`](.env.example), [`pa.example.toml`](pa.example.toml), and [model configuration](docs/model-configuration.md) (Chinese). The app does not load `.env` files automatically.
+
+Web search is optional. When the model is DeepSeek official, search and page reading use the same key. Otherwise, configure a search key in the `[web]` section.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  U[You, in the web UI] --> C[Conversation layer<br/>intake & reply]
+  C -->|promise| L[(Commitment ledger)]
+  C -->|task| S[Service<br/>queue, budgets, recovery]
+  S --> P[Pi agent loop<br/>Node subprocess]
+  P --> M[Model provider<br/>DeepSeek / Qwen / gateway]
+  P --> T[Capability plugins<br/>artifacts, web, follow-up]
+  T --> A[Artifacts + sources]
+  A -->|accepted, sha256| L
+  C <--> MEM[(Memory<br/>confirmed / candidates)]
+  L --> R[Replay & galaxy<br/>read-only views]
 ```
 
-在新的 PowerShell 窗口里没有 `$taskId` 时，先运行不带 ID 的 `status`，再把返回的 ID 传给详细查询。全局选项 `--data` 放在子命令前。
+- **Python** owns everything that has to be correct: tasks, the ledger, memory, budgets, authorization, and recovery after crashes. This is one asyncio service with SQLite.
+- **[Pi agent core](https://github.com/earendil-works/pi)** (pinned at 1.5.0) runs the tool loop in a managed Node subprocess. The host owns model transport and tools.
+- Tools are capability plugins. Adding one requires no change to the core. See [module interfaces](docs/module-interfaces.md) (Chinese).
 
-任务详情包含模型请求、输入使用记录、工具回执与验收结果。产物在 `.pa/m0-demo/tasks/<task_id>/artifacts/`，投递在 `.pa/m0-demo/inbox/`。投递 accepted 表示本地收件箱已接受，不代表人已经阅读。
+## Status and roadmap
 
-示例初始预算为最多 12 次模型调用、40 次工具调用和 600 秒任务时间。真实调用会使用账号额度；费用是否可知应以实际返回的用量和账号计费记录为准。
+Current version: **0.6.0**, used daily by the author on one Windows machine.
 
-## 高级：命令行恢复与额度
+Done:
+- Model support for DeepSeek official (including image input), Qwen official, and loopback gateways.
+- Memory phase 1 with the candidate area and the daily review sheet.
+- The commitment ledger.
+- Ledger replay with geometric and pixel skins.
+- The memory galaxy.
 
-先检查 `status <task_id> --detail` 中的失败类型、预算与已保存结果。`resume`（也可用 `retry`）只受理 paused、failed 或 review 状态，重新排入队列，不自行启动服务：
+Not done:
+- Third-party channels (e.g. chat apps), email and calendar accounts, and general computer control.
+- Tested installs outside Windows.
+- An English UI.
 
-```powershell
-& .\.venv\Scripts\python.exe -m personal_agent --data .\.pa\m0-demo resume $taskId
-```
+Ideas for later: an always-on home machine, more channels, and a browser tool. See [STATUS](STATUS.md) and [decisions](docs/decisions.md) (Chinese) for details.
 
-预算已经用尽时，必须明确增加对应预算；已使用次数仍保留。按实际需要增加，不必每次都加三个维度：
+## About this project
 
-```powershell
-& .\.venv\Scripts\python.exe -m personal_agent --data .\.pa\m0-demo retry $taskId --extra-calls 3 --extra-tools 8 --extra-seconds 120
-& .\.venv\Scripts\python.exe -m personal_agent --data .\.pa\m0-demo serve --config .\pa.example.toml --once
-```
+Noyi is a **learning project**. It was built to understand how a durable personal agent works: state, promises, evidence, and memory. It is not a product, and it comes with no support guarantees. Design notes, plans, and validation reports are kept in [`docs/`](docs/), including failures and unmeasured areas. Most of these documents are in Chinese.
 
-总预算仍受 TaskSpec 上限约束：100 次模型调用、200 次工具调用、3600 秒。SDK 不隐藏重试；已完成任务不会因 retry 再执行。新增工作请另行提交任务。
+Run the tests (no API key needed): `python -m pytest -q` and `npm test --prefix src/personal_agent/pi_bridge`. See [CONTRIBUTING](CONTRIBUTING.md) and the [command-line reference](docs/cli.md).
 
-## 本地测试
+## License
 
-协议测试使用可控模型和本地故障注入，不需要真实密钥，也不调用云模型：
-
-```powershell
-& .\.venv\Scripts\python.exe -m pytest -q
-npm test --prefix .\src\personal_agent\pi_bridge
-```
-
-也可运行仓库脚本，让测试临时文件保留在忽略的 `.pa/test-temp/` 内，并设置 UTF-8：
-
-```powershell
-& .\scripts\run-tests.ps1
-```
-
-脚本不会删除已有任务数据。Windows 测试需要能创建临时目录和初始化 asyncio 的普通本地运行环境。协议测试通过与真实模型/真实渠道验证分开报告；本地模拟结果不能冒充云端闭环。
-
-## 当前边界
-
-- 多个长期 Bot 与单层临时 Worker；并发默认 3、上限 4，同一 actor 只允许一个活动执行槽位。群内可以直接选择或 @ 成员；复制只带角色配置，私聊记忆不流入群聊。工具限于指定资料读取和本地产物，没有任意 shell 或对外消息发送。
-- WebUI 在统一对话中理解新需求、补充、回答、状态查询和控制；选中旧事项只是上下文线索，新需求仍可独立处理。命令行 `chat/submit/followup/control/questions/answer` 是高级显式接口，供调试与集成使用。
-- `submit_result` 检查产物完整性、资料读取覆盖、引用和用户指定文本条件。`succeeded/acceptance=passed` 表示这些明确检查通过，不证明所有语义、推理或事实都正确。真实任务仍需按根要求检查内容；文件存在或关键词出现不能取代结果质量验收。
-- 本地文件投递可按 delivery ID 重放；没有承诺第三方平台 exactly-once。未接入的渠道没有端到端验证。
-- 服务在当前电脑当前用户权限下运行，资料与产物保留在本地数据目录。只授权任务所需资料；读取到的文件内容是证据，不会因此获得执行权限。
-- 复盘页面和下载报告的事实来自冻结账本，模型解释单独标注；保留失败和原始模型草稿。没有测量的数据保持未知。多日真实稳定性、长期收益和一般语义正确性不由本轮初测保证。
-- 周期和变化检查依赖本机服务运行；没有单次定时提醒、远程唤醒、第三方账号连接或 DSH/Pi 原样插件安装器。当前实现提供可验证的替换接口，生态适配留待后续增量。
-
-`.pa/`、本地配置、虚拟环境和数据库默认不进 Git。架构资料来自研究，不代表上游代码或上游测试成绩已经成为本产品能力。
+[MIT](LICENSE)

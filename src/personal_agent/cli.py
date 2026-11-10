@@ -27,7 +27,7 @@ def load_spec(path: Path) -> TaskSpec:
 
 
 def parser():
-    p = argparse.ArgumentParser(prog="pa")
+    p = argparse.ArgumentParser(prog="noyi-cli")
     p.add_argument("--data", type=Path, default=Path(".pa"))
     sub = p.add_subparsers(dest="command", required=True)
     s = sub.add_parser("submit", help="Persist a task; serve executes it")

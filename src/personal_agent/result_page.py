@@ -98,5 +98,5 @@ def render(store, data, task_id):
         f'<li>[{escape(s)}] <a href="{escape(links[s])}" rel="noreferrer noopener" target="_blank">{escape(links[s])}</a></li>' for s in cited) + "</ol></div>") if cited else ""
     return f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)}</title><style>{STYLE}</style></head><body><main>
-<header>Personal Agent 交付 · 第 {versions} 版 · 已验收 · <span class="muted">sha256 {artifact["sha256"][:12]}</span></header>
+<header>Noyi 交付 · 第 {versions} 版 · 已验收 · <span class="muted">sha256 {artifact["sha256"][:12]}</span></header>
 <article>{markdown(text, links)}{sources}</article></main></body></html>"""
