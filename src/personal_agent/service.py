@@ -84,7 +84,7 @@ class Service:
                 receipt = await self.channel.send(d)
                 if not isinstance(receipt, dict) or receipt.get("accepted") is not True or receipt.get("id") != d["id"]:
                     raise ValueError("channel did not acknowledge this delivery")
-                self.store.db.execute("UPDATE deliveries SET state='accepted',receipt=?,last_error=NULL WHERE id=?", (encode(receipt), d["id"]))
+                self.store.accept_delivery(d["id"], receipt)
             except Exception as exc:
                 self.store.db.execute("UPDATE deliveries SET state='failed',last_error=? WHERE id=?", (type(exc).__name__, d["id"]))
 

@@ -208,7 +208,7 @@ function proposalCard(p){
   else {title=p.op==='delete'?'可能不再需要':'整理建议';body=t.map(item).join('')+(p.value?`<p>${esc(p.value)}</p>`:'');buttons=btn(p.op==='delete'?'删除':'接受',true,null,true)+btn('保留',false);}
   return `<article class="question memory-proposal"><div class="question-label">${title}</div>${body}${reason}${proposalEvidence(p)}${p.origin?`<small class="muted">${esc(p.origin)}</small>`:''}<div class="task-buttons">${buttons}</div></article>`;
 }
-const COMMITMENT_GROUPS=[['进行中',c=>c.state==='open'&&!c.overdue],['已逾期',c=>c.overdue],['已兑现',c=>c.state==='fulfilled'],['没做成',c=>['unable','released'].includes(c.state)]];
+const COMMITMENT_GROUPS=[['做完未送达',c=>c.state==='open'&&c.done_not_delivered],['进行中',c=>c.state==='open'&&!c.overdue&&!c.done_not_delivered],['已逾期',c=>c.overdue&&!c.done_not_delivered],['已兑现',c=>c.state==='fulfilled'],['没做成',c=>['unable','released'].includes(c.state)]];
 function commitmentCard(c){
   const ending={fulfilled:'已兑现',unable:'做不到，已如实告诉你',released:'不再继续'}[c.state];
   const due=c.due_at?`<span class="muted">约在 ${esc(timeLabel(c.due_at))}${c.due_basis==='user'?'（你说的）':c.due_basis==='assistant'?'（我说的）':''}</span>`:c.kind==='standing'?'<span class="muted">长期跟进</span>':'';

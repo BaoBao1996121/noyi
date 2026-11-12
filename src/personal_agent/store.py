@@ -292,6 +292,11 @@ class BaseStore:
             if before_commit:
                 before_commit()
 
+    def accept_delivery(self, delivery_id, receipt):
+        """The channel acknowledged this message; what depends on it settles in the same commit."""
+        with self.transaction():
+            self.db.execute("UPDATE deliveries SET state='accepted',receipt=?,last_error=NULL WHERE id=?", (encode(receipt), delivery_id))
+
     def recover(self):
         """Only the process holding ServiceLock may call this."""
         with self.transaction():

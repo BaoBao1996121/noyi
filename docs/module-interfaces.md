@@ -80,3 +80,11 @@ modules = ["my_notes"]
 - 前端：`web/replay.js` 分数据、播放器、皮肤三层；`registerSkin({name, layout, background, track, station, lamp, token, burst, caption})` 注册新皮肤，`setSkin(name)` 切换。皮肤绘制时的 `view` 另带 `now`（毫秒，用于动画）、`history`（已到站的事件）、`event`/`progress`（当前事件和到站后进度），站点对象带 `id` 与 `kinds`；皮肤可设 `animated: true` 让暂停时传送带也动。像素皮肤见 `web/replay-pixel.js`，由 `app.js` 注册。
 - 记忆星系：`GET /api/memory/galaxy?room=` → `MemoryStore.memory_galaxy(room)`，只读，返回 `{now, kinds, stars, links}`。`stars` 每项含 `id,key,value,kind,state(active|deleted|pending),version,expired,expires_at,source_type,origin,quote,evidence,keywords,subject,supersedes,created,updated,last_used,history[{version,action,at}]`；待确认建议 `state="pending"`、`source_type="proposal"`。`links` 每项 `{kind: supersedes|source|keyword, from, to, label}`，取代是新→旧。前端 `web/galaxy.js` 的 `installGalaxy({state, api, esc, timeLabel})` 返回 `{mount, load, draw, fit, select, camera, world}`，布局函数 `layoutGalaxy(data)` 可单独调用。
 - 演示数据：`scripts/demo-replay.py build|serve --data <目录>`，拒绝写入 `.pa/personal`；四件事覆盖兑现、逾期、做不到、改约后兑现。
+
+
+## 出处与兑现加固（2026-11-11 起）
+
+- 送达：`Store.accept_delivery(delivery_id, receipt)` 是通道确认收下一条消息的唯一入口（`Service.deliver` 调它）；`CommitmentStore` 在同一事务里把等这条交付的承诺记为兑现。`_settle` 验收通过时只写 `done_awaiting_delivery` 事件；`close_commitment(..., "fulfilled")` 只接受已送达（`state='accepted'`）的消息和成果作出处。`commitment_items` 每项带 `done_not_delivered`；回放 `outcome` 可为 `awaiting_delivery`。
+- 原文核对：`submit_result` 可选参数 `quotes: [{source_id, quote}]`，最多 12 条。`tools.check_quotes` 在本任务读过的快照里逐字查找：本地资料用 `read_source` 回执里的 `snapshot`，网页用任务目录 `web/<page_id>.txt`，两者都先核对快照哈希仍等于读取回执里的 `sha256`。验收结果多出 `quotes`（每条 `verified`、`sha256` 或 `reason`），`checks` 里每个被引用的网页多一项 `{page, sha256}`。
+- 网页出处：兑现证据里的 `page` 项带 `sha256` 和 `url`；传入的 `sha256` 和读取回执不一致时拒绝。
+- 回放：`ReplayView.memories()` 从 `memory_loads` 生成「开工」站的 `memory_used` 事件，事实列为记忆标题 → 「类别 · 第 n 版」；验收站的 `accepted` 事件带原文核对计数和已找到的原文。

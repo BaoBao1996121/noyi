@@ -1,5 +1,7 @@
 """Ledger replay: one task's walk through the ledger, read back in order, never written."""
 import json
+
+from personal_agent.contracts import encode
 import sqlite3
 
 import pytest
@@ -8,7 +10,7 @@ from personal_agent.commitment_store import due_label
 from personal_agent.runtime import Runtime
 from personal_agent.store import Store
 from conftest import ScriptedModel, tool_reply
-from test_commitments import incoming, intake
+from test_commitments import deliver_all, incoming, intake
 from test_webui import client_for
 
 STATIONS = ["intake", "commit", "start", "model", "tool", "deliver", "fulfil"]
@@ -26,6 +28,7 @@ def first_seen(events):
 async def test_a_fulfilled_task_replays_all_seven_stations_in_order_without_writing(store, source, tmp_path, successful_model):
     result = intake(store, "帮我整理这份资料", {"action": "new_task", "receipt": "好，我去整理，做好发你。"}, nonce="f", sources=[source])
     await Runtime(store, tmp_path / "data", successful_model).execute(store.claim())
+    deliver_all(store)
     before = store.db.total_changes
     timeline = store.task_timeline(result["task_id"])
     assert store.db.total_changes == before
@@ -146,3 +149,20 @@ async def test_pixel_skin_is_served_and_draws_only_from_code(store, tmp_path):
     assert "const PAL" in text and "const SPRITES" in text
     for banned in ("http://", "https://", ".png", ".gif", "new Image", "import "):
         assert banned not in text
+
+
+@pytest.mark.asyncio
+async def test_replay_shows_which_memories_the_work_relied_on(store, source, tmp_path, successful_model):
+    rule = store.save_memory("local", key="格式", value="先给结论", purpose="交付", kind="rule")
+    gone = store.save_memory("local", key="旧称呼", value="小明", purpose="对话", kind="about_me")
+    store.delete_memory("local", gone["id"], expected_version=gone["version"])
+    store.import_memory_proposals("local", [{"kind": "preference", "key": "长度", "value": "喜欢简短"}], origin="测试导入")
+    result = intake(store, "帮我整理这份资料", {"action": "new_task", "receipt": "好，我去整理。"}, nonce="mem", sources=[source])
+    await Runtime(store, tmp_path / "data", successful_model).execute(store.claim())
+    timeline = store.task_timeline(result["task_id"])
+    [used] = [e for e in timeline["events"] if e["kind"] == "memory_used"]
+    assert used["station"] == "start"
+    facts = dict(used["facts"])
+    assert facts["格式"] == f"规则 · 第 {rule['version']} 版"
+    # Only what was actually handed to the model: not deleted items, not unconfirmed proposals.
+    assert "旧称呼" not in facts and "长度" not in facts and "先给结论" not in encode(used)

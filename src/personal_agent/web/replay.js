@@ -5,7 +5,7 @@
 const TONES = {ok: '#2f9e6b', warn: '#d39518', bad: '#d64545', info: '#5b7fd6'};
 const BEAT_MS = 1400;            // one event per beat at 1×
 const TRAVEL = 0.42;             // share of a beat the token spends moving
-const OUTCOMES = {fulfilled: ['已兑现', 'ok'], overdue: ['已逾期，已如实提醒', 'bad'], unable: ['做不到，已如实告知', 'warn'], released: ['不再继续', 'warn'],
+const OUTCOMES = {fulfilled: ['已兑现', 'ok'], awaiting_delivery: ['已做完，还没送到你手上', 'warn'], overdue: ['已逾期，已如实提醒', 'bad'], unable: ['做不到，已如实告知', 'warn'], released: ['不再继续', 'warn'],
   superseded: ['已改约', 'warn'], blocked: ['卡住了', 'warn'], open: ['还在做', 'info'], none: ['没有登记承诺', 'info']};
 
 // ---- skin: geometric (phase 1). Pixel skin = another object with these methods. ----

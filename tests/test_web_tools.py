@@ -221,3 +221,43 @@ def test_deepseek_fetch_without_text_fails_visibly(tmp_path, monkeypatch):
     web = deepseek_web(tmp_path, monkeypatch, lambda request: httpx.Response(200, json={"title": "x", "content": "  "}))
     with pytest.raises(ValueError, match="no readable text"):
         asyncio.run(web.fetch(Call(tmp_path / "task"), {"url": "https://example.org/empty"}))
+
+
+def quoting(quote):
+    def write(messages, tools):
+        page = next(json.loads(m["content"]) for m in reversed(messages) if m["role"] == "tool" and "page_id" in json.loads(m["content"]))
+        return tool_reply("write_artifact", {"name": "r.md", "content": f"最新是 v2.0 [{page['page_id']}]"}, "w")
+    def submit_quoted(messages, tools):
+        page = next(json.loads(m["content"]) for m in messages if m["role"] == "tool" and "page_id" in json.loads(m["content"]))
+        ref = next(json.loads(m["content"]) for m in reversed(messages) if m["role"] == "tool" and "artifact_ref" in json.loads(m["content"]))["artifact_ref"]
+        return tool_reply("submit_result", {"artifact_ref": ref, "summary": "最新是 v2.0。", "limitations": [],
+                                            "quotes": [{"source_id": page["page_id"], "quote": quote}]}, "s")
+    return write, submit_quoted
+
+
+@pytest.mark.asyncio
+async def test_page_evidence_binds_the_version_read_and_quotes_are_checked_against_it(store, tmp_path, web):
+    from personal_agent.commitment_store import CommitmentStore
+    tid = store.submit(TaskSpec("查最新版本"), nonce="q")["task_id"]
+    write, submit_quoted = quoting("Released 2026-11-01.")
+    model = ScriptedModel([tool_reply("fetch_page", {"url": "https://example.org/notes"}, "f"), write, submit_quoted])
+    await Service(store, tmp_path / "data", model, plugins=[web_plugin(web)]).run_until_quiescent()
+    accept = [o for o in store.operations(tid) if o["tool"] == "submit_result"][-1]["result"]
+    assert accept["passed"] is True
+    [page] = [o["result"] for o in store.operations(tid) if o["tool"] == "fetch_page"]
+    [check] = accept["quotes"]
+    assert check["verified"] is True and check["sha256"] == page["sha256"]
+    item = store._commitment_source({"room_id": "local"}, {"kind": "page", "task_id": tid, "page_id": page["page_id"]})
+    assert item["sha256"] == page["sha256"]
+
+
+@pytest.mark.asyncio
+async def test_a_quote_not_in_the_version_read_fails_acceptance_visibly(store, tmp_path, web):
+    tid = store.submit(TaskSpec("查最新版本", max_calls=6), nonce="q2")["task_id"]
+    write, submit_quoted = quoting("Released 2026-12-24.")
+    model = ScriptedModel([tool_reply("fetch_page", {"url": "https://example.org/notes"}, "f"), write, submit_quoted])
+    await Service(store, tmp_path / "data", model, plugins=[web_plugin(web)]).run_until_quiescent()
+    accept = [o for o in store.operations(tid) if o["tool"] == "submit_result"][0]["result"]
+    assert accept["passed"] is False
+    assert any("原文" in e for e in accept["errors"])
+    assert [q["verified"] for q in accept["quotes"]] == [False]

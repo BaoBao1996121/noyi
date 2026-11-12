@@ -12,6 +12,12 @@ from personal_agent.store import Store
 from conftest import ScriptedModel, tool_reply, submit_written_artifact
 
 
+def deliver_all(store):
+    """The channel acknowledges every pending message (what Service.deliver does)."""
+    for d in store.all("SELECT id FROM deliveries WHERE state IN ('pending','failed')"):
+        store.accept_delivery(d["id"], {"id": d["id"], "accepted": True})
+
+
 def incoming(store, text, *, nonce, sources=None, reply_to=None):
     return store.accept_conversation(TaskSpec(text, sources or [], max_calls=40, max_tools=100, max_seconds=900),
                                      text=text, nonce=nonce, reply_to=reply_to)
@@ -71,6 +77,7 @@ async def test_router_records_the_refused_promise_for_replay(store, tmp_path):
 async def test_accepted_result_fulfils_with_a_verified_artifact(store, source, tmp_path, successful_model):
     result = intake(store, "帮我整理这份资料", {"action": "new_task", "receipt": "好，我去整理，做好发你。"}, nonce="f", sources=[source])
     await Runtime(store, tmp_path / "data", successful_model).execute(store.claim())
+    deliver_all(store)
     [c] = commitments(store)
     assert c["state"] == "fulfilled"
     evidence = json.loads(c["evidence"])
@@ -203,6 +210,8 @@ async def test_one_time_reminder_stays_open_until_the_reminder_itself_is_deliver
     store.db.execute("UPDATE tasks SET goal_id=?,goal_revision=?,policy_id=?,policy_revision=? WHERE id=?", (goal["id"], goal["revision"], policy["id"], policy["revision"], occurrence_task))
     run = store.claim()
     store.finish(run, status="succeeded", reason="accepted", content="该交周报了。", acceptance="passed")
+    assert commitments(store)[0]["state"] == "open"
+    deliver_all(store)
     c = commitments(store)[0]
     assert c["state"] == "fulfilled"
     assert store.one("SELECT content FROM deliveries WHERE id=?", (c["closing_delivery_id"],))["content"] == "该交周报了。"
@@ -221,6 +230,7 @@ async def test_executor_cannot_promise_later_work_without_registering_it(store, 
     await Runtime(store, tmp_path / "data", model).execute(store.claim())
     failed = [o for o in store.all("SELECT * FROM operations WHERE tool='submit_result'") if "promise" in o["arguments"]]
     assert "登记" in failed[0]["result"]
+    deliver_all(store)
     assert commitments(store)[0]["state"] == "fulfilled"
 
 
@@ -252,3 +262,40 @@ def test_upgrade_backs_up_then_backfills_existing_work(tmp_path, source, success
         assert upgraded.one("PRAGMA user_version")["user_version"] == Store.SCHEMA_VERSION
     finally:
         upgraded.close()
+
+
+class RefusingChannel:
+    """A channel that never acknowledges: the user did not get the message."""
+    async def send(self, delivery):
+        raise OSError("channel unavailable")
+
+
+@pytest.mark.asyncio
+async def test_accepted_work_is_not_fulfilled_until_the_user_actually_got_it(store, source, tmp_path, successful_model):
+    from personal_agent.service import Service
+    intake(store, "帮我整理这份资料", {"action": "new_task", "receipt": "好，我去整理，做好发你。"}, nonce="nd", sources=[source])
+    data = tmp_path / "data"
+    await Runtime(store, data, successful_model).execute(store.claim())
+    [c] = commitments(store)
+    assert store.task(c["task_id"])["acceptance"] == "passed"
+    # Accepted but never sent: the promise is not kept yet.
+    assert c["state"] == "open"
+    await Service(store, data, None, channel=RefusingChannel()).deliver()
+    [c] = commitments(store)
+    assert c["state"] == "open"
+    [item] = [i for i in store.commitment_items("local") if i["id"] == c["id"]]
+    assert item["done_not_delivered"] is True
+    await Service(store, data, None).deliver()
+    [c] = commitments(store)
+    assert c["state"] == "fulfilled"
+    delivery = store.one("SELECT * FROM deliveries WHERE id=?", (c["closing_delivery_id"],))
+    assert delivery["state"] == "accepted" and delivery["artifact"]
+
+
+def test_fulfilment_cannot_cite_a_message_the_user_never_got(store, source):
+    intake(store, "帮我整理这份资料", {"action": "new_task", "receipt": "好，我去整理。"}, nonce="nd2", sources=[source])
+    [c] = commitments(store)
+    store.db.execute("INSERT INTO deliveries(id,task_id,run_id,room_id,content) VALUES('undelivered',?, 'r-x','local','好了')", (c["task_id"],))
+    with pytest.raises(ValueError, match="送达"):
+        store.close_commitment(c["id"], "fulfilled", [{"kind": "delivery", "id": "undelivered"}])
+    assert commitments(store)[0]["state"] == "open"

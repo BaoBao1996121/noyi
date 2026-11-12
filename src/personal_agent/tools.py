@@ -13,6 +13,7 @@ from .sources import ExactSourceReader
 MAX_SOURCE_BYTES = 128_000
 MAX_IMAGE_BYTES = 4_000_000
 PAGE_CHARS = 8_000
+MAX_QUOTES, MIN_QUOTE, MAX_QUOTE_CHARS = 12, 6, 300  # source quotes checked at acceptance
 IMAGE_SIGNATURES = [(b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"),
                     (b"GIF87a", "image/gif"), (b"GIF89a", "image/gif")]
 
@@ -48,7 +49,9 @@ TOOL_SCHEMAS = [
          {"artifact_ref": {"type": "string"}, "summary": {"type": "string"},
           "limitations": {"type": "array", "items": {"type": "string"},
                           "description": "IDs of unavailable optional sources; each must have literal UNAVAILABLE [source_id] in artifact"},
-          "promise": {"type": "string", "description": "Optional: copy verbatim any words in summary that promise the user future work (e.g. '之后资料有变化我会再告诉你'). Such a promise is accepted only if this run registered it with start_following; otherwise leave it out of summary."}},
+          "promise": {"type": "string", "description": "Optional: copy verbatim any words in summary that promise the user future work (e.g. '之后资料有变化我会再告诉你'). Such a promise is accepted only if this run registered it with start_following; otherwise leave it out of summary."},
+          "quotes": {"type": "array", "maxItems": MAX_QUOTES, "items": {"type": "object", "properties": {"source_id": {"type": "string"}, "quote": {"type": "string"}}, "required": ["source_id", "quote"]},
+                     "description": "For each key conclusion in the artifact, the exact source words it rests on: source_id is a supplied source ID or a fetched page_id, quote is copied character for character from the text you read (6-300 characters). The runtime checks each quote against the version you read; a quote it cannot find fails acceptance."}},
          ["artifact_ref", "summary", "limitations"]),
 ]
 
@@ -67,7 +70,10 @@ def validate_arguments(name: str, args: dict):
             raise ValueError(f"{key} must be string")
         if kind == "integer" and (type(value) is not int or value < 0):
             raise ValueError(f"{key} must be nonnegative integer")
-        if kind == "array" and (not isinstance(value, list) or any(not isinstance(x, str) for x in value)):
+        if kind == "array" and key == "quotes":
+            if not isinstance(value, list) or len(value) > MAX_QUOTES or any(not isinstance(x, dict) or set(x) != {"source_id", "quote"} or not all(isinstance(v, str) for v in x.values()) for x in value):
+                raise ValueError(f"quotes must be at most {MAX_QUOTES} objects with source_id and quote strings")
+        elif kind == "array" and (not isinstance(value, list) or any(not isinstance(x, str) for x in value)):
             raise ValueError(f"{key} must be string array")
 
 
@@ -243,6 +249,51 @@ class Toolset:
         return {"artifact_ref": artifact_ref, "text": text[offset:end], "start": offset, "end": end, "total": len(text), "eof": end == len(text), "sha256": digest(raw)}
 
 
+def _normal(text):
+    return " ".join(text.split())
+
+
+def check_quotes(toolset: Toolset, operations: list[dict], quotes: list[dict]) -> list[dict]:
+    """Each quote must occur verbatim in the exact version this task read.
+
+    The text is the snapshot cached at read time and its digest must still
+    match the read receipt, so a source that changed later cannot make an old
+    quote pass or fail. This checks provenance only: a quote that exists does
+    not make the conclusion drawn from it correct."""
+    snapshots = {}
+    for o in operations:
+        result = o.get("result") or {}
+        if o["status"] != "succeeded":
+            continue
+        if o["tool"] == "read_source" and result.get("snapshot") and "image" not in result:
+            snapshots.setdefault(result["source_id"], (toolset.root / result["snapshot"], result["sha256"], False))
+        elif o["tool"] == "fetch_page" and result.get("page_id"):
+            snapshots.setdefault(result["page_id"], (toolset.root / "web" / (result["page_id"] + ".txt"), result["sha256"], True))
+    checked = []
+    for q in quotes:
+        sid, quote = q["source_id"], q["quote"].strip()
+        item = {"source_id": sid, "quote": quote, "verified": False}
+        if not MIN_QUOTE <= len(quote) <= MAX_QUOTE_CHARS:
+            item["reason"] = f"原文片段要 {MIN_QUOTE}–{MAX_QUOTE_CHARS} 字"
+        elif sid not in snapshots:
+            item["reason"] = "这项任务没有成功读过这份资料"
+        else:
+            path, sha, page = snapshots[sid]
+            try:
+                raw = toolset._checked(path).read_text(encoding="utf-8")
+                text = raw.split("\n", 2)[2] if page else raw
+            except (OSError, UnicodeError, ValueError, IndexError):
+                text = None
+            if text is None or digest(text.encode()) != sha:
+                item["reason"] = "读过的那一版内容已无法核对"
+            elif _normal(quote) not in _normal(text):
+                item["reason"] = "读过的那一版内容里没有这段原文"
+            else:
+                item = {"source_id": sid, "quote": quote, "verified": True, "sha256": sha}
+        checked.append(item)
+    return checked
+
+
 def verify(toolset: Toolset, operations: list[dict], proposal: dict) -> dict:
     """Deterministic acceptance; never infer semantic truth from a model's claim."""
     errors, checks = [], []
@@ -291,12 +342,23 @@ def verify(toolset: Toolset, operations: list[dict], proposal: dict) -> dict:
             errors.append(f"source {sid} not fully read; optional failure requires limitations ID and UNAVAILABLE [{sid}] in artifact")
         else:
             checks.append({"source": sid, "unavailable_disclosed": True})
-    fetched = {o["result"].get("page_id") for o in operations if o["tool"] == "fetch_page" and o["status"] == "succeeded"}
-    for page_id in sorted(set(re.findall(r"\[(page_[0-9a-f]{10})\]", text)) - fetched):
+    fetched = {}
+    for o in operations:
+        if o["tool"] == "fetch_page" and o["status"] == "succeeded":
+            fetched.setdefault(o["result"].get("page_id"), o["result"].get("sha256"))
+    cited_pages = set(re.findall(r"\[(page_[0-9a-f]{10})\]", text))
+    for page_id in sorted(cited_pages - set(fetched)):
         errors.append(f"citation [{page_id}] has no successful fetch_page in this task")
+    for page_id in sorted(cited_pages & set(fetched)):
+        # Which version of the page the citation rests on.
+        checks.append({"page": page_id, "sha256": fetched[page_id]})
     for required in toolset.task["spec"]["required_text"]:
         if required.casefold() not in text.casefold():
             errors.append(f"missing required text: {required}")
-    return {"passed": not errors, "errors": errors, "checks": checks,
+    quotes = check_quotes(toolset, operations, proposal.get("quotes") or [])
+    for q in quotes:
+        if not q["verified"]:
+            errors.append(f"原文核对没通过 [{q['source_id']}]：{q['reason']}（「{q['quote'][:40]}」）。请从读过的内容里逐字复制，或删掉这条依据")
+    return {"passed": not errors, "errors": errors, "checks": checks, "quotes": quotes,
             "artifact": {"ref": ref, "sha256": digest(raw), "bytes": len(raw)},
-            "scope": "file integrity, source read coverage/citations, user-supplied text checks; not general semantic correctness"}
+            "scope": "file integrity, source read coverage/citations, verbatim source quotes, user-supplied text checks; not general semantic correctness"}

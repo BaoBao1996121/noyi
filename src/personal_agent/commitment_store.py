@@ -6,6 +6,10 @@ for it, in the same transaction that sends the words. It ends only by:
 fulfilled (evidence the ledger can find), unable, released or superseded, and
 every ending that is not a fulfilment is told to the user in a message the
 ledger links. There is no silent closing path.
+
+Accepted work is not yet a kept promise: it is fulfilled only when the channel
+acknowledged the message that hands the result to the user. Until then the
+ledger records it as done but not delivered.
 """
 from __future__ import annotations
 
@@ -125,14 +129,15 @@ class CommitmentStore:
                                                     "due_at": row["due_at"], "due_basis": row["due_basis"], "origin": origin, "supersedes": supersedes})
         return row
 
-    def _commitment_source(self, commitment, item):
+    def _commitment_source(self, commitment, item, *, delivered_only=False):
         if not isinstance(item, dict):
             raise ValueError("出处格式无效")
         kind = item.get("kind")
+        sent = " AND state='accepted'" if delivered_only else ""
         if kind == "artifact":
-            delivered = [json.loads(d["artifact"]) for d in self.all("SELECT artifact FROM deliveries WHERE task_id=? AND artifact IS NOT NULL", (item.get("task_id"),))]
+            delivered = [json.loads(d["artifact"]) for d in self.all("SELECT artifact FROM deliveries WHERE task_id=? AND artifact IS NOT NULL" + sent, (item.get("task_id"),))]
             if not any(a.get("ref") == item.get("ref") and a.get("sha256") == item.get("sha256") for a in delivered):
-                raise ValueError("这份成果没有通过验收的交付记录")
+                raise ValueError("这份成果没有送达你的交付记录" if delivered_only else "这份成果没有通过验收的交付记录")
             from .tools import Toolset
             path = Toolset(self.conversation_data, self.task(item["task_id"])).artifact_path(item["ref"])
             if digest(path.read_bytes()) != item["sha256"]:
@@ -143,13 +148,20 @@ class CommitmentStore:
                 raise ValueError("账本里没有这次成功操作")
             return {"kind": "operation", "task_id": item["task_id"], "id": item["id"]}
         if kind == "page":
-            pages = self.all("SELECT result FROM operations WHERE task_id=? AND tool='fetch_page' AND status='succeeded'", (item.get("task_id"),))
-            if not any(json.loads(p["result"] or "{}").get("page_id") == item.get("page_id") for p in pages):
+            pages = [json.loads(p["result"] or "{}") for p in self.all("SELECT result FROM operations WHERE task_id=? AND tool='fetch_page' AND status='succeeded'", (item.get("task_id"),))]
+            read = next((p for p in pages if p.get("page_id") == item.get("page_id")), None)
+            if not read:
                 raise ValueError("这项任务没有成功读过这个网页")
-            return {"kind": "page", "task_id": item["task_id"], "page_id": item["page_id"]}
+            if item.get("sha256") and item["sha256"] != read.get("sha256"):
+                raise ValueError("这个网页读到的不是这一版内容")
+            # The page as it was read, not whatever the address shows today.
+            return {"kind": "page", "task_id": item["task_id"], "page_id": item["page_id"], "sha256": read.get("sha256"), "url": read.get("url")}
         if kind == "delivery":
-            if not self.one("SELECT 1 FROM deliveries WHERE id=? AND room_id=?", (item.get("id"), commitment["room_id"])):
+            row = self.one("SELECT state FROM deliveries WHERE id=? AND room_id=?", (item.get("id"), commitment["room_id"]))
+            if not row:
                 raise ValueError("这条消息不在这个会话里")
+            if delivered_only and row["state"] != "accepted":
+                raise ValueError("这条消息还没送达，不能作为兑现的出处")
             return {"kind": "delivery", "id": item["id"]}
         raise ValueError("未知出处类型")
 
@@ -161,10 +173,11 @@ class CommitmentStore:
             commitment = self.commitment(commitment_id)
             if commitment["state"] != OPEN:
                 raise ValueError("这条承诺已经收口")
-            checked = [self._commitment_source(commitment, item) for item in evidence or []]
+            fulfil = state == "fulfilled"
+            checked = [self._commitment_source(commitment, item, delivered_only=fulfil) for item in evidence or []]
             if closing_delivery_id:
-                checked.append(self._commitment_source(commitment, {"kind": "delivery", "id": closing_delivery_id}))
-            if state == "fulfilled" and not checked:
+                checked.append(self._commitment_source(commitment, {"kind": "delivery", "id": closing_delivery_id}, delivered_only=fulfil))
+            if fulfil and not checked:
                 raise ValueError("兑现必须引用能核对的出处")
             now = time.time()
             self.db.execute("UPDATE commitments SET state=?,evidence=?,closing_delivery_id=?,close_reason=?,closed=? WHERE id=?",
@@ -343,16 +356,23 @@ class CommitmentStore:
             artifact = outcome.get("artifact")
             if artifact:
                 evidence.append({"kind": "artifact", "task_id": task["id"], "ref": artifact["ref"], "sha256": artifact["sha256"]})
+                accepted = self.one("SELECT data FROM steps WHERE run_id=? AND kind='acceptance' ORDER BY id DESC LIMIT 1", (run["id"],))
+                for check in (json.loads(accepted["data"]).get("checks", []) if accepted else []):
+                    if check.get("page"):
+                        evidence.append({"kind": "page", "task_id": task["id"], "page_id": check["page"], "sha256": check["sha256"]})
             action = self.one("SELECT result FROM operations WHERE run_id=? AND tool='complete_action' AND status='succeeded' ORDER BY created DESC LIMIT 1", (run["id"],))
             for ref in (json.loads(action["result"]).get("effect_refs", []) if action else []):
                 evidence.append({"kind": "operation", "task_id": task["id"], "id": ref})
-            for row in self._open_for_task(task["id"]):
-                self.close_commitment(row["id"], "fulfilled", evidence, closing_delivery_id=delivery["id"] if delivery else None)
+            due = list(self._open_for_task(task["id"]))
             for row in self.all("SELECT * FROM commitments WHERE task_id=? AND state='open' AND kind IN ('scheduled','standing')", (task["id"],)):
                 self._commitment_event(row, "arrangement_confirmed", {"delivery_id": delivery["id"] if delivery else None, "evidence": evidence})
             if task["policy_id"]:
-                for row in self.all("SELECT * FROM commitments WHERE policy_id=? AND kind='scheduled' AND state='open'", (task["policy_id"],)):
-                    self.close_commitment(row["id"], "fulfilled", evidence, closing_delivery_id=delivery["id"] if delivery else None)
+                due += self.all("SELECT * FROM commitments WHERE policy_id=? AND kind='scheduled' AND state='open'", (task["policy_id"],))
+            for row in due:
+                # Done, not yet kept: fulfilment waits for the channel to acknowledge this delivery.
+                self._commitment_event(row, "done_awaiting_delivery", {"delivery_id": delivery["id"] if delivery else None, "evidence": evidence})
+            if delivery and delivery["state"] == "accepted":
+                self._settle_delivered(delivery["id"])
         elif reason == "unable_reported":
             for row in self._open_for_task(task["id"], ("task", "scheduled", "standing")):
                 self.close_commitment(row["id"], "unable", [], reason="做不到，已如实说明", closing_delivery_id=delivery["id"] if delivery else None)
@@ -361,6 +381,22 @@ class CommitmentStore:
                 if not row["blocked_since"]:
                     self.db.execute("UPDATE commitments SET blocked_since=?,blocked_notified=NULL WHERE id=?", (time.time(), row["id"]))
                 self._commitment_event(row, "blocked", {"reason": reason, "delivery_id": delivery["id"] if delivery else None})
+
+    def _awaiting(self, delivery_id=None):
+        """Open commitments whose work is accepted, with the delivery they wait on (latest wins)."""
+        rows = self.all("""SELECT e.commitment_id,e.data FROM commitment_events e JOIN commitments c ON c.id=e.commitment_id
+            WHERE e.kind='done_awaiting_delivery' AND c.state='open' ORDER BY e.created,e.id""")
+        latest = {r["commitment_id"]: json.loads(r["data"]) for r in rows}
+        return {key: data for key, data in latest.items() if data.get("delivery_id") and (delivery_id is None or data["delivery_id"] == delivery_id)}
+
+    def _settle_delivered(self, delivery_id):
+        for commitment_id, data in self._awaiting(delivery_id).items():
+            self.close_commitment(commitment_id, "fulfilled", data.get("evidence") or [], closing_delivery_id=delivery_id)
+
+    def accept_delivery(self, delivery_id, receipt):
+        with self.transaction():
+            super().accept_delivery(delivery_id, receipt)
+            self._settle_delivered(delivery_id)
 
     def request_control(self, task_id, kind, *, run_id=None, account="local-user"):
         with self.transaction():
@@ -434,7 +470,9 @@ class CommitmentStore:
     def commitment_items(self, room):
         now = time.time()
         rows = self.all("SELECT * FROM commitments WHERE room_id=? AND state!='superseded' ORDER BY created DESC LIMIT 200", (room,))
+        awaiting = self._awaiting()
         for row in rows:
+            row["done_not_delivered"] = row["id"] in awaiting
             row["evidence"] = json.loads(row["evidence"])
             row["overdue"] = bool(row["state"] == OPEN and row["due_at"] and row["due_at"] < now)
             row["said_at"] = (self.one("SELECT created FROM deliveries WHERE id=?", (row["said_delivery_id"],)) or {}).get("created") or row["created"]
@@ -461,8 +499,12 @@ class CommitmentStore:
                 latest[decision["task_id"]] = row["id"]
         for row in self.all("SELECT * FROM commitments WHERE state='open' AND origin='backfill'"):
             task = self.task(row["task_id"])
-            last = self.one("SELECT id,artifact FROM deliveries WHERE task_id=? AND kind='result' ORDER BY rowid DESC LIMIT 1", (task["id"],))
-            if task["status"] == "succeeded" and task["acceptance"] == "passed" and last:
+            last = self.one("SELECT id,artifact,state FROM deliveries WHERE task_id=? AND kind='result' ORDER BY rowid DESC LIMIT 1", (task["id"],))
+            if task["status"] == "succeeded" and task["acceptance"] == "passed" and last and last["state"] != "accepted":
+                artifact = json.loads(last["artifact"]) if last["artifact"] else None
+                evidence = [{"kind": "artifact", "task_id": task["id"], "ref": artifact["ref"], "sha256": artifact["sha256"]}] if artifact else []
+                self._commitment_event(row, "done_awaiting_delivery", {"delivery_id": last["id"], "evidence": evidence})
+            elif task["status"] == "succeeded" and task["acceptance"] == "passed" and last:
                 artifact = json.loads(last["artifact"]) if last["artifact"] else None
                 evidence = [{"kind": "artifact", "task_id": task["id"], "ref": artifact["ref"], "sha256": artifact["sha256"]}] if artifact else []
                 try:

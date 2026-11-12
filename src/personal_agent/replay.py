@@ -11,6 +11,7 @@ import json
 import time
 
 from .commitment_store import due_label
+from .memory_store import KINDS
 
 STATIONS = [
     {"id": "intake", "label": "回复层判断"},
@@ -140,7 +141,9 @@ class ReplayView:
                     elif item.get("kind") == "operation":
                         facts.append(["成功操作", item.get("id")])
                     elif item.get("kind") == "page":
-                        facts.append(["读过的网页", item.get("page_id")])
+                        facts.append(["读过的网页", item.get("url") or item.get("page_id")])
+                        if item.get("sha256"):
+                            facts.append(["读到的那一版", item["sha256"][:12]])
                     elif item.get("kind") == "delivery":
                         facts.append(["告知你的消息", self.delivery_text(item.get("id"))[:80]])
                 out.append(_event("fulfil", kind, "ok", "承诺兑现", at=row["created"], text=row["quote"], facts=facts, links=links))
@@ -156,6 +159,8 @@ class ReplayView:
                 out.append(_event("fulfil", kind, "bad", "卡住超过一天，已提醒", at=row["created"], text=self.delivery_text(data.get("delivery_id"))))
             elif kind == "disclosed":
                 out.append(_event("fulfil", kind, "info", "告诉你结果", at=row["created"], text=self.delivery_text(data.get("delivery_id"))))
+            elif kind == "done_awaiting_delivery":
+                out.append(_event("deliver", kind, "info", "做完了，等送到你手上才算兑现", at=row["created"], text=row["quote"]))
             elif kind == "arrangement_confirmed":
                 out.append(_event("fulfil", kind, "info", "安排已确认", at=row["created"], text=row["quote"]))
         return out
@@ -168,6 +173,27 @@ class ReplayView:
             seconds = round(run["ended"] - run["started"]) if _known(run["ended"]) and _known(run["started"]) else None
             out.append(_event("start", "run", "info", title, at=run["started"], end=run["ended"], has_end=True, ongoing=run["phase"] == "running",
                               facts=[["起因", TRIGGERS.get(run["trigger"], run["trigger"])], ["第几轮", run["epoch"]], ["用时", f"{seconds} 秒" if seconds is not None else None]]))
+        return out
+
+    def memories(self):
+        """Which memories each run was actually given: titles and versions from the load manifest.
+
+        Values stay out of the replay; deleted items and unconfirmed proposals are
+        never in a manifest, so they cannot appear here."""
+        out, s = [], self.store
+        for run in s.all(f"SELECT id FROM runs WHERE task_id IN ({self.marks}) ORDER BY started,id", self.tasks):
+            for load in s.all("SELECT * FROM memory_loads WHERE run_id=? ORDER BY id", (run["id"],)):
+                if load["state"] != "loaded":
+                    out.append(_event("start", "memory_used", "warn", "记忆没读出来", at=load["created"], text="这一轮没有用上记忆，也没有当作“没有记忆”"))
+                    continue
+                facts = []
+                for record in _loads(load["manifest"]).get("records") or []:
+                    row = s.one("SELECT key,kind FROM memories WHERE id=?", (record.get("id"),))
+                    if row:
+                        label = KINDS.get(row["kind"], row["kind"]) + f" · 第 {record.get('version')} 版" + ("（只看了标题）" if record.get("state") == "title_only" else "")
+                        facts.append([row["key"], label])
+                if facts:
+                    out.append(_event("start", "memory_used", "info", f"这一轮依据的记忆（{len(facts)} 条）", at=load["created"], facts=facts))
         return out
 
     def model_requests(self):
@@ -203,7 +229,13 @@ class ReplayView:
         for step in self.store.all(f"SELECT * FROM steps WHERE task_id IN ({self.marks}) AND kind='acceptance' ORDER BY id", self.tasks):
             data = _loads(step["data"])
             artifact = data.get("artifact") or {}
-            out.append(_event("deliver", "accepted", "ok", "验收通过", at=step["created"], facts=[["成果校验值", artifact.get("sha256")], ["字节数", artifact.get("bytes")]]))
+            facts = [["成果校验值", artifact.get("sha256")], ["字节数", artifact.get("bytes")]]
+            quotes = data.get("quotes") or []
+            if quotes:
+                # Code checked that each quote is in the version read; whether the conclusion follows is not checked.
+                facts.append(["原文核对", f"{sum(q.get('verified') is True for q in quotes)}/{len(quotes)} 条在读过的那一版里逐字找到（只核对出处，不核对推断）"])
+                facts += [[f"依据 [{q['source_id']}]", q["quote"][:80]] for q in quotes if q.get("verified")]
+            out.append(_event("deliver", "accepted", "ok", "验收通过", at=step["created"], facts=facts))
         return out
 
     def messages(self, told):
@@ -239,10 +271,12 @@ class ReplayView:
             return row["state"]
         if row["overdue_notified"] or (row["due_at"] and row["due_at"] < time.time()):
             return "overdue"
+        if row["id"] in self.store._awaiting():
+            return "awaiting_delivery"
         return "blocked" if row["blocked_since"] else "open"
 
     def build(self):
-        sources = [self.intake(), self.commitments(), self.runs(), self.model_requests(), self.operations(), self.acceptance(), self.messages(self.told_deliveries())]
+        sources = [self.intake(), self.commitments(), self.runs(), self.memories(), self.model_requests(), self.operations(), self.acceptance(), self.messages(self.told_deliveries())]
         keyed = []
         for source_index, events in enumerate(sources):
             previous = 0.0

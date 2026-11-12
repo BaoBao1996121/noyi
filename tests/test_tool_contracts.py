@@ -136,3 +136,24 @@ def test_cross_task_artifact_reference_rejected(tmp_path):
         own.artifact_path(str(other.artifact_path(receipt["artifact_ref"])))
     with pytest.raises(ValueError):
         own.artifact_path("../other/" + receipt["artifact_ref"])
+
+
+@pytest.mark.asyncio
+async def test_source_quote_must_appear_verbatim_in_the_snapshot_that_was_read(tmp_path):
+    source = tmp_path / "policy.txt"
+    source.write_text("发布需要人工审核。负责人是陈语。\n", encoding="utf-8")
+    tools = make_tools(tmp_path, [{"id": "policy", "kind": "file", "location": str(source.resolve()), "required": True}])
+    read = await tools.read_source("policy")
+    write = tools.write_artifact("w1", "report.md", "发布前要人工审核 [policy]")
+    ops = [{"tool": "read_source", "status": "succeeded", "result": read, "arguments": {"source_id": "policy"}},
+           {"tool": "write_artifact", "status": "succeeded", "result": write, "arguments": {}}]
+    ok = verify(tools, ops, {"artifact_ref": write["artifact_ref"], "limitations": [], "quotes": [{"source_id": "policy", "quote": "发布需要人工审核"}]})
+    assert ok["passed"] and ok["quotes"] == [{"source_id": "policy", "quote": "发布需要人工审核", "verified": True, "sha256": read["sha256"]}]
+    # The file changes after it was read: the quote is checked against what was read.
+    source.write_text("发布不需要审核。\n", encoding="utf-8")
+    still = verify(tools, ops, {"artifact_ref": write["artifact_ref"], "limitations": [], "quotes": [{"source_id": "policy", "quote": "发布需要人工审核"}]})
+    assert still["passed"]
+    made_up = verify(tools, ops, {"artifact_ref": write["artifact_ref"], "limitations": [], "quotes": [{"source_id": "policy", "quote": "陈语必须亲自提交"}]})
+    assert not made_up["passed"] and made_up["quotes"][0]["verified"] is False
+    unread = verify(tools, ops, {"artifact_ref": write["artifact_ref"], "limitations": [], "quotes": [{"source_id": "other", "quote": "发布"}]})
+    assert not unread["passed"] and unread["quotes"][0]["verified"] is False
