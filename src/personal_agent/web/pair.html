@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Noyi · 配对这台设备</title>
+  <meta name="theme-color" content="#252525">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Noyi">
+  <link rel="stylesheet" href="/assets/pair.css">
+  <script type="module" src="/assets/pair.js"></script>
+</head>
+<body>
+<main class="pair">
+  <img src="/assets/icon-192.png" alt="" width="64" height="64">
+  <h1>配对这台设备</h1>
+  <p>这是你家里电脑上的 Noyi。为了安全，第一次用要先配对。</p>
+  <ol>
+    <li>在家里电脑上打开 Noyi，点左下角 ⚙ →「添加手机」。</li>
+    <li>用手机相机扫屏幕上的二维码；或者在下面输入 8 位配对码。</li>
+  </ol>
+  <form id="pair-form">
+    <input id="code" name="code" inputmode="text" autocomplete="one-time-code" autocapitalize="characters" placeholder="例如 ABCD-EF23" maxlength="12" required aria-label="配对码">
+    <button type="submit">配对</button>
+  </form>
+  <p id="pair-status" class="status" role="status"></p>
+  <p class="hint">配对码 5 分钟内有效，只能用一次。配对后这台设备可以一直使用，你随时可以在家里电脑上移除它。</p>
+</main>
+</body></html>

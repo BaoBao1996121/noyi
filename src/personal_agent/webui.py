@@ -21,6 +21,9 @@ from .tools import Toolset, MAX_SOURCE_BYTES, MAX_IMAGE_BYTES, atomic_write, ima
 from .goal_api import goal_snapshot, goal_action
 from .memory_curation import MemoryCurator
 from .memory_store import KINDS
+from .remote import COOKIE, COOKIE_MAX_AGE, DEVICE, REMOTE, RemoteConfig, RemoteGate
+from .push import PushChannel, load_vapid
+from .service import FileChannel
 
 
 WEB = Path(__file__).with_name("web")
@@ -80,10 +83,12 @@ class Console:
         self.token = secrets.token_urlsafe(32)
         self.instance_id = uuid.uuid4().hex
         self.shutdown_event = shutdown_event
-        self.service = Service(store, self.data, model, plugins=plugins)
+        self.channel = PushChannel(store, self.data, FileChannel(self.data))
+        self.service = Service(store, self.data, model, channel=self.channel, plugins=plugins)
         self.curator = MemoryCurator(self.service.runtime)
         self.run_service = run_service
         self.service_error = None
+        self.remote = RemoteGate(store, RemoteConfig.load())
         self.store.db.execute("CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY,room_id TEXT NOT NULL,account TEXT NOT NULL,name TEXT NOT NULL,path TEXT NOT NULL,sha256 TEXT NOT NULL,bytes INTEGER NOT NULL,created REAL NOT NULL)")
 
     def room(self, room_id="local"):
@@ -211,12 +216,14 @@ class Console:
 async def security(request, handler):
     console = request.app[CONSOLE]
     try:
-        if request.url.host not in {"127.0.0.1", "localhost", "::1"}:
-            raise web.HTTPForbidden(text="Only loopback access is supported")
+        refused = console.remote.admit(request)
+        if refused:
+            status, text = refused
+            raise (web.HTTPUnauthorized if status == 401 else web.HTTPForbidden)(text=text)
         origin = request.headers.get("Origin")
-        if origin and origin != str(request.url.origin()):
+        if not request[REMOTE] and origin and origin != str(request.url.origin()):
             raise web.HTTPForbidden(text="Cross-origin access denied")
-        if request.method not in {"GET", "HEAD"}:
+        if request.method not in {"GET", "HEAD"} and request.path != "/api/pair":
             if not secrets.compare_digest(request.headers.get("X-PA-Token", ""), console.token):
                 raise web.HTTPForbidden(text="Refresh this page before making changes")
             if request.headers.get("Sec-Fetch-Site") == "cross-site":
@@ -245,7 +252,9 @@ async def json_body(request):
 
 async def boot(request):
     c = request.app[CONSOLE]
-    return web.json_response({"token": c.token, "instance_id": c.instance_id, "workspace_id": c.workspace_id, "version": "0.6.0", "title": "Noyi"})
+    return web.json_response({"token": c.token, "instance_id": c.instance_id, "workspace_id": c.workspace_id, "version": "0.6.0", "title": "Noyi",
+                              "remote": bool(request.get(REMOTE)), "push_public_key": c.channel.vapid.public if request.get(DEVICE) else None,
+                              "remote_hosts": sorted(c.remote.config.hosts) if not request.get(REMOTE) else []})
 
 
 async def snapshot(request):
@@ -424,11 +433,77 @@ async def shutdown(request):
     return web.json_response({"accepted": True, "instance_id": c.instance_id})
 
 
+STATIC_FILES = {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
+                "replay-pixel.js", "galaxy.js", "galaxy.css", "mobile.css", "mobile.js", "pair.js", "pair.css", "pair.html", "sw.js",
+                "icon-192.png", "icon-512.png", "apple-touch-icon.png"}
+
+
 async def static(request):
     name = request.match_info.get("name", "index.html")
-    if name not in {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css", "replay-pixel.js", "galaxy.js", "galaxy.css"}:
+    if name not in STATIC_FILES:
         raise web.HTTPNotFound()
+    if name == "index.html" and request.get(REMOTE) and not request.get(DEVICE):
+        name = "pair.html"
     return web.FileResponse(WEB / name)
+
+
+async def manifest(request):
+    response = web.FileResponse(WEB / "manifest.webmanifest")
+    response.content_type = "application/manifest+json"
+    return response
+
+
+async def service_worker(request):
+    # Served from the root so its scope covers the whole app.
+    response = web.FileResponse(WEB / "sw.js", headers={"Service-Worker-Allowed": "/"})
+    response.content_type = "text/javascript"
+    return response
+
+
+async def pairing(request):
+    c, body = request.app[CONSOLE], await json_body(request)
+    return web.json_response(c.remote.new_code(body.get("name", "")))
+
+
+async def pair(request):
+    c, body = request.app[CONSOLE], await json_body(request)
+    secret, device = c.remote.redeem(body.get("code", ""))
+    if not secret:
+        if device == "locked":
+            return web.json_response({"error": "试错太多次，请 5 分钟后在家里电脑上重新生成配对码"}, status=429)
+        raise ValueError("配对码不对或已过期，请在家里电脑上重新生成")
+    response = web.json_response({"paired": True, "device_id": device})
+    response.set_cookie(COOKIE, secret, max_age=COOKIE_MAX_AGE, httponly=True, secure=True, samesite="Strict", path="/")
+    return response
+
+
+async def push_subscribe(request):
+    c, body = request.app[CONSOLE], await json_body(request)
+    device = request.get(DEVICE)
+    if not device:
+        raise ValueError("只有配对过的手机能开启通知")
+    return web.json_response(c.store.save_push_subscription(device["id"], body))
+
+
+async def seen(request):
+    c, body = request.app[CONSOLE], await json_body(request)
+    device = request.get(DEVICE)
+    return web.json_response({"accepted": c.store.mark_seen(body.get("ids", []), device_id=device["id"] if device else None)})
+
+
+async def feedback(request):
+    c, body = request.app[CONSOLE], await json_body(request)
+    return web.json_response(c.store.mark_feedback(body.get("delivery_id"), category=body.get("category"), note_shared=body.get("note_shared", ""),
+                                                   note_private=body.get("note_private", ""), share=body.get("share", False)))
+
+
+async def devices(request):
+    return web.json_response({"devices": request.app[CONSOLE].remote.devices(), "hosts": sorted(request.app[CONSOLE].remote.config.hosts)})
+
+
+async def revoke_device(request):
+    c, body = request.app[CONSOLE], await json_body(request)
+    return web.json_response(c.remote.revoke(body.get("id")))
 
 
 async def lifecycle(app):
@@ -476,6 +551,9 @@ def create_app(store, data, model, *, run_service=True, shutdown_event=None, plu
     app = web.Application(middlewares=[security], client_max_size=MAX_IMAGE_BYTES + 20000)
     app[CONSOLE] = Console(store, data, model, run_service=run_service, shutdown_event=shutdown_event, plugins=plugins)
     app.add_routes([web.get("/", static), web.get("/assets/{name}", static), web.get("/api/bootstrap", boot),
+                    web.get("/manifest.webmanifest", manifest), web.get("/sw.js", service_worker),
+                    web.post("/api/pairing", pairing), web.post("/api/pair", pair), web.get("/api/devices", devices), web.post("/api/devices/revoke", revoke_device),
+                    web.post("/api/push/subscribe", push_subscribe), web.post("/api/seen", seen), web.post("/api/feedback", feedback),
                     web.get("/api/state", snapshot), web.get("/api/tasks/{task_id}", detail), web.get("/api/tasks/{task_id}/timeline", timeline), web.get("/api/memory/galaxy", memory_galaxy), web.post("/api/messages", submit),
                     web.post("/api/actions/{name}", action), web.post("/api/uploads", upload),
                     web.get("/api/artifacts/{delivery_id}", artifact), web.post("/api/settings", settings),

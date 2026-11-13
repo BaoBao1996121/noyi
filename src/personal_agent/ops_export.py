@@ -41,7 +41,7 @@ PRIVATE_TABLES = set(HEALTH_TABLES) - {"health_bias"} | {
     "experiment_reminders", "investigation", "progress_log", "nudges", "handoffs", "worker_reviews", "worker_adoptions",
     "identity_audit", "bots", "team_templates", "rooms", "room_members", "actors", "thread_subscriptions", "followups",
     "followup_history", "pending_routes", "events", "input_usage", "artifact_heads", "artifact_versions", "coverage_reads",
-    "dependency_reads", "speech_marks", "activity_log", "controls", "push_subscriptions", "paired_devices", "pairing_codes",
+    "dependency_reads", "speech_marks", "activity_log", "controls", "push_subscriptions", "push_sent", "app_presence", "paired_devices", "pairing_codes",
     "conversation_goal_actions",
 }
 

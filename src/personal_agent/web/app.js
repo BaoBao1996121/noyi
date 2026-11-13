@@ -114,7 +114,7 @@ function messageView(force=false){
   const originHtml=before.length?`<details class="task-origin" open><summary>这件事是从这段对话来的</summary>${before.map(t=>`<article class="message ${t.speaker==='user'?'user':'assistant'}"><div class="bubble ${t.speaker==='user'?'':'rich'}">${t.speaker==='user'?esc(t.content):rich(t.content)}</div></article>`).join('')}</details>`:'';
   // The intake receipt is a room reply, not task output; show it from the
   // task's origin right after the request it answered.
-  const items=[...(originHtml?[{sort:-1,html:originHtml}]:[]),...(receipt&&asked?[{sort:(asked.created||0)+0.001,html:`<article class="message assistant"><div class="message-label">${esc(botName(task.actor_id))}</div><div class="bubble rich">${rich(receipt.content)}</div></article>`}]:[]),...messages.map(m=>({sort:m.created||0,html:`<article class="message user"><div class="message-label">你 ${m.actor_id!=='unassigned'?'→ '+esc(botName(m.actor_id)):''}<time>${esc(timeLabel(m.created))}</time><button class="small-link" data-reply="${m.id}" data-tid="${m.task_id||''}" data-actor="${m.actor_id}">回复</button></div><div class="bubble">${esc(m.content)}</div></article>`})),...deliveries.map(d=>({sort:d.created||0,html:`<article class="message ${d.kind==='system'||d.kind==='clarification'||d.kind==='commitment'?'system':'assistant'}"><div class="message-label">${d.kind==='result'?esc(botName(d.actor_id)):''} <time>${esc(timeLabel(d.created))}</time>${d.actor_id?`<button class="small-link" data-reply="${d.id}" data-tid="${d.task_id||''}" data-actor="${d.actor_id}">回复</button>`:''}</div><div class="bubble rich">${rich(d.content)}</div>${d.artifact?artifactCard(d):''}${fulfilledLine(d)}</article>`}))].sort((a,b)=>a.sort-b.sort);
+  const items=[...(originHtml?[{sort:-1,html:originHtml}]:[]),...(receipt&&asked?[{sort:(asked.created||0)+0.001,html:`<article class="message assistant"><div class="message-label">${esc(botName(task.actor_id))}</div><div class="bubble rich">${rich(receipt.content)}</div></article>`}]:[]),...messages.map(m=>({sort:m.created||0,html:`<article class="message user"><div class="message-label">你 ${m.actor_id!=='unassigned'?'→ '+esc(botName(m.actor_id)):''}<time>${esc(timeLabel(m.created))}</time><button class="small-link" data-reply="${m.id}" data-tid="${m.task_id||''}" data-actor="${m.actor_id}">回复</button></div><div class="bubble">${esc(m.content)}</div></article>`})),...deliveries.map(d=>({sort:d.created||0,html:`<article class="message ${d.kind==='system'||d.kind==='clarification'||d.kind==='commitment'?'system':'assistant'}${d.kind==='health_alert'?' alert':''}" data-delivery="${esc(d.id)}" data-delivery-state="${esc(d.state)}"><div class="message-label">${d.kind==='result'?esc(botName(d.actor_id)):''} <time>${esc(timeLabel(d.created))}</time>${d.actor_id?`<button class="small-link" data-reply="${d.id}" data-tid="${d.task_id||''}" data-actor="${d.actor_id}">回复</button>`:''}</div><div class="bubble rich">${rich(d.content)}</div>${d.artifact?artifactCard(d):''}${fulfilledLine(d)}</article>`}))].sort((a,b)=>a.sort-b.sort);
   if(!items.length&&!questions.length){
     box.innerHTML='<div class="empty"><div class="hero-mark">✳</div><h2>把事情交给我，慢慢腾出手。</h2><p>整理资料、拆解任务、跟进进度。<br>你可以随时补充、暂停，或查看每一份成果。</p><div class="suggestions"><button class="suggestion" data-suggestion="帮我把这些资料整理成一份行动清单，标明优先级和待确认事项。"><span>▤</span>从一份资料开始<br><span class="muted">整理重点和下一步行动</span></button><button class="suggestion" data-suggestion="帮我规划接下来一周的个人工作，先问我需要了解的关键信息。"><span>☷</span>理清手头的事情<br><span class="muted">把想法变成可执行的计划</span></button></div></div>';
   }else{
@@ -346,7 +346,10 @@ const galaxyUI=installGalaxy({state,api,esc,timeLabel});
 try{state.memoryMode=localStorage.getItem('pa.memory.mode')||'list';}catch{state.memoryMode='list';}
 document.addEventListener('galaxy:closed',()=>detailView(true));
 const goalsUI=installGoals({state,api,modal,toast,refresh,esc,timeLabel,chooseTask,compose:composeAbout,request:sendIntent});
-async function poll(){await refresh();setTimeout(poll,document.hidden?5000:1500);}
+async function poll(){await refresh();window.noyiMobile?.afterRefresh(state.data);setTimeout(poll,document.hidden?5000:1500);}
+// Phone extras (mobile.js) read state and call the same api(); nothing here depends on them.
+window.noyiApp={api,toast,modal,refresh:()=>refresh(true),get data(){return state.data;},get room(){return state.room;},
+  addUpload(u){state.uploads.push(u);renderAttachments();saveDraft();}};
 // Deep links (used by the landing page): ?task=<id>&tab=replay|memory&view=galaxy&play=1
 function applyLink(){
   const q=new URLSearchParams(location.search);
@@ -366,7 +369,7 @@ function staticChrome(){
   document.body.prepend(bar);
 }
 try{
-  const boot=await api('/api/bootstrap');switchWorkspace(boot);
+  const boot=await api('/api/bootstrap');switchWorkspace(boot);window.noyiBoot=boot;
   if(STATIC){staticChrome();state.room='local';}
   await refresh(true);
   if(STATIC){

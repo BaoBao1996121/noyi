@@ -82,6 +82,12 @@ class Service:
             self.store.db.execute("UPDATE deliveries SET attempts=attempts+1 WHERE id=?", (d["id"],))
             try:
                 receipt = await self.channel.send(d)
+                if isinstance(receipt, dict) and receipt.get("id") == d["id"] and receipt.get("awaiting_seen") is True:
+                    # Sent to the phone, or the page is open: it counts as
+                    # delivered only when the page reports it seen (mark_seen).
+                    if not receipt.get("deferred"):
+                        self.store.db.execute("UPDATE deliveries SET state='pushed',last_error=NULL WHERE id=? AND state IN ('pending','failed')", (d["id"],))
+                    continue
                 if not isinstance(receipt, dict) or receipt.get("accepted") is not True or receipt.get("id") != d["id"]:
                     raise ValueError("channel did not acknowledge this delivery")
                 self.store.accept_delivery(d["id"], receipt)

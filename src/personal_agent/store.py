@@ -333,9 +333,10 @@ from .speech import SpeechStore
 from .commitment_store import CommitmentStore, backup_before_upgrade
 from .replay import ReplayStore
 from .health import HealthStore
+from .push import PushStore
 
 
-class Store(HealthStore, ReplayStore, CommitmentStore, SpeechStore, ConversationStore, ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
+class Store(PushStore, HealthStore, ReplayStore, CommitmentStore, SpeechStore, ConversationStore, ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
     """Durable task ledger with versioned collaboration protocols."""
 
     SCHEMA_VERSION = 12  # 12: local-only health records; 11: operations.ended for replay; 10: commitment ledger; 9: shared personal memory
