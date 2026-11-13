@@ -59,6 +59,7 @@ def parser():
     s = sub.add_parser("web", help="Start the local WebUI and background worker service")
     s.add_argument("--config", type=Path)
     s.add_argument("--port", type=int, default=8765)
+    s.add_argument("--rehearsal", action="store_true", help="Open the ledger (running migrations) and serve pages, with background work off")
     s = sub.add_parser("status")
     s.add_argument("task_id", nargs="?")
     s.add_argument("--detail", action="store_true")
@@ -120,7 +121,7 @@ def main():
             from .webui import serve_web
             if not 1024 <= args.port <= 65535:
                 raise ValueError("port must be between 1024 and 65535")
-            serve_web(data, ModelConfig.load(args.config), port=args.port, plugins=configured_plugins(args.config) + web_plugins(args.config, data) + [health_plugin()])
+            serve_web(data, ModelConfig.load(args.config), port=args.port, run_service=not args.rehearsal, plugins=configured_plugins(args.config) + web_plugins(args.config, data) + [health_plugin()])
             return
         store = Store(data / "state.sqlite")
         if args.command == "submit":

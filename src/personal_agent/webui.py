@@ -567,13 +567,13 @@ def create_app(store, data, model, *, run_service=True, shutdown_event=None, plu
     return app
 
 
-def serve_web(data, config=None, port=8765, plugins=None):
+def serve_web(data, config=None, port=8765, plugins=None, run_service=True):
     data = Path(data).resolve()
     store = Store(data / "state.sqlite")
     model = LocalModel(data, config or ModelConfig.load())
     async def run():
         stopping = asyncio.Event()
-        app = create_app(store, data, model, shutdown_event=stopping, plugins=plugins)
+        app = create_app(store, data, model, run_service=run_service, shutdown_event=stopping, plugins=plugins)
         runner = web.AppRunner(app, access_log=None, shutdown_timeout=10)
         try:
             await runner.setup()
