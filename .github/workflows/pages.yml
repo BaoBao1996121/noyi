@@ -1,7 +1,9 @@
 # Static read-only demo site on GitHub Pages.
 #
 # Publish:  git tag demo-YYYYMMDD-N && git push origin demo-YYYYMMDD-N
-# Rollback: gh workflow run pages.yml -f ref=<earlier demo-* tag or pages-ok-* tag>
+# Rollback: gh workflow run pages.yml --ref <earlier pages-ok-* or demo-* tag>
+#   (run on the old tag itself: Pages keys a deployment by the run's commit, so a run on main
+#   that builds old content is recorded under main's commit and does not replace the live site)
 # Why it failed: gh run list -w pages.yml ; gh run view <id> --log-failed ; gh run download <id>
 #
 # Gates, in order (each prints its reason; a failure stops everything after it):
@@ -15,9 +17,6 @@ on:
     tags: ["demo-*"]
   workflow_dispatch:
     inputs:
-      ref:
-        description: "Tag or commit to publish (default: the ref this runs on)"
-        required: false
       rollback:
         description: "Set by the automatic rollback; a failing rollback does not roll back again"
         type: boolean
@@ -47,8 +46,6 @@ jobs:
       sha: ${{ steps.sha.outputs.sha }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref || github.ref }}
       - id: sha
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v7
@@ -149,4 +146,4 @@ jobs:
             [ "$(git rev-list -n 1 "$t")" != "${{ needs.build.outputs.sha }}" ] && echo "$t" && break; done)
           if [ -z "$good" ]; then echo "::error::live check failed and there is no earlier good version to roll back to"; exit 1; fi
           echo "::warning::live check failed; republishing $good"
-          gh workflow run pages.yml --ref main -f ref="$good" -f rollback=true
+          gh workflow run pages.yml --ref "$good" -f rollback=true

@@ -16,7 +16,7 @@
 | 要做的事 | 命令 |
 |---|---|
 | 发布当前 main | `git tag demo-YYYYMMDD-N && git push origin demo-YYYYMMDD-N` |
-| 回滚到某个好版本 | `gh workflow run pages.yml -f ref=<pages-ok-N 或旧的 demo-* 标签>` |
+| 回滚到某个好版本 | `gh workflow run pages.yml --ref <pages-ok-N 或旧的 demo-* 标签>`（必须在旧标签上运行：Pages 按运行时的提交号记部署，在 main 上运行、只换内容的话不会替换线上版本） |
 | 看最近几次发布 | `gh run list -w pages.yml` |
 | 看失败原因 | `gh run view <id> --log-failed` |
 | 取截图和浏览器日志 | `gh run download <id>`（`smoke-before-publish`、`smoke-live`） |
