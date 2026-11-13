@@ -26,6 +26,8 @@
 
 冒烟检查（`scripts/site-smoke/smoke.mjs`）要求：落地页和演示页没有控制台报错和失败请求，图片都能加载，英文切换生效，「60 秒看它怎么面对逾期」按钮打开逾期那件事的回放并真的在播放，演示页只读，记忆星系画出来。每一项失败都会打印原因。
 
+演练线上失败自动回退：`gh workflow run pages.yml --ref <demo-标签> -f drill=true`（发布后故意让线上检查失败，应自动重新发布上一个 `pages-ok-*`）。
+
 `probe.yml` 每天从 GitHub 的境外机器检查一次：证书剩余天数、`build.json`、冒烟检查。失败时 GitHub 会发邮件。
 
 ## 本地复现
