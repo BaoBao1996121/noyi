@@ -116,7 +116,7 @@ def test_upgrade_to_v11_backs_up_first_and_adds_tool_end_times(tmp_path, source)
         assert "ended" not in {r[1] for r in copy.execute("PRAGMA table_info(operations)")}
         copy.close()
         assert "ended" in {r["name"] for r in upgraded.all("PRAGMA table_info(operations)")}
-        assert upgraded.one("PRAGMA user_version")["user_version"] == 11
+        assert upgraded.one("PRAGMA user_version")["user_version"] == Store.SCHEMA_VERSION
     finally:
         upgraded.close()
     again = Store(path)
