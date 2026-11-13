@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Noyi · 说到做到的个人助理</title>
+  <meta name="description" content="Noyi: a personal agent that keeps its word. 说到做到的个人助理。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23252525'/%3E%3Ctext x='17' y='46' fill='white' font-size='46' font-family='sans-serif'%3En%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="landing.css">
+  <script type="module" src="landing.js"></script>
+</head>
+<body>
+<header class="top">
+  <span class="brand"><b>n·</b> Noyi</span>
+  <nav><a href="https://github.com/BaoBao1996121/noyi" target="_blank" rel="noopener">GitHub</a><button id="lang" type="button" aria-label="切换语言 / Switch language">EN</button></nav>
+</header>
+<main>
+  <section class="hero">
+    <h1 data-zh="说到做到的个人助理" data-en="A personal agent that keeps its word">说到做到的个人助理</h1>
+    <p class="lead" data-zh="每句「我去做」都记进账本；做完附上能核对的出处；你真的收到了，才算兑现。" data-en="Every “I'll do it” is logged. Every result cites a source you can check. It only counts as done once you actually have it.">每句「我去做」都记进账本；做完附上能核对的出处；你真的收到了，才算兑现。</p>
+    <div class="cta">
+      <a id="play-overdue" class="button primary" href="app/?tab=replay&play=1" data-zh="▶ 60 秒看它怎么面对逾期" data-en="▶ Watch it handle a missed deadline (60 s)">▶ 60 秒看它怎么面对逾期</a>
+      <a class="button" href="app/" data-zh="打开只读演示" data-en="Open the read-only demo">打开只读演示</a>
+    </div>
+    <p class="note" data-zh="演示数据由脚本生成，走的是真实账本代码，页面不调用任何模型。" data-en="Demo data is scripted but runs through the real ledger code. This page calls no model.">演示数据由脚本生成，走的是真实账本代码，页面不调用任何模型。</p>
+  </section>
+
+  <section class="cards">
+    <a class="card" id="card-replay" href="app/?tab=replay">
+      <img src="images/ledger-replay-pixel.jpg" alt="">
+      <h2 data-zh="账本回放" data-en="Ledger replay">账本回放</h2>
+      <p data-zh="选一件事，按时间回放它走过的七站：判断、登记承诺、开工、模型、工具、交付、兑现。逾期、做不到、改约都如实显示。" data-en="Pick a task and replay its seven stations: intake, promise, start, model, tools, delivery, fulfilment. Missed deadlines, “can't do”, and rescheduling are all shown as they happened.">选一件事，按时间回放它走过的七站：判断、登记承诺、开工、模型、工具、交付、兑现。逾期、做不到、改约都如实显示。</p>
+    </a>
+    <a class="card" id="card-proof" href="app/?tab=replay">
+      <img src="images/ledger-overdue.jpg" alt="">
+      <h2 data-zh="交付附原文，逐字核对" data-en="Results quote their sources, checked word for word">交付附原文，逐字核对</h2>
+      <p data-zh="关键结论要附资料原文；验收时核对它确实出自这次读过的那一版，核对不过就不交付。回复层不能口头许诺，要做就真的接下来。" data-en="Key claims carry a quote. Acceptance checks the quote appears word for word in the exact version that was read; if not, nothing is delivered. The chat layer can't make empty promises: it either takes the work on or says no.">关键结论要附资料原文；验收时核对它确实出自这次读过的那一版，核对不过就不交付。回复层不能口头许诺，要做就真的接下来。</p>
+    </a>
+    <a class="card" href="app/?tab=memory&view=galaxy">
+      <img src="images/memory-galaxy.jpg" alt="">
+      <h2 data-zh="记忆星系" data-en="Memory galaxy">记忆星系</h2>
+      <p data-zh="五类记忆画成五团星：确认过的是亮星，待确认的是虚线，被取代的旧记忆是残骸并指向新记忆。推断出的记忆要你确认才生效。" data-en="Five kinds of memory as five clusters: confirmed stars, dashed pending ones, and superseded memories as wrecks pointing to what replaced them. Inferred memories wait for your confirmation.">五类记忆画成五团星：确认过的是亮星，待确认的是虚线，被取代的旧记忆是残骸并指向新记忆。推断出的记忆要你确认才生效。</p>
+    </a>
+  </section>
+
+  <section class="stories">
+    <h2 data-zh="演示里的四件事" data-en="Four tasks in the demo">演示里的四件事</h2>
+    <ul id="story-list">
+      <li data-outcome="fulfilled" data-zh="整理周会纪要：先拦下一句口头许诺，再真的接下，读资料、交付、按出处兑现。" data-en="Meeting notes: an empty spoken promise is blocked, then the work is really taken on, read, delivered and fulfilled with its source.">整理周会纪要：先拦下一句口头许诺，再真的接下，读资料、交付、按出处兑现。</li>
+      <li data-outcome="overdue" data-zh="三点前要报价对比表：中途出错卡住，如实告知；过了三点，账本只提醒一次逾期。" data-en="Quote comparison due at 3 pm: the run fails, the user is told; after 3 pm the ledger reminds them once that it is overdue.">三点前要报价对比表：中途出错卡住，如实告知；过了三点，账本只提醒一次逾期。</li>
+      <li data-outcome="unable" data-zh="每天七点打电话叫醒：做不到就直说，承诺记为「做不到」，不挂着装没事。" data-en="Wake-up call at 7 am every day: it can't, says so, and closes the promise as “unable” instead of leaving it hanging.">每天七点打电话叫醒：做不到就直说，承诺记为「做不到」，不挂着装没事。</li>
+      <li data-outcome="fulfilled" data-zh="四点前写通知，用户改到五点：旧承诺被替换，新承诺按时兑现。" data-en="A notice due at 4 pm, moved to 5 pm by the user: the old promise is replaced and the new one is kept.">四点前写通知，用户改到五点：旧承诺被替换，新承诺按时兑现。</li>
+    </ul>
+  </section>
+
+  <section class="arch">
+    <h2 data-zh="怎么做的" data-en="How it works">怎么做的</h2>
+    <ol class="flow"><li data-zh="回复层判断" data-en="Intake">回复层判断</li><li data-zh="登记承诺" data-en="Promise">登记承诺</li><li data-zh="开工" data-en="Start">开工</li><li data-zh="模型请求" data-en="Model">模型请求</li><li data-zh="工具调用" data-en="Tools">工具调用</li><li data-zh="交付" data-en="Deliver">交付</li><li data-zh="兑现" data-en="Fulfil">兑现</li></ol>
+    <ul class="stack">
+      <li data-zh="Python asyncio 服务 + SQLite 账本：每一步都是账本里的一行，回放只读这些行。" data-en="Python asyncio service + SQLite ledger: every step is a row, and the replay only reads those rows.">Python asyncio 服务 + SQLite 账本：每一步都是账本里的一行，回放只读这些行。</li>
+      <li data-zh="执行循环复用 Pi Agent（pi-agent-core 1.5.0），经 Node 24 子进程桥接；工具和权限留在 Python 一侧。" data-en="The agent loop reuses Pi Agent (pi-agent-core 1.5.0) through a Node 24 subprocess bridge; tools and permissions stay on the Python side.">执行循环复用 Pi Agent（pi-agent-core 1.5.0），经 Node 24 子进程桥接；工具和权限留在 Python 一侧。</li>
+      <li data-zh="模型用 DeepSeek flash 官方 API，搜索与读网页用 DeepSeek Search/Fetch。" data-en="Model: DeepSeek flash via the official API; web search and fetch via DeepSeek Search/Fetch.">模型用 DeepSeek flash 官方 API，搜索与读网页用 DeepSeek Search/Fetch。</li>
+      <li data-zh="前端零依赖：回放的像素画和星系都是 Canvas 代码绘制，不含外部素材。" data-en="Zero-dependency front end: the pixel art and the galaxy are drawn in Canvas code, with no external assets.">前端零依赖：回放的像素画和星系都是 Canvas 代码绘制，不含外部素材。</li>
+    </ul>
+  </section>
+</main>
+<footer>
+  <a href="https://github.com/BaoBao1996121/noyi" target="_blank" rel="noopener">github.com/BaoBao1996121/noyi</a> · MIT · <span id="build"></span>
+</footer>
+</body>
+</html>

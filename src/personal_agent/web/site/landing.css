@@ -1,0 +1,29 @@
+:root{font-family:Inter,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;color:#1c1c1c;background:#fcfcf9;font-size:16px;line-height:1.6}
+body{margin:0}
+a{color:inherit}
+.top{display:flex;justify-content:space-between;align-items:center;max-width:1080px;margin:0 auto;padding:18px 24px}
+.brand{font-size:18px}.brand b{background:#252525;color:#fff;border-radius:8px;padding:2px 8px;margin-right:6px}
+.top nav{display:flex;gap:16px;align-items:center}
+.top nav a{text-decoration:none}
+#lang{border:1px solid #ccc;background:#fff;border-radius:6px;padding:3px 10px;cursor:pointer;font:inherit;font-size:14px}
+main{max-width:1080px;margin:0 auto;padding:0 24px}
+.hero{padding:48px 0 32px}
+h1{font-size:clamp(30px,5vw,48px);line-height:1.2;margin:0 0 16px}
+.lead{font-size:clamp(17px,2.2vw,21px);max-width:760px;margin:0 0 28px;color:#333}
+.cta{display:flex;flex-wrap:wrap;gap:12px}
+.button{display:inline-block;padding:12px 20px;border-radius:10px;border:1px solid #252525;text-decoration:none;font-weight:600}
+.button.primary{background:#252525;color:#fff}
+.note{color:#737373;font-size:14px;margin-top:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;padding:16px 0 40px}
+.card{display:block;text-decoration:none;border:1px solid #e8e8e8;border-radius:14px;overflow:hidden;background:#fff;transition:box-shadow .15s}
+.card:hover{box-shadow:0 6px 24px rgba(0,0,0,.08)}
+.card img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#eee}
+.card h2{font-size:19px;margin:14px 16px 6px}.card p{margin:0 16px 18px;color:#555;font-size:15px}
+.stories,.arch{padding:8px 0 32px}
+.stories h2,.arch h2{font-size:22px}
+#story-list{padding-left:20px}#story-list li{margin:6px 0;cursor:pointer}#story-list li:hover{text-decoration:underline}
+.flow{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0;counter-reset:s}
+.flow li{counter-increment:s;background:#252525;color:#fff;border-radius:8px;padding:6px 12px;font-size:14px}
+.flow li::before{content:counter(s) ". ";color:#ffd166}
+.stack{padding-left:20px;color:#333}
+footer{max-width:1080px;margin:0 auto;padding:24px;color:#737373;font-size:14px;border-top:1px solid #eee}

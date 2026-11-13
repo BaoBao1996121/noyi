@@ -1,0 +1,152 @@
+# Static read-only demo site on GitHub Pages.
+#
+# Publish:  git tag demo-YYYYMMDD-N && git push origin demo-YYYYMMDD-N
+# Rollback: gh workflow run pages.yml -f ref=<earlier demo-* tag or pages-ok-* tag>
+# Why it failed: gh run list -w pages.yml ; gh run view <id> --log-failed ; gh run download <id>
+#
+# Gates, in order (each prints its reason; a failure stops everything after it):
+#   1. related tests          2. build the demo library in an empty folder (no personal data exists here)
+#   3. export with source/path checks   4. browser smoke check on the built site (before publishing)
+#   5. publish   6. browser smoke check on the live URL; if it fails, the last good version is republished.
+name: pages
+
+on:
+  push:
+    tags: ["demo-*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or commit to publish (default: the ref this runs on)"
+        required: false
+      rollback:
+        description: "Set by the automatic rollback; a failing rollback does not roll back again"
+        type: boolean
+        default: false
+      drill:
+        description: "Drill only: force the live check to fail to exercise the automatic rollback"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  SITE_URL: https://baobao1996121.github.io/noyi/
+  PYTHONUTF8: "1"
+  TZ: Asia/Shanghai   # the demo story is staged in local time; build it in the time zone it was written for
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Install
+        run: |
+          python -m pip install -r requirements-lock.txt
+          python -m pip install -e . --no-deps
+          npm ci --prefix src/personal_agent/pi_bridge
+          npm ci --prefix scripts/site-smoke
+          npx --prefix scripts/site-smoke playwright install --with-deps chromium
+      - name: "Gate 1: related tests"
+        run: python -m pytest tests/test_demo_site.py tests/test_replay.py -q
+      - name: "Gate 2: build the demo library from the script"
+        run: python scripts/demo-replay.py build --data "$RUNNER_TEMP/demo"
+      - name: "Gate 3: export (refuses real model calls and local paths)"
+        run: python scripts/demo-replay.py export --data "$RUNNER_TEMP/demo" --out dist/site
+      - name: "Gate 4: browser smoke check before publishing"
+        run: |
+          python scripts/demo-replay.py site --out dist/site --port 8791 > "$RUNNER_TEMP/site.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8791/noyi/ > /dev/null && break; sleep 1; done
+          node scripts/site-smoke/smoke.mjs http://127.0.0.1:8791/noyi/ smoke-before
+      - name: Keep the smoke report (screenshots, console log, failed requests)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-before-publish
+          path: smoke-before
+          if-no-files-found: ignore
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  verify:
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write   # tag the version that passed
+      actions: write    # dispatch the rollback run
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Install the browser
+        run: |
+          npm ci --prefix scripts/site-smoke
+          npx --prefix scripts/site-smoke playwright install --with-deps chromium
+      - name: "Gate 6: browser smoke check on the live site"
+        run: |
+          # Pages can take a moment to switch; wait until it serves this build.
+          for i in $(seq 1 40); do
+            curl -sf "$SITE_URL/build.json?$(date +%s)" | grep -q "${{ needs.build.outputs.sha }}" && break; sleep 6
+          done
+          curl -sf "$SITE_URL/build.json?$(date +%s)" | grep -q "${{ needs.build.outputs.sha }}" || { echo "live site still serves another build"; exit 1; }
+          if [ "${{ inputs.drill }}" = "true" ]; then echo "drill: forcing the live check to fail"; exit 1; fi
+          node scripts/site-smoke/smoke.mjs "$SITE_URL" smoke-live
+      - name: Keep the live smoke report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-live
+          path: smoke-live
+          if-no-files-found: ignore
+      - name: Record this version as good
+        run: |
+          git tag "pages-ok-${{ github.run_number }}" "${{ needs.build.outputs.sha }}"
+          git push origin "pages-ok-${{ github.run_number }}"
+      - name: Roll back to the last good version
+        if: failure() && !inputs.rollback
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          good=$(git tag --list 'pages-ok-*' --sort=-version:refname | while read t; do
+            [ "$(git rev-list -n 1 "$t")" != "${{ needs.build.outputs.sha }}" ] && echo "$t" && break; done)
+          if [ -z "$good" ]; then echo "::error::live check failed and there is no earlier good version to roll back to"; exit 1; fi
+          echo "::warning::live check failed; republishing $good"
+          gh workflow run pages.yml --ref main -f ref="$good" -f rollback=true

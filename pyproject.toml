@@ -20,7 +20,7 @@ pa = "personal_agent.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-personal_agent = ["pi_bridge/*.mjs", "pi_bridge/package.json", "pi_bridge/package-lock.json", "web/*.html", "web/*.css", "web/*.js"]
+personal_agent = ["pi_bridge/*.mjs", "pi_bridge/package.json", "pi_bridge/package-lock.json", "web/*.html", "web/*.css", "web/*.js", "web/site/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

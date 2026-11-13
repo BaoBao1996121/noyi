@@ -4,6 +4,8 @@
 
 [English](README.md) · 简体中文
 
+**在线演示（只读，无需注册）：<https://baobao1996121.github.io/noyi/>**
+
 名字取「一诺」的倒序谐音。
 
 ![账本回放：像素工厂画风](docs/images/ledger-replay-pixel.jpg)

@@ -83,7 +83,7 @@ function createPlayer(onChange) {
   return p;
 }
 
-export function installReplay({state, api, esc, timeLabel}) {
+export function installReplay({state, api, esc, timeLabel, pageUrl = u => u}) {
   const root = document.createElement('div');
   root.className = 'replay';
   root.innerHTML = `<div class="replay-bar"><select class="replay-task" aria-label="选一件事"></select><select class="replay-skin" aria-label="画风"></select><button class="small-link" data-replay-reload>刷新</button><button class="small-link" data-replay-full>全屏回放</button></div>
@@ -92,7 +92,7 @@ export function installReplay({state, api, esc, timeLabel}) {
     <div class="replay-step-label muted"></div><article class="replay-card"></article><details class="replay-log"><summary>全部经过</summary><ol></ol></details>`;
   const $ = q => root.querySelector(q);
   const canvas = $('.replay-canvas'), ctx = canvas.getContext('2d');
-  let timeline = null, taskId = null, followed = null, skin = geometricSkin, frame = 0, shownCard = -2;
+  let loading = Promise.resolve(), timeline = null, taskId = null, followed = null, skin = geometricSkin, frame = 0, shownCard = -2;
   const player = createPlayer(() => {draw(); controls();});
 
   function skinOptions() {
@@ -121,7 +121,7 @@ export function installReplay({state, api, esc, timeLabel}) {
   function card(e) {
     if (!e) return '<p class="muted">按 ▶ 开始，或拖动进度条。</p>';
     const facts = e.facts.map(([k, v]) => `<div class="detail-row"><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('');
-    const links = e.links.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join(' ');
+    const links = e.links.map(l => `<a href="${esc(pageUrl(l.url))}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join(' ');
     const station = timeline.stations.find(s => s.id === e.station)?.label || '';
     const end = e.end_time === 'unknown' ? ' · 结束时间未知' : e.end_time === 'running' ? ' · 还没结束' : '';
     return `<div class="replay-card-head"><span class="replay-tone ${esc(e.tone)}"></span><strong>${esc(e.title)}</strong><span class="muted">${esc(station)}</span></div>
@@ -199,7 +199,7 @@ export function installReplay({state, api, esc, timeLabel}) {
   }
 
   async function load(id) {
-    taskId = id; timeline = null; shownCard = -2;
+    taskId = id; timeline = null; shownCard = -2; let resolveLoad; loading = new Promise(r => {resolveLoad = r;});
     $('.replay-outcome').className = 'replay-outcome info'; $('.replay-outcome').textContent = '正在读账本…';
     try {
       const data = await api('/api/tasks/' + encodeURIComponent(id) + '/timeline');
@@ -211,7 +211,10 @@ export function installReplay({state, api, esc, timeLabel}) {
       $('.replay-log ol').innerHTML = data.events.map((e, i) => `<li><button data-replay-seek="${i}"><span class="replay-tone ${esc(e.tone)}"></span>${esc(e.title)}<small>${esc(when(e))}</small></button></li>`).join('');
       player.load(data.events);
     } catch (error) {$('.replay-outcome').className = 'replay-outcome bad'; $('.replay-outcome').textContent = error.message; player.load([]);}
+    finally {resolveLoad();}
   }
+  // Play the loaded task from the start once its timeline is in (landing-page deep link).
+  async function autoplay() {await loading; if (player.length()) {player.seek(0); start();}}
   function options() {
     const tasks = (state.data?.tasks || []).filter(t => !t.parent_task_id);
     const select = $('.replay-task');
@@ -258,5 +261,5 @@ export function installReplay({state, api, esc, timeLabel}) {
   $('.replay-task').addEventListener('change', e => {if (e.target.value) {player.pause(); load(e.target.value);}});
   document.addEventListener('keydown', e => {if (e.key === 'Escape' && root.classList.contains('full')) toggleFull(false);});
   new ResizeObserver(() => draw()).observe(canvas);
-  return {mount, setSkin, registerSkin, player};
+  return {mount, setSkin, registerSkin, player, autoplay};
 }

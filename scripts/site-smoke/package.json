@@ -1,0 +1,10 @@
+{
+  "name": "noyi-site-smoke",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Headless-browser smoke check for the static demo site",
+  "dependencies": {
+    "playwright": "1.65.0"
+  }
+}

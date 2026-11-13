@@ -3,6 +3,8 @@
     python scripts/demo-replay.py build --data .pa/demo-replay     # four tasks + demo memories
     python scripts/demo-replay.py memories --data .pa/demo-replay  # add only the demo memories
     python scripts/demo-replay.py serve --data .pa/demo-replay    # read-only WebUI on port 8790
+    python scripts/demo-replay.py export --data .pa/demo-site --out dist/site   # static site (GitHub Pages)
+    python scripts/demo-replay.py site --out dist/site            # open the exported site locally on 8791
 
 build runs the real pipeline (conversation layer, Pi runtime, ledger, deadline
 check) with a scripted model, so every row comes from the same code paths as
@@ -112,17 +114,26 @@ def build(data):
     from personal_agent.store import Store
     store = Store(data / "state.sqlite")
 
+    def delivered():
+        # The user's screen acknowledges each message, as Service.deliver does;
+        # since P-1 a promise is only kept once its delivery is acknowledged.
+        for d in store.all("SELECT id FROM deliveries WHERE state IN ('pending','failed')"):
+            clock.now += 2
+            store.accept_delivery(d["id"], {"id": d["id"], "accepted": True})
+
     async def say(text, nonce, source_file, intake_steps, work_steps, before_work=None):
         spec = TaskSpec(text, [{"id": source_file.stem, "kind": "file", "location": str(source_file.resolve()), "required": True, "description": source_file.name}],
                         max_calls=40, max_tools=100, max_seconds=900)
         store.accept_conversation(spec, text=text, nonce=nonce)
         await Runtime(store, data, Scripted(intake_steps)).execute(store.claim_conversation())
+        delivered()
         clock.now += 20
         if before_work:
             task = store.one("SELECT id FROM tasks WHERE parent_task_id IS NULL ORDER BY created DESC,rowid DESC LIMIT 1")
             await before_work(task["id"])
         run = store.claim()
         await Runtime(store, data, Scripted(work_steps)).execute(run)
+        delivered()
         return run["task_id"]
 
     async def story():
@@ -148,6 +159,7 @@ def build(data):
         ])
         clock.at("15:01")
         store.tick_commitments()
+        delivered()
 
         async def reschedule(task_id):
             # Before the work starts the user moves the deadline in the same chat.
@@ -156,6 +168,7 @@ def build(data):
             store.accept_conversation(TaskSpec("改到五点吧，四点有个会。", [], max_calls=40, max_tools=100, max_seconds=900), text="改到五点吧，四点有个会。", nonce="demo-4b")
             await Runtime(store, data, Scripted([call("resolve_conversation", {"action": "commitment", "commitment_id": promise["id"], "commitment_op": "reschedule",
                                                                                 "due_at": f"{DAY} 17:00", "basis": "改到五点吧"}, "c6", (2260, 46))])).execute(store.claim_conversation())
+            delivered()
             clock.at("16:30")
 
         # 3. Unable: something this machine cannot do is closed honestly, not left hanging.
@@ -320,13 +333,50 @@ def serve(data, port):
     web.run_app(create_app(store, data, model, run_service=False), host="127.0.0.1", port=port, print=None)
 
 
+def export(data, out):
+    """Build the static read-only site from a scripted demo library (see personal_agent.demo_site)."""
+    from personal_agent.demo_site import DemoExportError, export_site
+    import subprocess
+    try:
+        commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, timeout=10).stdout.strip()
+    except OSError:
+        commit = ""
+    try:
+        manifest = asyncio.run(export_site(data, out, commit=commit))
+    except DemoExportError as error:
+        raise SystemExit(f"导出失败：{error}")
+    print(json.dumps({"out": str(out), "files": len(manifest["files"]), "stories": manifest["stories"]}, ensure_ascii=False))
+
+
+def site(out, port):
+    """Serve an exported site under /noyi/ like GitHub Pages does."""
+    from aiohttp import web
+    if not (out / "index.html").is_file():
+        raise SystemExit(f"{out} 里还没有导出的站点，先运行 export。")
+    app = web.Application()
+    app.router.add_get("/", lambda r: web.HTTPFound("/noyi/"))
+    async def page(request):
+        rel = request.match_info["path"] or "index.html"
+        target = (out / rel).resolve()
+        if target.is_dir():
+            target = target / "index.html"
+        if not target.is_relative_to(out) or not target.is_file():
+            raise web.HTTPNotFound()
+        return web.FileResponse(target)
+    app.router.add_get("/noyi/{path:.*}", page)
+    print(f"静态演示站：http://127.0.0.1:{port}/noyi/", flush=True)
+    web.run_app(app, host="127.0.0.1", port=port, print=None)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["build", "serve", "memories"])
+    parser.add_argument("command", choices=["build", "serve", "memories", "export", "site"])
     parser.add_argument("--data", type=Path, default=ROOT / ".pa" / "demo-replay")
-    parser.add_argument("--port", type=int, default=8790)
+    parser.add_argument("--out", type=Path, default=ROOT / "dist" / "site")
+    parser.add_argument("--port", type=int, default=None)
     args = parser.parse_args()
-    data = args.data.resolve()
+    data, out = args.data.resolve(), args.out.resolve()
     if data == (ROOT / ".pa" / "personal").resolve():
         raise SystemExit("演示数据不能放进自用库 .pa/personal。")
-    {"build": build, "memories": add_memories}.get(args.command, lambda d: serve(d, args.port))(data)
+    {"build": build, "memories": add_memories, "export": lambda d: export(d, out), "site": lambda d: site(out, args.port or 8791)}.get(
+        args.command, lambda d: serve(d, args.port or 8790))(data)

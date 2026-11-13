@@ -4,6 +4,8 @@
 
 English · [简体中文](README.zh-CN.md)
 
+**Live demo (read-only, no sign-up): <https://baobao1996121.github.io/noyi/>**
+
 The name comes from 一诺 (*yī nuò*, "a promise kept"), read backwards.
 
 ![Ledger replay in the pixel-factory skin](docs/images/ledger-replay-pixel.jpg)

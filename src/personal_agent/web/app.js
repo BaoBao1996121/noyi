@@ -12,7 +12,18 @@ let toastTimer;
 const timeLabel = seconds => seconds ? new Date(seconds*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
 const pill = status => `<span class="pill ${esc(status)}">${esc(labels[status] || status)}</span>`;
 function toast(text){$('#toast').textContent=text;$('#toast').classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.add('hidden'),5000);}
+// Static demo (GitHub Pages): every read is a file exported from the demo library; nothing can be written.
+const STATIC = document.documentElement.dataset.static === '1';
+const pageUrl = url => STATIC && url.startsWith('/r/') ? 'r/' + url.slice(3) + '.html' : url;
+const staticPath = path => {const [p, q] = path.split('?'); const room = new URLSearchParams(q || '').get('room'); if (room && room !== 'local') return null; return p.replace(/^\//, '') + '.json';};
 async function api(path, body, options={}, retryToken=true){
+  if(STATIC){
+    const file=body?null:staticPath(path);
+    if(!file)throw new Error('这是只读演示版，不能修改或发送。完整功能请按 GitHub 说明在自己电脑上运行。');
+    const res=await fetch(file,{cache:'no-cache'});
+    if(!res.ok)throw new Error('演示数据里没有这一项');
+    return res.json();
+  }
   const headers = {'X-PA-Token':state.token};
   if(body && !(body instanceof FormData)) headers['Content-Type']='application/json';
   const res=await fetch(path,{method:body?'POST':'GET',headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined,...options});
@@ -71,7 +82,7 @@ function roomView(){
   $('#model-label').textContent=`${state.data.model.name} · ${({deepseek_official:'DeepSeek 官网',qwen_official:'Qwen 官网',local_gateway:'本机网关'})[state.data.model.provider]||'模型'}`;
   const active=roots().filter(t=>['running','waiting_children'].includes(t.status)).length;
   $('#header-status').textContent=active?`${active} 项任务正在处理`:'帮你把事情持续管好';
-  $('#connection').textContent=state.online?'已连接 · 运行在此电脑':'连接中断 · 草稿已保留';
+  $('#connection').textContent=STATIC?'只读演示 · 不调用模型':state.online?'已连接 · 运行在此电脑':'连接中断 · 草稿已保留';
   const banner=$('#banner');
   banner.classList.toggle('hidden',state.data.ready&&!state.data.service_error&&state.online);
   if(!state.online)banner.textContent='连接暂时中断。草稿会保留，恢复后可以继续。';
@@ -313,7 +324,7 @@ document.addEventListener('click',async e=>{
   if(b.dataset.answer)await answer(b.dataset.answer,b.dataset.option);
   if(b.dataset.action){if(b.dataset.action==='cancel')modal('取消这项委托？',`<p class="modal-note">这会停止当前任务及其后台协作。已有记录和产物会保留，普通消息不会重新启动这项已取消的任务。</p><div class="modal-actions"><button class="button danger" data-confirm-cancel="${b.dataset.tid}">取消委托</button></div>`);else {b.disabled=true;try{await performAction(b.dataset.action,b.dataset.tid);}finally{b.disabled=false;}}}
   if(b.dataset.confirmCancel)await performAction('cancel',b.dataset.confirmCancel);
-  if(b.dataset.artifact){try{const data=await api('/api/artifacts/'+b.dataset.artifact);modal(data.name,`<div class="artifact-preview rich">${rich(data.text)}</div><div class="modal-actions"><button class="button" data-feedback-task="${esc(state.data.deliveries.find(d=>d.id===b.dataset.artifact)?.task_id||"")}">这份成果怎么样</button><a class="button" href="/r/${esc(state.data.deliveries.find(d=>d.id===b.dataset.artifact)?.task_id||"")}" target="_blank" rel="noopener">打开交付页</a><a class="button download" href="/api/artifacts/${b.dataset.artifact}?download=1" download="result.md">下载成果</a></div>`);}catch(error){toast(error.message);}}
+  if(b.dataset.artifact){try{const data=await api('/api/artifacts/'+b.dataset.artifact);modal(data.name,`<div class="artifact-preview rich">${rich(data.text)}</div><div class="modal-actions"><button class="button" data-feedback-task="${esc(state.data.deliveries.find(d=>d.id===b.dataset.artifact)?.task_id||"")}">这份成果怎么样</button><a class="button" href="${pageUrl('/r/'+(state.data.deliveries.find(d=>d.id===b.dataset.artifact)?.task_id||''))}" target="_blank" rel="noopener">打开交付页</a>${STATIC?'':`<a class="button download" href="/api/artifacts/${b.dataset.artifact}?download=1" download="result.md">下载成果</a>`}</div>`);}catch(error){toast(error.message);}}
 });
 document.addEventListener('submit',async e=>{
   if(['bot-form','group-form','memory-form','assignment-form'].includes(e.target.id)){
@@ -329,14 +340,41 @@ document.addEventListener('submit',async e=>{
   if(e.target.id==='url-form'){e.preventDefault();state.urls.push(new FormData(e.target).get('url'));renderAttachments();saveDraft();$('#modal').close();}
 });
 $$('.resizer').forEach(r=>r.addEventListener('pointerdown',e=>{r.setPointerCapture(e.pointerId);const move=e=>{const width=r.dataset.panel==='left'?e.clientX:innerWidth-e.clientX;document.documentElement.style.setProperty(r.dataset.panel==='left'?'--left':'--right',Math.max(220,Math.min(440,width))+'px');};r.addEventListener('pointermove',move);r.addEventListener('pointerup',()=>r.removeEventListener('pointermove',move),{once:true});}));
-const replayUI=installReplay({state,api,esc,timeLabel});
+const replayUI=installReplay({state,api,esc,timeLabel,pageUrl});
 document.addEventListener('replay:closed',()=>detailView(true));
 const galaxyUI=installGalaxy({state,api,esc,timeLabel});
 try{state.memoryMode=localStorage.getItem('pa.memory.mode')||'list';}catch{state.memoryMode='list';}
 document.addEventListener('galaxy:closed',()=>detailView(true));
 const goalsUI=installGoals({state,api,modal,toast,refresh,esc,timeLabel,chooseTask,compose:composeAbout,request:sendIntent});
 async function poll(){await refresh();setTimeout(poll,document.hidden?5000:1500);}
-try{const boot=await api('/api/bootstrap');switchWorkspace(boot);await refresh(true);setTimeout(poll,1500);}catch(e){toast('无法连接本地服务，请确认启动窗口仍在运行。');}
+// Deep links (used by the landing page): ?task=<id>&tab=replay|memory&view=galaxy&play=1
+function applyLink(){
+  const q=new URLSearchParams(location.search);
+  if(q.get('tab'))state.tab=q.get('tab');
+  if(q.get('view')==='galaxy')state.memoryMode='galaxy';
+  if(q.get('task')&&state.data?.tasks.some(t=>t.id===q.get('task')))state.task=q.get('task');
+  return q.get('play')==='1';
+}
+function staticChrome(){
+  document.body.classList.add('static-demo');
+  const tag=$('.local-tag');if(tag)tag.textContent='演示';
+  $('#connection').textContent='只读演示 · 不调用模型';
+  $('#message-input').placeholder='这是只读演示版，不能发送。左侧选一件事，右侧「账本回放」看它怎么说到做到。';
+  $('#message-input').disabled=true;$('#send').disabled=true;
+  const bar=document.createElement('div');bar.className='static-bar';
+  bar.innerHTML='<span>只读演示：数据由脚本生成，未调用模型。</span><a href="../">← 返回介绍</a><a href="https://github.com/BaoBao1996121/noyi" target="_blank" rel="noopener">GitHub</a>';
+  document.body.prepend(bar);
+}
+try{
+  const boot=await api('/api/bootstrap');switchWorkspace(boot);
+  if(STATIC){staticChrome();state.room='local';}
+  await refresh(true);
+  if(STATIC){
+    const play=applyLink();state.detailSignature='';await detailView(true);roomView();messageView(true);
+    const skin=new URLSearchParams(location.search).get('skin');if(skin)replayUI.setSkin(skin);
+    if(play&&state.tab==='replay')replayUI.autoplay();
+  }else setTimeout(poll,1500);
+}catch(e){toast(STATIC?'演示数据读取失败：'+e.message:'无法连接本地服务，请确认启动窗口仍在运行。');console.error(e);}
 
 async function downloadBackup(){
   let response=await fetch('/api/backup',{method:'POST',headers:{'X-PA-Token':state.token}});

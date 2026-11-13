@@ -1,0 +1,41 @@
+# Daily outside check of the live demo site (GitHub-hosted runner, outside China).
+# A failure emails the repository owner. Run by hand: gh workflow run probe.yml
+name: probe
+
+on:
+  schedule:
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Install the browser
+        run: |
+          npm ci --prefix scripts/site-smoke
+          npx --prefix scripts/site-smoke playwright install --with-deps chromium
+      - name: Certificate and build
+        run: |
+          host=baobao1996121.github.io
+          end=$(echo | openssl s_client -servername $host -connect $host:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          days=$(( ( $(date -d "$end" +%s) - $(date +%s) ) / 86400 ))
+          echo "certificate ends $end ($days days left)"
+          [ "$days" -ge 7 ] || { echo "::error::certificate has $days days left"; exit 1; }
+          curl -sf "https://$host/noyi/build.json"
+      - name: Browser smoke check
+        run: node scripts/site-smoke/smoke.mjs https://baobao1996121.github.io/noyi/ smoke-probe
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-probe
+          path: smoke-probe
+          if-no-files-found: ignore
