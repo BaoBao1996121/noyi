@@ -76,6 +76,11 @@ def parser():
     s.add_argument("file", type=Path)
     s.add_argument("--origin", required=True, help="Shown on each suggestion, e.g. 从 Codex / Claude Code 导入")
     s.add_argument("--room", default="local")
+    s = sub.add_parser("ops-export", help="Write a desensitized run bundle (no words, no health data) for the ops repository")
+    s.add_argument("--out", type=Path, required=True)
+    s.add_argument("--hours", type=float, default=1.0)
+    s.add_argument("--service", type=Path, help="JSON status written by the home supervisor")
+    s.add_argument("--version", type=Path, help="JSON with tag/commit/python/node")
     s = sub.add_parser("restore", help="Restore into a new directory with work paused")
     s.add_argument("archive", type=Path)
     s.add_argument("--destination", type=Path, required=True)
@@ -91,6 +96,13 @@ def main():
     try:
         if args.command == "model-config":
             print(encode(asdict(ModelConfig.load(args.config))))
+            return
+        if args.command == "ops-export":
+            import time as _time
+            from .ops_export import export_bundle
+            until = _time.time()
+            load = lambda p: json.loads(p.read_text(encoding="utf-8-sig")) if p and p.exists() else {}
+            print(export_bundle(data, args.out, since=until - args.hours * 3600, until=until, service=load(args.service), version=load(args.version)))
             return
         if args.command == "restore":
             from .backup import restore_backup

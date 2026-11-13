@@ -66,6 +66,11 @@ SQL = [
         commitment_id TEXT, task_id TEXT, state TEXT NOT NULL, last_day TEXT, created REAL NOT NULL, updated REAL NOT NULL)""",
     """CREATE TABLE IF NOT EXISTS health_alerts(id TEXT PRIMARY KEY, account TEXT NOT NULL, kind TEXT NOT NULL,
         day TEXT NOT NULL, delivery_id TEXT, created REAL NOT NULL)""",
+    # 「这里不对」: who marked which reply, a category, the sentence the user
+    # confirmed may leave home, and a private note that never leaves.
+    """CREATE TABLE IF NOT EXISTS feedback_marks(id TEXT PRIMARY KEY, delivery_id TEXT NOT NULL, task_id TEXT,
+        delivery_kind TEXT, category TEXT NOT NULL, note_shared TEXT, note_private TEXT, share INTEGER NOT NULL,
+        created REAL NOT NULL)""",
     "CREATE INDEX IF NOT EXISTS health_meals_day ON health_meals(account,day)",
     "CREATE INDEX IF NOT EXISTS health_exercise_day ON health_exercise(account,day)",
     "CREATE INDEX IF NOT EXISTS health_metrics_kind ON health_metrics(account,kind,measured_at)",
@@ -258,6 +263,25 @@ class HealthStore:
                "source_message": source_message, "operation_id": operation_id, "created": time.time()}
         self.db.execute(f"INSERT INTO health_exercise({','.join(row)}) VALUES({','.join('?' * len(row))})", tuple(row.values()))
         return row
+
+    # ---- 「这里不对」 ---------------------------------------------------------
+    def mark_feedback(self, delivery_id, *, category, note_shared="", note_private="", share=False, account="local-user"):
+        from .ops_export import FEEDBACK_CATEGORIES, NOTE_MAX
+        if category not in FEEDBACK_CATEGORIES:
+            raise ValueError("请选一类问题")
+        if type(share) is not bool or not isinstance(note_shared, str) or not isinstance(note_private, str):
+            raise ValueError("标记格式不对")
+        if len(note_shared.strip()) > NOTE_MAX or len(note_private.strip()) > 2000:
+            raise ValueError(f"外传的说明最多 {NOTE_MAX} 字")
+        with self.transaction():
+            d = self.one("SELECT d.id,d.task_id,d.kind,d.room_id FROM deliveries d JOIN rooms r ON r.id=d.room_id WHERE d.id=? AND r.owner=?", (delivery_id, account))
+            if not d:
+                raise ValueError("这条回复不在你的会话里")
+            row = {"id": uid(), "delivery_id": d["id"], "task_id": d["task_id"], "delivery_kind": d["kind"], "category": category,
+                   "note_shared": note_shared.strip() if share and note_shared.strip() else None, "note_private": note_private.strip() or None,
+                   "share": int(share and bool(note_shared.strip())), "created": time.time()}
+            self.db.execute(f"INSERT INTO feedback_marks({','.join(row)}) VALUES({','.join('?' * len(row))})", tuple(row.values()))
+        return {"id": row["id"], "shared": bool(row["share"])}
 
     # ---- nightly summary ---------------------------------------------------
     def enable_nightly(self, account, room, *, at, task_id, quote, said_delivery_id=None):
