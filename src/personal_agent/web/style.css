@@ -6,3 +6,4 @@
 .static-demo .app{padding-top:32px;box-sizing:border-box}
 .static-demo .composer-area .compose-actions,.static-demo #settings,.static-demo #new-task,.static-demo #new-room,.static-demo #manage-bots{display:none}
 .intake-state{font-size:10px;color:#aaa;margin-top:5px}.intake-state.reading{color:#5c83b6}.intake-state.failed{color:#b67b7b}
+.message.draft .bubble{background:#f7f7f7;color:#555;border:1px dashed #ddd}.message.draft .message-label{color:#5c83b6}.draft-notice .bubble{color:#b07a3c!important}

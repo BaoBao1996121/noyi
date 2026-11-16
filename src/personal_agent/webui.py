@@ -86,12 +86,14 @@ class LocalModel:
                 await self.client.warm_up()
         return self.client
 
-    async def complete(self, messages, tools):
+    streams_text = True
+
+    async def complete(self, messages, tools, on_text=None):
         if self.client is None:
             await self.prepare()
         if self.client is None:
             self.client = QwenModel(self.config)
-        return await self.client.complete(messages, tools)
+        return await self.client.complete(messages, tools, on_text=on_text)
 
     async def close(self):
         if self._building is not None:
@@ -161,6 +163,8 @@ class Console:
                 "goals": goal_snapshot(self.store, room),
                 "unassigned": pending, "server_time": time.time(), "ready": getattr(self.model, "ready", True),
                 "intake": self.store.intake_states(room),
+                # Display-only text being written; not a delivery (see drafts.py).
+                "drafts": self.service.runtime.drafts.for_room(room),
                 "model": {"name": config.name, "base_url": config.base_url, "provider": config.provider}, "service_error": self.service_error or self.service.triggers.error,
                 "controls": self.store.all("SELECT c.* FROM controls c JOIN tasks t ON t.id=c.task_id WHERE t.room_id=? ORDER BY c.created DESC LIMIT 50", (room,)),
                 "rooms": [{**r, "members": self.store.members(r["id"])} for r in self.store.all("SELECT * FROM rooms WHERE owner='local-user' ORDER BY rowid")],
@@ -291,9 +295,10 @@ async def boot(request):
                               "remote_hosts": sorted(c.remote.config.hosts) if not request.get(REMOTE) else []})
 
 
-def ledger_version(store):
-    """Changes whenever the ledger does: this service's writes or another process's."""
-    return f"{store.db.total_changes}.{store.one('PRAGMA data_version')['data_version']}"
+def ledger_version(store, drafts=None):
+    """Changes whenever the ledger does (this service's writes or another
+    process's) or a reply draft grows."""
+    return f"{store.db.total_changes}.{store.one('PRAGMA data_version')['data_version']}.{drafts.version if drafts else 0}"
 
 
 async def snapshot(request):
@@ -307,10 +312,10 @@ async def snapshot(request):
     since = request.query.get("since")
     if since:
         deadline = time.monotonic() + 20
-        while ledger_version(c.store) == since and time.monotonic() < deadline:
-            await asyncio.sleep(0.05)
+        while ledger_version(c.store, c.service.runtime.drafts) == since and time.monotonic() < deadline:
+            await asyncio.sleep(0.03)
     data = c.snapshot(request.query.get("room", "local"))
-    data["version"] = ledger_version(c.store)
+    data["version"] = ledger_version(c.store, c.service.runtime.drafts)
     return web.json_response(data)
 
 

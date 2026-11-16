@@ -97,6 +97,11 @@ function questionCard(q){
 }
 // Where the assistant is with each message: stored, being read, done.
 const intakeLabels={received:'已送达',reading:'正在读…',failed:'没能处理'};
+// A reply still being written. It is not a delivery: it has no id to mark seen,
+// is styled as unfinished, and is replaced by the accepted reply or a visible notice.
+function draftLine(id){const d=state.data.drafts?.[id];if(!d)return '';
+  if(d.state==='writing'){if(state.data.intake?.[id]==='answered')return '';return `<article class="message assistant draft"><div class="message-label">正在回复…</div><div class="bubble">${esc(d.text)}</div></article>`;}
+  return `<article class="message system draft-notice"><div class="bubble">${d.state==='corrected'?'刚才显示的回复已更正为下面这条':'刚才显示的回复没有通过核对，已撤回'}</div></article>`;}
 function intakeLine(id){const s=state.data.intake?.[id];return s&&intakeLabels[s]?`<div class="intake-state ${s}">${intakeLabels[s]}</div>`:'';}
 function messageView(force=false){
   const data=state.data, task=selected();
@@ -107,7 +112,7 @@ function messageView(force=false){
   const messages=data.messages.filter(m=>['web','cli','conversation'].includes(m.source)&&visible(m.task_id)&&focused(m.task_id));
   const deliveries=data.deliveries.filter(d=>visible(d.task_id)&&!['question','clarification'].includes(d.kind)&&focused(d.task_id));
   const questions=data.questions.filter(q=>!state.task||q.task_id===state.task||data.tasks.some(t=>t.id===q.task_id&&t.root_task_id===state.task));
-  const sig=JSON.stringify({messages,deliveries,questions,intake:data.intake,task:task?.status,unassigned:data.unassigned,routes:data.pending_routes,selected:state.task,room:state.room});
+  const sig=JSON.stringify({messages,deliveries,questions,intake:data.intake,drafts:data.drafts,task:task?.status,unassigned:data.unassigned,routes:data.pending_routes,selected:state.task,room:state.room});
   if(!force&&sig===state.signature)return;
   state.signature=sig;
   const box=$('#messages'), bottom=box.scrollHeight-box.scrollTop-box.clientHeight<90, oldScroll=box.scrollTop;
@@ -118,7 +123,7 @@ function messageView(force=false){
   const originHtml=before.length?`<details class="task-origin" open><summary>这件事是从这段对话来的</summary>${before.map(t=>`<article class="message ${t.speaker==='user'?'user':'assistant'}"><div class="bubble ${t.speaker==='user'?'':'rich'}">${t.speaker==='user'?esc(t.content):rich(t.content)}</div></article>`).join('')}</details>`:'';
   // The intake receipt is a room reply, not task output; show it from the
   // task's origin right after the request it answered.
-  const items=[...(originHtml?[{sort:-1,html:originHtml}]:[]),...(receipt&&asked?[{sort:(asked.created||0)+0.001,html:`<article class="message assistant"><div class="message-label">${esc(botName(task.actor_id))}</div><div class="bubble rich">${rich(receipt.content)}</div></article>`}]:[]),...messages.map(m=>({sort:m.created||0,html:`<article class="message user"><div class="message-label">你 ${m.actor_id!=='unassigned'?'→ '+esc(botName(m.actor_id)):''}<time>${esc(timeLabel(m.created))}</time><button class="small-link" data-reply="${m.id}" data-tid="${m.task_id||''}" data-actor="${m.actor_id}">回复</button></div><div class="bubble">${esc(m.content)}</div>${intakeLine(m.id)}</article>`})),...deliveries.map(d=>({sort:d.created||0,html:`<article class="message ${d.kind==='system'||d.kind==='clarification'||d.kind==='commitment'?'system':'assistant'}${d.kind==='health_alert'?' alert':''}" data-delivery="${esc(d.id)}" data-delivery-state="${esc(d.state)}"><div class="message-label">${d.kind==='result'?esc(botName(d.actor_id)):''} <time>${esc(timeLabel(d.created))}</time>${d.actor_id?`<button class="small-link" data-reply="${d.id}" data-tid="${d.task_id||''}" data-actor="${d.actor_id}">回复</button>`:''}</div><div class="bubble rich">${rich(d.content)}</div>${d.artifact?artifactCard(d):''}${fulfilledLine(d)}</article>`}))].sort((a,b)=>a.sort-b.sort);
+  const items=[...(originHtml?[{sort:-1,html:originHtml}]:[]),...(receipt&&asked?[{sort:(asked.created||0)+0.001,html:`<article class="message assistant"><div class="message-label">${esc(botName(task.actor_id))}</div><div class="bubble rich">${rich(receipt.content)}</div></article>`}]:[]),...messages.map(m=>({sort:m.created||0,html:`<article class="message user"><div class="message-label">你 ${m.actor_id!=='unassigned'?'→ '+esc(botName(m.actor_id)):''}<time>${esc(timeLabel(m.created))}</time><button class="small-link" data-reply="${m.id}" data-tid="${m.task_id||''}" data-actor="${m.actor_id}">回复</button></div><div class="bubble">${esc(m.content)}</div>${intakeLine(m.id)}</article>${draftLine(m.id)}`})),...deliveries.map(d=>({sort:d.created||0,html:`<article class="message ${d.kind==='system'||d.kind==='clarification'||d.kind==='commitment'?'system':'assistant'}${d.kind==='health_alert'?' alert':''}" data-delivery="${esc(d.id)}" data-delivery-state="${esc(d.state)}"><div class="message-label">${d.kind==='result'?esc(botName(d.actor_id)):''} <time>${esc(timeLabel(d.created))}</time>${d.actor_id?`<button class="small-link" data-reply="${d.id}" data-tid="${d.task_id||''}" data-actor="${d.actor_id}">回复</button>`:''}</div><div class="bubble rich">${rich(d.content)}</div>${d.artifact?artifactCard(d):''}${fulfilledLine(d)}</article>`}))].sort((a,b)=>a.sort-b.sort);
   if(!items.length&&!questions.length){
     box.innerHTML='<div class="empty"><div class="hero-mark">✳</div><h2>把事情交给我，慢慢腾出手。</h2><p>整理资料、拆解任务、跟进进度。<br>你可以随时补充、暂停，或查看每一份成果。</p><div class="suggestions"><button class="suggestion" data-suggestion="帮我把这些资料整理成一份行动清单，标明优先级和待确认事项。"><span>▤</span>从一份资料开始<br><span class="muted">整理重点和下一步行动</span></button><button class="suggestion" data-suggestion="帮我规划接下来一周的个人工作，先问我需要了解的关键信息。"><span>☷</span>理清手头的事情<br><span class="muted">把想法变成可执行的计划</span></button></div></div>';
   }else{

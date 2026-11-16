@@ -715,6 +715,26 @@ class ConversationRouter:
         self.runtime, self.store = runtime, runtime.store
 
     async def execute(self, run):
+        drafts = self.runtime.drafts
+        first = self.store.conversation_input(run)
+        try:
+            await self._execute(run, drafts)
+        finally:
+            # Whatever happened, no draft outlives intake looking like an
+            # answer: an accepted reply is now a delivery, anything else is
+            # withdrawn visibly.
+            if first:
+                # A merged turn is answered under its newest message.
+                current = self.store.conversation_input(run) or first
+                item = self.store.one("SELECT state FROM conversation_inputs WHERE id=?", (current["id"],))
+                said = self.store.one("SELECT content FROM deliveries WHERE run_id=? ORDER BY created DESC LIMIT 1", (run["id"],))
+                for mid in {first["message_id"], current["message_id"]}:
+                    if item and item["state"] == "resolved" and said:
+                        drafts.settle(mid, said["content"])
+                    else:
+                        drafts.withdraw(mid)
+
+    async def _execute(self, run, drafts):
         last_error = None
         async def handle(method, params):
             nonlocal last_error
@@ -732,7 +752,11 @@ class ConversationRouter:
                     messages.append({"role":"user","content":"The previous interpretation was rejected by the ledger: " + last_error})
                 messages.append({"role":"user","content":item["content"]})
                 started = time.monotonic()
-                reply = await self.runtime.request(run, messages, CONVERSATION_SCHEMA, lambda: self.store.reserve_conversation(run))
+                # Show the reply while it is written. A new attempt (retry, or
+                # a re-ask after the ledger refused) first withdraws the old draft.
+                drafts.withdraw(item["message_id"])
+                reply = await self.runtime.request(run, messages, CONVERSATION_SCHEMA, lambda: self.store.reserve_conversation(run),
+                                                   on_text=lambda text: drafts.write(item["message_id"], item["room_id"], text))
                 self.store.step(run,"model",{**asdict(reply),"seconds":time.monotonic()-started,"engine":self.runtime.engine.identity,"purpose":"conversation_intake"})
                 return asdict(reply) if self.store.current(run) else {"halt":True}
             if method == "tool":

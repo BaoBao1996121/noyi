@@ -157,6 +157,56 @@ def transient_error(exc) -> bool:
     return isinstance(exc, openai.APIStatusError) and (status == 429 or type(status) is int and status >= 500)
 
 
+def partial_text(arguments: str) -> str | None:
+    """The user-facing sentence of an intake decision still being written.
+
+    That is "text" for a reply or question, "receipt" when work is taken on.
+    Only for showing a draft; the finished arguments are parsed and checked
+    normally. Returns None until one of those fields has started.
+    """
+    match = re.search(r'"(?:text|receipt)"\s*:\s*"', arguments)
+    if not match:
+        return None
+    out, i, raw = [], match.end(), arguments
+    escapes = {'"': '"', "\\": "\\", "/": "/", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t"}
+    while i < len(raw):
+        ch = raw[i]
+        if ch == '"':
+            break
+        if ch != "\\":
+            out.append(ch)
+            i += 1
+            continue
+        if i + 1 >= len(raw):
+            break  # escape cut off mid-stream; wait for the rest
+        nxt = raw[i + 1]
+        if nxt == "u":
+            code = raw[i + 2:i + 6]
+            if len(code) < 4:
+                break
+            try:
+                value = int(code, 16)
+            except ValueError:
+                break
+            if 0xD800 <= value < 0xDC00:
+                # A surrogate pair is shown once both halves have arrived.
+                low = raw[i + 6:i + 12]
+                if len(low) < 6:
+                    break
+                try:
+                    out.append(chr(0x10000 + ((value - 0xD800) << 10) + (int(low[2:], 16) - 0xDC00)))
+                except ValueError:
+                    break
+                i += 12
+                continue
+            out.append(chr(value))
+            i += 6
+            continue
+        out.append(escapes.get(nxt, nxt))
+        i += 2
+    return "".join(out)
+
+
 class QwenModel:
     """A registered official provider, or a loopback gateway, via the OpenAI-compatible interface."""
     @staticmethod
@@ -191,7 +241,9 @@ class QwenModel:
                 "max_output_tokens": self.config.max_output_tokens,
                 "timeout_seconds": self.config.timeout_seconds}
 
-    async def complete(self, messages, tools):
+    streams_text = True
+
+    async def complete(self, messages, tools, on_text=None):
         kwargs = dict(model=self.config.name, messages=messages,
                       max_tokens=self.config.max_output_tokens)
         intake = (bool(tools) and len(tools) == 1 and tools[0].get("type") == "function"
@@ -221,6 +273,8 @@ class QwenModel:
             # without the decision.
             if intake and force:
                 kwargs["tool_choice"] = {"type": "function", "function": {"name": "resolve_conversation"}}
+        if on_text is not None and intake:
+            return await self._stream_intake(kwargs, on_text)
         result = await self.client.chat.completions.create(**kwargs)
         msg = result.choices[0].message
         # Keep only public answer and tool calls, never reasoning or credentials.
@@ -232,6 +286,46 @@ class QwenModel:
                           usage.completion_tokens if usage else 0, result.model,
                           getattr(result, "_request_id", None) or result.id,
                           result.choices[0].finish_reason)
+
+    async def _stream_intake(self, kwargs, on_text):
+        """The same request, streamed: the reply text is shown while it is written.
+
+        The decision still arrives whole and is checked by the ledger as
+        before; on_text only receives display drafts of the text field.
+        """
+        stream = await self.client.chat.completions.create(**kwargs, stream=True, stream_options={"include_usage": True})
+        content, calls, usage, model, rid, finish = [], {}, None, self.config.name, None, None
+        shown = ""
+        async for chunk in stream:
+            rid = rid or getattr(chunk, "_request_id", None) or chunk.id
+            model = chunk.model or model
+            if chunk.usage:
+                usage = chunk.usage
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            finish = choice.finish_reason or finish
+            delta = choice.delta
+            if delta.content:
+                content.append(delta.content)
+            for part in delta.tool_calls or []:
+                call = calls.setdefault(part.index, {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                if part.id:
+                    call["id"] = part.id
+                if part.function and part.function.name:
+                    call["function"]["name"] += part.function.name
+                if part.function and part.function.arguments:
+                    call["function"]["arguments"] += part.function.arguments
+                    if len(calls) == 1:
+                        draft = partial_text(call["function"]["arguments"])
+                        if draft and draft != shown:
+                            shown = draft
+                            on_text(draft)
+        message = {"role": "assistant", "content": "".join(content)}
+        if calls:
+            message["tool_calls"] = [calls[i] for i in sorted(calls)]
+        return ModelReply(message, usage.prompt_tokens if usage else 0, usage.completion_tokens if usage else 0,
+                          model, rid, finish)
 
     async def warm_up(self):
         """Open the first connection before the first message needs it.

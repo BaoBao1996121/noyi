@@ -78,6 +78,9 @@ class Runtime:
         self.orchestration = OrchestrationTools(store, data)
         self.following = ConversationGoals(store)
         self.plugins = PluginRegistry(builtin_plugins() + list(plugins or []))
+        # Reply drafts shown while the model writes; memory only (see drafts.py).
+        from .drafts import DraftBoard
+        self.drafts = DraftBoard()
         extension_prompt = self.plugins.prompt()
         self.system = SYSTEM + ("\nInstalled capabilities:\n" + extension_prompt + "\n" if extension_prompt else "")
 
@@ -365,7 +368,7 @@ class Runtime:
         return {"result": result, "is_error": status == "failed" or result.get("passed") is False,
                 "terminate": not self.runnable(run)}
 
-    async def request(self, run, messages, tools, reserve=None):
+    async def request(self, run, messages, tools, reserve=None, on_text=None):
         # A model call has no side effects of its own, so a transient provider
         # fault is retried. Each retry is a separately recorded request that
         # first reserves its own budget (reserve); no hidden SDK retries.
@@ -380,7 +383,10 @@ class Runtime:
             request_id = self.store.begin_request(run, messages, getattr(self.model, "metadata", {}))
             try:
                 async with asyncio.timeout(deadline):
-                    reply = await self.model.complete(messages, tools)
+                    if on_text is not None and getattr(self.model, "streams_text", False):
+                        reply = await self.model.complete(messages, tools, on_text=on_text)
+                    else:
+                        reply = await self.model.complete(messages, tools)
             except BaseException as exc:
                 # A timeout/cancellation can occur after provider acceptance. Do not
                 # turn missing response into proof of no remote work or no charge.
