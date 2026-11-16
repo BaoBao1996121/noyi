@@ -203,3 +203,50 @@ def test_supervisor_restarts_after_a_crash_and_stops_a_crash_loop(tmp_path):
     finally:
         (root / "stop-supervisor").write_text("x")
         thread.join(30)
+
+
+def test_supervisor_waits_for_a_held_data_directory_instead_of_counting_crashes(tmp_path):
+    # A crash restart or a switch while the previous process is still closing:
+    # starting would die at once on the lock and count toward a crash loop.
+    from common import write_json
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from personal_agent.service import ServiceLock
+    root = tmp_path / "Noyi"
+    release = root / "releases" / "home-20261114-1"
+    (release / "src" / "personal_agent").mkdir(parents=True)
+    (release / "src" / "personal_agent" / "__main__.py").write_text("import time; time.sleep(60)", encoding="utf-8")
+    (release / "src" / "personal_agent" / "__init__.py").write_text("", encoding="utf-8")
+    write_json(root / "home.json", {"port": free_port(), "python": sys.executable, "pythonpath_src": True, "backoff": [0.1], "crash_limit": 3, "crash_window": 60})
+    write_json(root / "current.json", {"tag": "home-20261114-1"})
+    layout = Layout(root)
+    layout.data.mkdir(parents=True)
+    sup = Supervisor(layout)
+    release_lock = threading.Event()
+
+    def old_owner():
+        with ServiceLock(layout.data):
+            release_lock.wait(30)
+    owner = threading.Thread(target=old_owner, daemon=True)
+    owner.start()
+    time.sleep(0.3)
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    try:
+        deadline = time.time() + 10
+        while time.time() < deadline and (read_json(layout.supervisor, {}) or {}).get("state") != "waiting_lock":
+            time.sleep(0.1)
+        status = read_json(layout.supervisor)
+        assert status["state"] == "waiting_lock" and status["crashes_24h"] == 0 and status["pid"] is None
+        release_lock.set()
+        owner.join(5)
+        deadline = time.time() + 10
+        while time.time() < deadline and (read_json(layout.supervisor, {}) or {}).get("state") != "running":
+            time.sleep(0.1)
+        status = read_json(layout.supervisor)
+        assert status["state"] == "running" and status["crashes_24h"] == 0
+    finally:
+        release_lock.set()
+        (root / "stop-supervisor").write_text("x")
+        thread.join(30)
+        if sup.proc:
+            sup.proc.kill()

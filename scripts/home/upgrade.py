@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import (Layout, TAG, bootstrap, http, iso, kill_tree, read_json, release_env, release_python,  # noqa: E402
+from common import (Layout, TAG, bootstrap, data_released, http, iso, kill_tree, read_json, release_env, release_python,  # noqa: E402
                     shutdown, tag_key, write_json)
 
 
@@ -181,7 +181,10 @@ class Upgrader:
         deadline = time.time() + 60
         while time.time() < deadline:
             sup = read_json(self.layout.supervisor, {}) or {}
-            if bootstrap(port) is None and sup.get("state") in {"held", "no_release", "crash_loop", "backoff", "exited", None}:
+            # Stopped means the data directory is free too: the backup and
+            # the switch that follow must not race a process still closing.
+            if (bootstrap(port) is None and data_released(self.layout.data)
+                    and sup.get("state") in {"held", "no_release", "crash_loop", "backoff", "exited", "waiting_lock", None}):
                 return
             time.sleep(0.5)
         if sup.get("pid"):

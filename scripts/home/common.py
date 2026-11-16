@@ -136,6 +136,54 @@ def shutdown(port):
     return status == 200
 
 
+def data_released(data):
+    """True when no Noyi process holds the data directory's service lock.
+
+    A stopping service stops answering its page before it has finished
+    closing and let go of the lock; starting a new one in that gap fails at
+    once ("another pa serve owns this data directory"). Probes the same OS
+    lock the service takes (service.py ServiceLock), so it is exact and a dead
+    process never blocks it. Standard library only.
+    """
+    path = Path(data) / "service.lock"
+    if not path.exists():
+        return True
+    try:
+        handle = open(path, "r+b")
+    except OSError:
+        return False
+    try:
+        if os.name == "nt":
+            import msvcrt
+            handle.seek(0)
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError:
+                return False
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                return False
+            fcntl.flock(handle, fcntl.LOCK_UN)
+        return True
+    finally:
+        handle.close()
+
+
+def wait_released(data, timeout, poll=0.2):
+    """Wait until the data directory is free; False if it is still held after timeout seconds."""
+    deadline = time.time() + timeout
+    while not data_released(data):
+        if time.time() >= deadline:
+            return False
+        time.sleep(poll)
+    return True
+
+
 def pid_alive(pid):
     if not pid:
         return False

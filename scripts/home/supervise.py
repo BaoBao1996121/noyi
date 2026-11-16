@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import Layout, iso, kill_tree, read_json, serve_command, release_env, shutdown, write_json  # noqa: E402
+from common import Layout, data_released, iso, kill_tree, read_json, serve_command, release_env, shutdown, write_json  # noqa: E402
 
 POLL = 0.5
 
@@ -145,6 +145,13 @@ class Supervisor:
                         self.status()
                 elif self.state == "crash_loop" and current == self.stopped_for:
                     pass                                      # wait for a different release
+                elif time.time() >= wait_until and not data_released(self.layout.data):
+                    # Another process (one still exiting, or one started by
+                    # hand) holds the data directory. Starting now would fail
+                    # at once and be counted as a crash; wait and say why.
+                    if self.state != "waiting_lock":
+                        self.state, self.lock_since = "waiting_lock", iso()
+                        self.status(waiting_since=self.lock_since)
                 elif time.time() >= wait_until:
                     if self.tag and self.started:
                         self.restarts.append(time.time())

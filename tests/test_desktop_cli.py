@@ -128,6 +128,85 @@ class Namespace:
         self.__dict__.update(kwargs)
 
 
+def hold_lock_for(data: Path, seconds: float):
+    """Play an old service that has stopped answering but is still shutting down."""
+    import threading
+    from personal_agent.service import ServiceLock
+    held, done = threading.Event(), threading.Event()
+
+    def run():
+        with ServiceLock(data):
+            held.set()
+            done.wait(seconds)
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    held.wait(5)
+    return done, thread
+
+
+def lock_free(data: Path):
+    from personal_agent.service import ServiceLock
+    try:
+        with ServiceLock(data):
+            return True
+    except RuntimeError:
+        return False
+
+
+def test_stop_returns_only_after_the_old_process_released_the_data_directory(tmp_path, monkeypatch, capsys):
+    # The page stops answering before the process has finished closing and let
+    # go of the lock. Starting then made the new process fail at once.
+    write_marker(tmp_path / "desktop-process.json", pid=None, instance_id="inst-1")
+    answers = iter([{"instance_id": "inst-1", "token": "t"}])
+    monkeypatch.setattr(desktop, "status", lambda url: next(answers, None))
+    monkeypatch.setattr(desktop, "request", lambda *a, **k: {})
+    _, thread = hold_lock_for(tmp_path, 0.6)
+
+    desktop.do_stop(Namespace(data=tmp_path, port=8765))
+
+    assert lock_free(tmp_path)
+    assert not thread.is_alive()
+    assert "已停止" in capsys.readouterr().out
+
+
+def test_stop_gives_a_clear_message_when_the_old_process_never_lets_go(tmp_path, monkeypatch):
+    write_marker(tmp_path / "desktop-process.json", pid=None, instance_id="inst-1")
+    answers = iter([{"instance_id": "inst-1", "token": "t"}])
+    monkeypatch.setattr(desktop, "status", lambda url: next(answers, None))
+    monkeypatch.setattr(desktop, "request", lambda *a, **k: {})
+    monkeypatch.setattr(desktop, "RELEASE_TIMEOUT", 0.5)
+    done, _ = hold_lock_for(tmp_path, 30)
+    try:
+        with pytest.raises(ValueError, match="仍未退出"):
+            desktop.do_stop(Namespace(data=tmp_path, port=8765))
+    finally:
+        done.set()
+
+
+def test_start_waits_for_a_still_exiting_service_before_launching(tmp_path, monkeypatch, capsys):
+    # Same race from the other side: Start clicked right after Stop, or a
+    # restart whose stop step was an older version of this script.
+    launched = []
+
+    class Proc:
+        pid = 99
+
+        def poll(self):
+            return None
+
+    def popen(*args, **kwargs):
+        launched.append(lock_free(tmp_path))
+        return Proc()
+    monkeypatch.setattr(desktop.subprocess, "Popen", popen)
+    monkeypatch.setattr(desktop, "status", lambda url: {"instance_id": "new", "title": "Noyi"} if launched else None)
+    _, thread = hold_lock_for(tmp_path, 0.6)
+
+    desktop.do_start(Namespace(data=tmp_path, port=8765, no_browser=True))
+
+    assert launched == [True]
+    assert "等待" in capsys.readouterr().out
+
+
 def test_service_titles_accept_new_name_and_old_running_service():
     # A service started before the rename still answers "Personal Agent"; start must
     # recognise both so `noyi restart` across the rename does not time out.

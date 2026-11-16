@@ -13,6 +13,12 @@ import urllib.request
 import webbrowser
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'home'))
+from common import data_released, wait_released  # noqa: E402  (standard library only)
+
+# How long a stopping service may take to close and release the data directory
+# after its page stops answering (saving state, ending model calls, closing Pi).
+RELEASE_TIMEOUT = 60
 # Bootstrap titles of this app; the old name still matches while an older
 # running service is being replaced.
 SERVICE_TITLES = ('Noyi', 'Personal Agent')
@@ -132,10 +138,16 @@ def do_stop(args):
     request(url + '/api/shutdown', body={}, token=current['token'])
     for _ in range(100):
         if status(url) is None:
-            print('服务已停止。下次启动继续处理已接收的工作。')
-            return
+            break
         time.sleep(0.2)
-    raise ValueError('停止请求已接收，但进程尚未结束，请查看数据目录中的日志。')
+    else:
+        raise ValueError('停止请求已接收，但页面 20 秒后仍在响应，请查看数据目录 logs/server.log。')
+    # The page goes quiet before the process has finished closing. Stopped
+    # means the data directory is free, so a start right after cannot collide.
+    if not wait_released(data, RELEASE_TIMEOUT):
+        raise ValueError(f'页面已停止响应，但旧进程 {RELEASE_TIMEOUT} 秒后仍未退出、还占着数据目录。'
+                         '请在任务管理器结束残留的 python 进程后再启动，或查看数据目录 logs/server.log。')
+    print('服务已停止。下次启动继续处理已接收的工作。')
 
 
 def do_start(args):
@@ -146,6 +158,13 @@ def do_start(args):
     current = status(url)
     if current and (not saved or current.get('instance_id') != saved.get('instance_id')):
         raise ValueError('这个端口正在运行另一份服务，请先使用它对应的停止入口，或选择其他端口。')
+    if not current and not data_released(data):
+        # A service that is still exiting (stop just now, or a crash being
+        # cleaned up) holds the data directory; launching now would fail.
+        print('上一次的服务还在退出，等待它释放数据目录…')
+        if not wait_released(data, RELEASE_TIMEOUT):
+            raise ValueError(f'另一份服务 {RELEASE_TIMEOUT} 秒后仍占着数据目录，没有启动新的。'
+                             '请先用它的停止入口，或在任务管理器结束残留的 python 进程。')
     if not current:
         data.mkdir(parents=True, exist_ok=True)
         logs = data / 'logs'
