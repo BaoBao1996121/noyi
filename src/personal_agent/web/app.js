@@ -2,6 +2,7 @@ import {installGoals} from './goals.js';
 import {installReplay,registerSkin} from './replay.js';
 import {pixelSkin} from './replay-pixel.js';
 import {installGalaxy} from './galaxy.js';
+import {placeQuestions} from './timeline.js';
 registerSkin(pixelSkin);
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => [...root.querySelectorAll(q)];
@@ -92,7 +93,7 @@ function roomView(){
 function questionCard(q){
   const pending=q.state==='pending';
   const options=q.options.map((o,i)=>`<button class="button" data-answer="${q.id}" data-option="${i}" ${pending?'':'disabled'}>${esc(o)}</button>`).join('');
-  return `<article class="question"><div class="question-label">${pending?'需要你补充':'问题记录'}</div><p>${esc(q.question)}</p><div class="question-options">${options}</div>${pending?`<div class="question-input"><input data-answer-input="${q.id}" placeholder="也可以直接输入你的回答" value="${esc(state.answers[q.id]||'')}"><button class="button" data-answer="${q.id}">回答</button></div>`:`<p class="muted">${q.state==='answered'?`已回答：${esc(q.answer)}`:'此问题已失效，无需回答'}</p>`}</article>`;
+  return `<article class="question${pending?'':' closed'}"><div class="question-label">${pending?'需要你补充':'问题记录'}${pending?'':` <time>${esc(timeLabel(q.created))}</time>`}</div><p>${esc(q.question)}</p>${pending?`<div class="question-options">${options}</div>`:''}${pending?`<div class="question-input"><input data-answer-input="${q.id}" placeholder="也可以直接输入你的回答" value="${esc(state.answers[q.id]||'')}"><button class="button" data-answer="${q.id}">回答</button></div>`:`<p class="muted">${q.state==='answered'?`已回答：${esc(q.answer)}`:'此问题已失效，无需回答'}</p>`}</article>`;
 }
 function messageView(force=false){
   const data=state.data, task=selected();
@@ -118,7 +119,8 @@ function messageView(force=false){
   if(!items.length&&!questions.length){
     box.innerHTML='<div class="empty"><div class="hero-mark">✳</div><h2>把事情交给我，慢慢腾出手。</h2><p>整理资料、拆解任务、跟进进度。<br>你可以随时补充、暂停，或查看每一份成果。</p><div class="suggestions"><button class="suggestion" data-suggestion="帮我把这些资料整理成一份行动清单，标明优先级和待确认事项。"><span>▤</span>从一份资料开始<br><span class="muted">整理重点和下一步行动</span></button><button class="suggestion" data-suggestion="帮我规划接下来一周的个人工作，先问我需要了解的关键信息。"><span>☷</span>理清手头的事情<br><span class="muted">把想法变成可执行的计划</span></button></div></div>';
   }else{
-    box.innerHTML=items.map(i=>i.html).join('')+questions.map(questionCard).join('')+(data.pending_routes||[]).map(p=>`<article class="question"><div class="question-label">选择接手对象</div><p>${esc(p.content)}</p><button class="button" data-route="${p.id}">分配这条消息</button></article>`).join('')+(data.unassigned||[]).map(f=>`<article class="question"><div class="question-label">待分配的补充</div><p>${esc(f.content)}</p><button class="button" data-followup-route="${f.id}">选择对应任务</button></article>`).join('');
+    const placed=placeQuestions(items,questions,questionCard);
+    box.innerHTML=placed.history.join('')+placed.pinned.join('')+(data.pending_routes||[]).map(p=>`<article class="question"><div class="question-label">选择接手对象</div><p>${esc(p.content)}</p><button class="button" data-route="${p.id}">分配这条消息</button></article>`).join('')+(data.unassigned||[]).map(f=>`<article class="question"><div class="question-label">待分配的补充</div><p>${esc(f.content)}</p><button class="button" data-followup-route="${f.id}">选择对应任务</button></article>`).join('');
     if(task&&['ready','running','waiting_children'].includes(task.status))box.insertAdjacentHTML('beforeend',`<article class="message system"><div class="bubble">${esc(labels[task.status])} <i class="spinner-dot"></i><i class="spinner-dot"></i><i class="spinner-dot"></i></div></article>`);
   }
   if(bottom||force)box.scrollTop=box.scrollHeight;else box.scrollTop=oldScroll;

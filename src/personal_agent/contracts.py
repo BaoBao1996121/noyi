@@ -16,6 +16,34 @@ def encode(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False)
 
 
+_CODE = re.compile(r"(```.*?```|`[^`\n]*`)", re.S)
+_ESCAPE = re.compile(r'\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}(?:\\u[0-9a-fA-F]{4})?)')
+
+
+def chat_text(text):
+    """Undo a second JSON encoding of model-written chat text.
+
+    Models sometimes escape newlines twice inside tool-call arguments, so the
+    decoded string holds a literal backslash-n instead of a line break. Text is
+    treated as double-encoded only when it has no real line break, has a
+    backslash-n outside code spans, and every part outside code is a valid
+    JSON string body; then those parts are decoded once. Code spans, Windows
+    paths (\\U is no JSON escape) and normal text are left as they are.
+    """
+    if not isinstance(text, str) or "\n" in text or "\\n" not in _CODE.sub("", text):
+        return text
+    parts = _CODE.split(text)
+    prose = [part for i, part in enumerate(parts) if not i % 2]
+    if any("\\" in _ESCAPE.sub("", part) for part in prose):
+        return text
+    decoded = "".join(part if i % 2 else _ESCAPE.sub(lambda m: json.loads('"' + m.group(0) + '"'), part) for i, part in enumerate(parts))
+    try:
+        decoded.encode("utf-8")  # a lone surrogate escape would not survive storage
+    except UnicodeEncodeError:
+        return text
+    return decoded
+
+
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 

@@ -51,3 +51,5 @@
 .commitment-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:11px;color:#777;margin-top:2px}
 .commitment-end{font-size:12px;margin-top:4px;color:#3a6b35;overflow-wrap:anywhere}
 .fulfilled-line{font-size:11px;color:#3a6b35;margin-top:4px}
+.question.closed{background:transparent;border-style:dashed;padding:12px 16px;margin-bottom:20px}.question.closed p{white-space:pre-wrap;color:#777;font-size:12px}.question.closed .muted{margin-top:4px}.question.closed time{margin-left:8px;color:#b0b0b0}
+.question p{white-space:pre-wrap}

@@ -5,7 +5,7 @@ import json
 import time
 import uuid
 
-from .contracts import TaskSpec, encode
+from .contracts import TaskSpec, chat_text, encode
 
 
 def uid():
@@ -85,6 +85,7 @@ class CollaborationStore:
         return eid
 
     def _notice(self, task_id, room, content, *, kind="system", attention_id=None):
+        content = chat_text(content)
         did = uid()
         self.db.execute("INSERT INTO deliveries(id,task_id,run_id,room_id,content,kind,attention_id,created) VALUES(?,?,?,?,?,?,?,?)",
                         (did, task_id, "notice:" + did, room, content, kind, attention_id, time.time()))
@@ -485,6 +486,7 @@ class CollaborationStore:
         return errors
 
     def finish(self, run, *, status, reason, content, artifact=None, acceptance="pending", before_commit=None, wait_spec=None):
+        content = chat_text(content)
         with self.transaction():
             if not self.current(run):
                 raise RuntimeError("stale run cannot finalize")
@@ -511,6 +513,7 @@ class CollaborationStore:
         self.db.execute("UPDATE attentions SET state='superseded' WHERE task_id=? AND state='pending'", (tid,))
 
     def ask_user(self, run, *, question, options, kind="information"):
+        question, options = chat_text(question), [chat_text(o) for o in options] if isinstance(options, list) else options
         if not isinstance(question, str) or not question.strip() or kind not in {"information", "authorization", "review"}:
             raise ValueError("invalid question")
         if not isinstance(options, list) or len(options) > 4 or any(not isinstance(o, str) or not o.strip() for o in options):
@@ -558,6 +561,7 @@ class CollaborationStore:
         return receipt
 
     def replace_attention(self, question_id, question, options, *, account="local-user"):
+        question, options = chat_text(question), [chat_text(o) for o in options] if isinstance(options, list) else options
         if not isinstance(question, str) or not question.strip() or not isinstance(options, list) or len(options) > 4 or any(not isinstance(o, str) for o in options):
             raise ValueError("invalid question")
         with self.transaction():

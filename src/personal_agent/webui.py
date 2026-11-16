@@ -13,7 +13,7 @@ import uuid
 
 from aiohttp import web
 
-from .contracts import TaskSpec, digest, encode
+from .contracts import TaskSpec, chat_text, digest, encode
 from .model import ModelConfig, QwenModel
 from .service import Service, ServiceLock
 from .store import Store
@@ -106,6 +106,10 @@ class Console:
             t["spec"]["sources"] = [{k: v for k, v in s.items() if k != "location"} for s in t["spec"]["sources"]]
             review = self.store.one("SELECT id FROM goal_reviews WHERE task_id=? ORDER BY created DESC LIMIT 1", (t["id"],))
             t["review_report_id"] = review["id"] if review else None
+            # Rows saved before model text was normalized on entry read the same way.
+            for turn in t["spec"].get("conversation") or []:
+                if turn.get("speaker") != "user":
+                    turn["content"] = chat_text(turn.get("content"))
         messages = self.store.all("SELECT m.id,m.source,m.actor_id,m.task_id,m.kind,m.content,m.status,COALESCE(p.created,f.created,MIN(e.created),0) AS created FROM messages m LEFT JOIN events e ON e.message_id=m.id LEFT JOIN followups f ON f.message_id=m.id LEFT JOIN pending_routes p ON p.message_id=m.id WHERE m.room_id=? AND m.source NOT IN ('runtime','route') GROUP BY m.id ORDER BY m.rowid DESC LIMIT 300", (room,))
         for message in messages:
             if message["source"] == "goal_review":
@@ -115,13 +119,14 @@ class Console:
         deliveries = self.store.all("SELECT d.id,d.task_id,r.actor_id,d.content,d.artifact,d.state,d.kind,d.attention_id,COALESCE(NULLIF(d.created,0),r.ended,a.created,0) AS created FROM deliveries d LEFT JOIN runs r ON r.id=d.run_id LEFT JOIN attentions a ON a.id=d.attention_id WHERE d.room_id=? ORDER BY d.rowid DESC LIMIT 300", (room,))
         for d in deliveries:
             d["artifact"] = json.loads(d["artifact"]) if d["artifact"] else None
+            d["content"] = chat_text(d["content"])
             if d['actor_id'] and d['actor_id'].startswith('conversation:'):
                 speaker = self.store.one("SELECT c.actor_id FROM conversation_inputs c JOIN events e ON e.message_id=c.message_id JOIN deliveries d ON d.run_id=e.claimed_by_run WHERE d.id=? AND e.kind='conversation'", (d['id'],))
                 if speaker:
                     d['actor_id'] = speaker['actor_id']
-        questions = self.store.all("SELECT a.id,a.task_id,a.question,a.options,a.state,a.answer FROM attentions a JOIN tasks t ON t.id=a.task_id WHERE t.room_id=? AND a.account='local-user' ORDER BY a.created", (room,))
+        questions = self.store.all("SELECT a.id,a.task_id,a.question,a.options,a.state,a.answer,a.created FROM attentions a JOIN tasks t ON t.id=a.task_id WHERE t.room_id=? AND a.account='local-user' ORDER BY a.created", (room,))
         for q in questions:
-            q["options"] = json.loads(q["options"])
+            q["question"], q["options"] = chat_text(q["question"]), [chat_text(o) for o in json.loads(q["options"])]
         pending = self.store.all("SELECT f.id,f.state,m.content FROM followups f JOIN messages m ON m.id=f.message_id WHERE m.room_id=? AND f.owner_task IS NULL AND f.state='unassigned'", (room,))
         config = getattr(self.model, "config", ModelConfig())
         return {"workspace_id": self.workspace_id, "tasks": tasks, "messages": list(reversed(messages)), "deliveries": list(reversed(deliveries)), "questions": questions,
@@ -433,7 +438,7 @@ async def shutdown(request):
     return web.json_response({"accepted": True, "instance_id": c.instance_id})
 
 
-STATIC_FILES = {"index.html", "app.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
+STATIC_FILES = {"index.html", "app.js", "timeline.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
                 "replay-pixel.js", "galaxy.js", "galaxy.css", "mobile.css", "mobile.js", "pair.js", "pair.css", "pair.html", "sw.js",
                 "icon-192.png", "icon-512.png", "apple-touch-icon.png"}
 

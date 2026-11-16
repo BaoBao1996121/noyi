@@ -1,6 +1,6 @@
 // Noyi service worker: an offline shell plus system notifications.
 // API responses are never cached, so diet and health data never sit in the phone's cache.
-const SHELL = 'noyi-shell-v1';
+const SHELL = 'noyi-shell-v2';
 const FILES = ['/assets/style.css', '/assets/modules.css', '/assets/mobile.css', '/assets/icon-192.png'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).catch(() => {})); self.skipWaiting(); });
