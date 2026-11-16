@@ -136,6 +136,31 @@ class ConversationStore:
                 self.db.execute("UPDATE ingress_receipts SET receipt=? WHERE source=? AND account=? AND nonce=?",(encode(receipt),source,account,nonce))
         return receipt
 
+    def intake_states(self, room, account="local-user"):
+        """Where each conversational message of this room stands, for the page.
+
+        received: stored, waiting its turn; reading: the assistant is reading
+        it now; answered / failed: intake finished. A message folded into a
+        later one shares that one's state. One query regardless of history size.
+        """
+        rows = self.all("""SELECT c.id,c.state,c.decision,
+            EXISTS(SELECT 1 FROM events e JOIN runs r ON r.id=e.claimed_by_run
+                   WHERE e.message_id=c.message_id AND e.kind='conversation' AND r.phase='running') AS reading
+            FROM conversation_inputs c WHERE c.room_id=? AND c.account=?""", (room, account))
+        own = {r["id"]: ("reading" if r["reading"] else "received") if r["state"] == "pending"
+               else {"resolved": "answered", "failed": "failed"}.get(r["state"]) for r in rows}
+        merged = {r["id"]: json.loads(r["decision"] or "{}").get("merged_into") for r in rows if r["state"] == "merged"}
+        out = {}
+        for mid in own:
+            target, seen = mid, set()
+            while target in merged and target not in seen:
+                seen.add(target)
+                target = merged[target]
+            state = own.get(target)
+            if state:
+                out[mid] = state
+        return out
+
     def _conversation_fast_control(self,mid,spec,text,room,account,reply_to):
         """Exact standalone stop phrases bypass even a blocked intake request.
 
@@ -744,4 +769,9 @@ class ConversationRouter:
         except Exception as exc:
             self.store.step(run,"error",{"type":type(exc).__name__,"purpose":"conversation_intake"})
             if self.store.current(run):
-                self.store.finish_conversation(run,"接收这条消息时遇到问题，原话已保留，尚未启动新的工作。稍后可以继续告诉我。",failed=True)
+                # Say what actually happened: a model that did not answer in
+                # time is not the same as a message we could not understand.
+                from .model import transient_error
+                slow = transient_error(exc)
+                self.store.finish_conversation(run,("模型服务这会儿没有正常回应，我限时重试了几次也没成功。你的原话已保留，还没开始任何工作；稍后再发一次就行。" if slow else
+                                                    "接收这条消息时遇到问题，原话已保留，尚未启动新的工作。稍后可以继续告诉我。"),failed=True)

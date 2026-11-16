@@ -82,6 +82,10 @@ class ModelConfig:
     base_url: str = "https://maas.qianwenaiapi.com/compatible-mode/v1"
     api_key_env: str = "DASHSCOPE_API_KEY"
     timeout_seconds: float = 90
+    # Hard limit for one conversation-intake call. Intake answers in a few
+    # seconds; a call silent this long is abandoned and retried, so the user
+    # hears back within a bounded time instead of waiting on a hung request.
+    chat_timeout_seconds: float = 20
     max_output_tokens: int = 4096
     enable_thinking: bool = False
     # Reasoning effort for work turns and for conversation intake. Sent to a
@@ -115,6 +119,9 @@ class ModelConfig:
         if (type(self.timeout_seconds) not in (int, float) or not math.isfinite(self.timeout_seconds)
                 or not 1 <= self.timeout_seconds <= 3600):
             raise ValueError("timeout_seconds must be between 1 and 3600")
+        if (type(self.chat_timeout_seconds) not in (int, float) or not math.isfinite(self.chat_timeout_seconds)
+                or not 1 <= self.chat_timeout_seconds <= 60):
+            raise ValueError("chat_timeout_seconds must be between 1 and 60")
         if type(self.max_output_tokens) is not int or self.max_output_tokens < 1:
             raise ValueError("max_output_tokens must be a positive integer")
         if type(self.enable_thinking) is not bool:
@@ -136,6 +143,9 @@ def transient_error(exc) -> bool:
     """A provider fault worth one more attempt: the connection broke, timed
     out, was rate limited, or the server failed. Requests the provider
     refused as invalid, unauthorized or unaffordable are not transient."""
+    if isinstance(exc, TimeoutError):
+        # Our own hard deadline on one call (see Runtime.request).
+        return True
     try:
         import openai
     except ImportError:
@@ -148,7 +158,16 @@ def transient_error(exc) -> bool:
 
 class QwenModel:
     """A registered official provider, or a loopback gateway, via the OpenAI-compatible interface."""
-    def __init__(self, config: ModelConfig):
+    @staticmethod
+    def preload():
+        """The slow, loop-independent part of building a client: importing the
+        SDK (seconds on a machine that scans every file) and loading the
+        certificate store. Safe on a worker thread; returns the TLS context."""
+        import openai  # noqa: F401
+        import httpx
+        return httpx.create_ssl_context()
+
+    def __init__(self, config: ModelConfig, *, ssl_context=None):
         from openai import AsyncOpenAI
         import httpx
         config.__post_init__()
@@ -160,7 +179,8 @@ class QwenModel:
         self.client = AsyncOpenAI(api_key=key, base_url=config.base_url,
                                   max_retries=0, timeout=config.timeout_seconds,
                                   http_client=httpx.AsyncClient(follow_redirects=False,
-                                                               timeout=config.timeout_seconds))
+                                                               timeout=config.timeout_seconds,
+                                                               **({"verify": ssl_context} if ssl_context is not None else {})))
 
     @property
     def metadata(self):

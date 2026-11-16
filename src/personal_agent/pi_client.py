@@ -46,7 +46,8 @@ async def _reap_created(creation):
     await close_pi(proc)
 
 
-async def run_pi(messages, tools, model_name, handle):
+def spawn_pi():
+    """Start one Pi child. It loads its modules, then waits for its start line."""
     node = shutil.which("node")
     if not node or not BRIDGE.is_file():
         raise RuntimeError("Pi requires Node >=22.19 and the installed bridge dependencies")
@@ -56,12 +57,69 @@ async def run_pi(messages, tools, model_name, handle):
         "PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "PATHEXT", "COMSPEC",
         "LOCALAPPDATA", "APPDATA", "USERPROFILE", "HOME",
     }}
-    creation = asyncio.create_task(asyncio.create_subprocess_exec(
+    return asyncio.create_task(asyncio.create_subprocess_exec(
         node, str(BRIDGE), stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
         cwd=str(BRIDGE.parent), env=env, limit=8 * 1024 * 1024))
+
+
+class WarmPi:
+    """Keeps one Pi child started ahead of need.
+
+    Starting Node and loading the Pi packages takes 1-2 s, and several seconds
+    on a machine whose virus scanner inspects every file, which the user felt
+    as a slow first reply. A child that has loaded but not yet received its
+    start line holds no task data, so starting it early changes nothing about
+    isolation: every run still gets its own fresh process, used once.
+    """
+    def __init__(self):
+        self._next = None
+        self._loop = None
+        # Only an owner that will call close() (the long-running service)
+        # turns pre-starting on; otherwise every run starts its own child.
+        self.enabled = False
+
+    def take(self):
+        """The ready child's creation task for this run; the next one starts now."""
+        loop = asyncio.get_running_loop()
+        ready = self._next if self._next is not None and self._loop is loop else None
+        self._next = None
+        if ready is not None and ready.done() and (ready.cancelled() or ready.exception()):
+            ready = None
+        current = ready or spawn_pi()
+        self._prestart(loop)
+        return current
+
+    def _prestart(self, loop):
+        if not self.enabled:
+            return
+        try:
+            self._next, self._loop = spawn_pi(), loop
+        except RuntimeError:
+            # No usable Node here: runs report it themselves when they start.
+            self._next = None
+
+    def start(self):
+        self.enabled = True
+        if self._next is None:
+            self._prestart(asyncio.get_running_loop())
+
+    async def close(self):
+        self.enabled = False
+        pending, self._next = self._next, None
+        if pending is not None:
+            await asyncio.gather(_reap_created(pending), return_exceptions=True)
+
+
+async def run_pi(messages, tools, model_name, handle, *, warm=None):
+    creation = warm.take() if warm else spawn_pi()
     try:
         proc = await asyncio.shield(creation)
+        if proc.returncode is not None:
+            # A pre-started child that exited while waiting is not reused.
+            await close_pi(proc)
+            creation = spawn_pi()
+            proc = await asyncio.shield(creation)
         proc.stdin.write((encode({"type": "start", "messages": messages,
                                   "tools": tools, "model": model_name}) + "\n").encode())
         await proc.stdin.drain()

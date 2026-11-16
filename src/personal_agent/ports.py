@@ -21,9 +21,21 @@ class AgentEngine(Protocol):
 class PiEngine:
     identity = "pi-agent-core@1.5.0"
 
+    def __init__(self):
+        from .pi_client import WarmPi
+        # One child is kept loaded ahead of the next run (see WarmPi).
+        self.warm = WarmPi()
+
+    def prepare(self):
+        """Start loading the next child now, so the first message does not wait for it."""
+        self.warm.start()
+
     async def run(self, messages, schemas, model_name, callback):
         from .pi_client import run_pi
-        await run_pi(messages, schemas, model_name, callback)
+        await run_pi(messages, schemas, model_name, callback, warm=self.warm)
+
+    async def close(self):
+        await self.warm.close()
 
 
 class SourceReader(Protocol):

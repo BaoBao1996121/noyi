@@ -369,10 +369,18 @@ class Runtime:
         # A model call has no side effects of its own, so a transient provider
         # fault is retried. Each retry is a separately recorded request that
         # first reserves its own budget (reserve); no hidden SDK retries.
+        # Every call has a hard deadline of its own. The SDK timeout bounds
+        # each network read, not the whole call, so a provider that trickles
+        # or stalls could otherwise hold a request until an outer limit kills
+        # the run (a 90 s hang with no retry). Intake gets a short deadline.
+        config = getattr(self.model, "config", None)
+        deadline = (getattr(config, "chat_timeout_seconds", 20) if run.get("trigger") == "conversation"
+                    else getattr(config, "timeout_seconds", 90))
         for attempt in range(len(RETRY_DELAYS) + 1):
             request_id = self.store.begin_request(run, messages, getattr(self.model, "metadata", {}))
             try:
-                reply = await self.model.complete(messages, tools)
+                async with asyncio.timeout(deadline):
+                    reply = await self.model.complete(messages, tools)
             except BaseException as exc:
                 # A timeout/cancellation can occur after provider acceptance. Do not
                 # turn missing response into proof of no remote work or no charge.
@@ -380,7 +388,8 @@ class Runtime:
                 if (not isinstance(exc, Exception) or not transient_error(exc) or attempt == len(RETRY_DELAYS)
                         or not self.runnable(run)):
                     raise
-                self.store.step(run, "model_retry", {"type": type(exc).__name__, "status_code": getattr(exc, "status_code", None), "attempt": attempt + 1})
+                self.store.step(run, "model_retry", {"type": type(exc).__name__, "status_code": getattr(exc, "status_code", None), "attempt": attempt + 1,
+                                                     **({"deadline_seconds": deadline} if isinstance(exc, TimeoutError) else {})})
                 await asyncio.sleep(RETRY_DELAYS[attempt])
                 if not self.runnable(run) or reserve is not None and not reserve():
                     raise

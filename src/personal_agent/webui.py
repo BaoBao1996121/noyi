@@ -34,6 +34,7 @@ class LocalModel:
     """Lazy credentials keep the setup screen usable before a key is configured."""
     def __init__(self, data, config):
         self.data, self.config, self.client = data, config, None
+        self._building = None
         saved = data / "model.json"
         if saved.is_file():
             self.config = ModelConfig(**json.loads(saved.read_text(encoding="utf-8")))
@@ -51,7 +52,7 @@ class LocalModel:
                 "base_url": self.config.base_url, "effort": self.config.effort, "chat_effort": self.config.chat_effort}
 
     async def configure(self, *, name, base_url, key=None):
-        keep = {k: getattr(self.config, k) for k in ("api_key_env", "effort", "chat_effort", "timeout_seconds", "max_output_tokens")}
+        keep = {k: getattr(self.config, k) for k in ("api_key_env", "effort", "chat_effort", "timeout_seconds", "chat_timeout_seconds", "max_output_tokens")}
         config = ModelConfig(name=name, base_url=base_url, **keep)
         if key is not None and (not isinstance(key, str) or not key.strip() or any(c.isspace() for c in key.strip())):
             raise ValueError("请输入有效的 API Key")
@@ -63,12 +64,38 @@ class LocalModel:
         self.config = config
         return {"ready": self.ready, "name": config.name}
 
+    async def prepare(self):
+        """Build the client ahead of the first message.
+
+        Importing the provider SDK took 5-11 s on the user's machine. Done
+        lazily it ran inside the first reply, on the event loop, freezing the
+        whole service; here it runs once on a worker thread at startup.
+        """
+        if self.client is None and self.ready:
+            if self._building is None:
+                self._building = asyncio.ensure_future(asyncio.to_thread(QwenModel.preload))
+            building = self._building
+            try:
+                ssl_context = await asyncio.shield(building)
+            finally:
+                if self._building is building:
+                    self._building = None
+            # The async client itself belongs to this event loop.
+            if self.client is None:
+                self.client = QwenModel(self.config, ssl_context=ssl_context)
+        return self.client
+
     async def complete(self, messages, tools):
+        if self.client is None:
+            await self.prepare()
         if self.client is None:
             self.client = QwenModel(self.config)
         return await self.client.complete(messages, tools)
 
     async def close(self):
+        if self._building is not None:
+            building, self._building = self._building, None
+            await asyncio.gather(building, return_exceptions=True)
         if self.client:
             await self.client.close()
             self.client = None
@@ -132,6 +159,7 @@ class Console:
         return {"workspace_id": self.workspace_id, "tasks": tasks, "messages": list(reversed(messages)), "deliveries": list(reversed(deliveries)), "questions": questions,
                 "goals": goal_snapshot(self.store, room),
                 "unassigned": pending, "server_time": time.time(), "ready": getattr(self.model, "ready", True),
+                "intake": self.store.intake_states(room),
                 "model": {"name": config.name, "base_url": config.base_url, "provider": config.provider}, "service_error": self.service_error or self.service.triggers.error,
                 "controls": self.store.all("SELECT c.* FROM controls c JOIN tasks t ON t.id=c.task_id WHERE t.room_id=? ORDER BY c.created DESC LIMIT 50", (room,)),
                 "rooms": [{**r, "members": self.store.members(r["id"])} for r in self.store.all("SELECT * FROM rooms WHERE owner='local-user' ORDER BY rowid")],
@@ -282,7 +310,10 @@ async def timeline(request):
 
 
 async def submit(request):
-    return web.json_response(request.app[CONSOLE].submit(await json_body(request)))
+    c = request.app[CONSOLE]
+    receipt = c.submit(await json_body(request))
+    c.service.wake()
+    return web.json_response(receipt)
 
 
 async def action(request):
@@ -526,7 +557,7 @@ async def lifecycle(app):
                         c.service_error = type(exc).__name__
                         # Stop on a scheduler fault; do not repeatedly run an inconsistent ledger.
                         return
-                await asyncio.sleep(0.3)
+                await c.service.idle(0.3)
         async def curate():
             # Daily tidy; it only proposes, so a failure leaves nothing half-done.
             while True:
@@ -537,6 +568,11 @@ async def lifecycle(app):
                     except Exception as exc:
                         c.service_error = c.service_error or "memory_curation:" + type(exc).__name__
         if c.run_service:
+            c.service.prepare_engine()
+            if hasattr(c.model, "prepare"):
+                # Failures surface on the first real call, where they are reported.
+                warm = asyncio.create_task(c.model.prepare())
+                warm.add_done_callback(lambda t: t.cancelled() or t.exception())
             job = asyncio.create_task(run())
             trigger_job = asyncio.create_task(c.service.triggers.run())
             curate_job = asyncio.create_task(curate())
@@ -546,6 +582,7 @@ async def lifecycle(app):
             if job:
                 job.cancel()
                 await asyncio.gather(job, return_exceptions=True)
+                await c.service.close_engine()
             if trigger_job:
                 trigger_job.cancel()
                 curate_job.cancel()

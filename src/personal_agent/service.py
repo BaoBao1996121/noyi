@@ -69,6 +69,7 @@ class Service:
         self.concurrency = concurrency
         self._active = {}
         self._delivery_lock = asyncio.Lock()
+        self._wake = None
         self.triggers = TriggerScheduler(store, data, observer=observer, **({"clock": clock} if clock else {}))
 
     async def deliver(self):
@@ -166,6 +167,35 @@ class Service:
                 delivery.cancel()
             await asyncio.gather(delivery, return_exceptions=True)
 
+    def wake(self):
+        """New input arrived in this process: look now instead of at the next poll."""
+        if self._wake is not None:
+            self._wake.set()
+
+    async def idle(self, seconds):
+        """Sleep between scheduler passes; returns early when woken.
+
+        Polling remains for work arriving from other processes (CLI, timers).
+        """
+        if self._wake is None:
+            self._wake = asyncio.Event()
+        try:
+            await asyncio.wait_for(self._wake.wait(), seconds)
+        except TimeoutError:
+            pass
+        self._wake.clear()
+
+    def prepare_engine(self):
+        """A long-running service keeps the next engine process loaded ahead of need."""
+        prepare = getattr(self.runtime.engine, "prepare", None)
+        if prepare:
+            prepare()
+
+    async def close_engine(self):
+        close = getattr(self.runtime.engine, "close", None)
+        if close:
+            await close()
+
     async def serve(self, once=False):
         with ServiceLock(self.data):
             self.store.recover()
@@ -174,13 +204,15 @@ class Service:
                 await self.run_until_quiescent()
                 return
             job = asyncio.create_task(self.triggers.run())
+            self.prepare_engine()
             try:
                 while True:
                     await self.run_until_quiescent()
                     if self.triggers.error:
                         raise RuntimeError("trigger scheduler failed: " + self.triggers.error)
                     # SQLite also picks up separate CLI processes.
-                    await asyncio.sleep(0.5)
+                    await self.idle(0.5)
             finally:
                 job.cancel()
                 await asyncio.gather(job, return_exceptions=True)
+                await self.close_engine()
