@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 import os
@@ -231,6 +232,21 @@ class QwenModel:
                           usage.completion_tokens if usage else 0, result.model,
                           getattr(result, "_request_id", None) or result.id,
                           result.choices[0].finish_reason)
+
+    async def warm_up(self):
+        """Open the first connection before the first message needs it.
+
+        The first connection in a process paid about 4.6 s (name lookup, TLS,
+        proxy detection); later ones about 0.1 s. Listing models is free, sends
+        no user data and is not a completion, so it is never billed or
+        recorded as a model request. Failure only means the first real call
+        pays that cost itself.
+        """
+        try:
+            async with asyncio.timeout(15):
+                await self.client.models.list()
+        except Exception:
+            pass
 
     async def close(self):
         await self.client.close()

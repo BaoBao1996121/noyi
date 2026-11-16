@@ -130,11 +130,54 @@ async def test_model_client_is_built_before_the_first_message(tmp_path, monkeypa
     loaded = []
     real = QwenModel.preload
     monkeypatch.setattr(QwenModel, "preload", staticmethod(lambda: loaded.append(1) or real()))
+    async def no_network(self):
+        pass
+    monkeypatch.setattr(QwenModel, "warm_up", no_network)
     model = LocalModel(tmp_path, ModelConfig(name="deepseek-flash", base_url="https://api.deepseek.com", api_key_env="NOYI_TEST_KEY"))
     await asyncio.gather(model.prepare(), model.prepare())
     assert model.client is not None and loaded == [1]
     await model.close()
     assert model.client is None
+
+
+@pytest.mark.asyncio
+async def test_page_state_waits_for_a_change_and_returns_as_soon_as_it_happens(store, tmp_path):
+    from aiohttp.test_utils import TestClient, TestServer
+    from personal_agent.webui import create_app
+    from conftest import ScriptedModel
+    app = create_app(store, tmp_path / "data", ScriptedModel([]), run_service=False)
+    async with TestClient(TestServer(app)) as client:
+        first = await (await client.get("/api/state")).json()
+        # Nothing changes: the request is held, not answered at once.
+        started = time.monotonic()
+        waiting = asyncio.ensure_future(client.get("/api/state", params={"since": first["version"]}))
+        await asyncio.sleep(0.4)
+        assert not waiting.done()
+        incoming(store, "你好", "wait")
+        response = await asyncio.wait_for(waiting, timeout=3)
+        changed = await response.json()
+        assert time.monotonic() - started < 1.5
+        assert changed["version"] != first["version"]
+        assert list(changed["intake"].values()) == ["received"]
+        # Reading the state is not a change: a page cannot wake itself up.
+        assert (await (await client.get("/api/state")).json())["version"] == changed["version"]
+
+
+@pytest.mark.asyncio
+async def test_model_connection_is_opened_before_the_first_message(tmp_path, monkeypatch):
+    from personal_agent.model import ModelConfig, QwenModel
+    from personal_agent.webui import LocalModel
+    monkeypatch.setenv("NOYI_TEST_KEY", "offline-test-key")
+    opened = []
+
+    async def fake_warm_up(self):
+        opened.append(1)
+
+    monkeypatch.setattr(QwenModel, "warm_up", fake_warm_up)
+    model = LocalModel(tmp_path, ModelConfig(name="deepseek-flash", base_url="https://api.deepseek.com", api_key_env="NOYI_TEST_KEY"))
+    await model.prepare()
+    assert opened == [1]
+    await model.close()
 
 
 def _count_queries(store, action):

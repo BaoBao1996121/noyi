@@ -83,6 +83,7 @@ class LocalModel:
             # The async client itself belongs to this event loop.
             if self.client is None:
                 self.client = QwenModel(self.config, ssl_context=ssl_context)
+                await self.client.warm_up()
         return self.client
 
     async def complete(self, messages, tools):
@@ -290,8 +291,27 @@ async def boot(request):
                               "remote_hosts": sorted(c.remote.config.hosts) if not request.get(REMOTE) else []})
 
 
+def ledger_version(store):
+    """Changes whenever the ledger does: this service's writes or another process's."""
+    return f"{store.db.total_changes}.{store.one('PRAGMA data_version')['data_version']}"
+
+
 async def snapshot(request):
-    return web.json_response(request.app[CONSOLE].snapshot(request.query.get("room", "local")))
+    """With ?since=<version>, wait until the ledger changes (at most ~20 s).
+
+    The page used to re-ask every 1.5 s, so a reply sat unseen for 0.75 s on
+    average. Now it is answered the moment anything is written. Checking is a
+    counter read, not a query per message, so waiting costs nothing.
+    """
+    c = request.app[CONSOLE]
+    since = request.query.get("since")
+    if since:
+        deadline = time.monotonic() + 20
+        while ledger_version(c.store) == since and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+    data = c.snapshot(request.query.get("room", "local"))
+    data["version"] = ledger_version(c.store)
+    return web.json_response(data)
 
 
 async def detail(request):

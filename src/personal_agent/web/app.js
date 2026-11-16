@@ -168,9 +168,10 @@ async function detailView(force=false){
   box.innerHTML=html;
   try{const detail=await api('/api/tasks/'+task.id);if(state.task!==task.id||state.tab!=='details')return;$('#operation-list').innerHTML=detail.operations.map(o=>`<div class="log-row"><span>${esc(o.tool)}</span><span>${esc(o.status)}</span></div>`).join('')||'<p class="muted">还没有工具操作记录</p>';}catch(e){toast(e.message);}
 }
-async function refresh(force=false){
+async function refresh(force=false,wait=false){
   const requestedRoom=state.room;
-  try{const data=await api('/api/state?room='+encodeURIComponent(requestedRoom));if(state.room!==requestedRoom)return;if(data.workspace_id!==state.workspace){switchWorkspace(await api('/api/bootstrap'));await refresh(true);return;}state.data=data;state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
+  // wait: the server answers as soon as the ledger changes, so a reply shows the moment it is written.
+  try{const data=await api('/api/state?room='+encodeURIComponent(requestedRoom)+(wait&&state.version&&!STATIC?'&since='+encodeURIComponent(state.version):''));if(!wait||state.room===requestedRoom)state.version=data.version;if(state.room!==requestedRoom)return;if(data.workspace_id!==state.workspace){switchWorkspace(await api('/api/bootstrap'));await refresh(true);return;}state.data=data;state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
   catch(e){try{const boot=await api('/api/bootstrap');if(boot.workspace_id!==state.workspace){switchWorkspace(boot);await refresh(true);return;}}catch{}state.online=false;$('#connection').textContent='连接中断 · 草稿已保留';$('#banner').textContent='连接暂时中断。已输入的内容会保留，恢复后可以继续。';$('#banner').classList.remove('hidden');}
 }
 function saveDraft(){localStorage.setItem(state.draftKey,JSON.stringify({text:$('#message-input').value,uploads:state.uploads,urls:state.urls,task:state.task,retry:state.retry,recipient:state.recipient,replyTo:state.replyTo}));}
@@ -351,7 +352,8 @@ const galaxyUI=installGalaxy({state,api,esc,timeLabel});
 try{state.memoryMode=localStorage.getItem('pa.memory.mode')||'list';}catch{state.memoryMode='list';}
 document.addEventListener('galaxy:closed',()=>detailView(true));
 const goalsUI=installGoals({state,api,modal,toast,refresh,esc,timeLabel,chooseTask,compose:composeAbout,request:sendIntent});
-async function poll(){await refresh();window.noyiMobile?.afterRefresh(state.data);setTimeout(poll,document.hidden?5000:1500);}
+// Hidden pages re-ask every 5 s; a visible one waits on the server for the next change.
+async function poll(){const visible=!document.hidden&&state.online!==false;await refresh(false,visible);window.noyiMobile?.afterRefresh(state.data);setTimeout(poll,document.hidden?5000:state.online===false?1500:visible?0:1500);}
 // Phone extras (mobile.js) read state and call the same api(); nothing here depends on them.
 window.noyiApp={api,toast,modal,refresh:()=>refresh(true),get data(){return state.data;},get room(){return state.room;},
   addUpload(u){state.uploads.push(u);renderAttachments();saveDraft();}};
