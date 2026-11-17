@@ -158,11 +158,11 @@ async def test_daily_curation_only_proposes_and_never_edits_confirmed_memory(sto
     moved = say(store, "我已经搬到杭州了", at=now - 7000)
     before = store.all("SELECT id,version,value,state FROM memories ORDER BY id")
     model = ScriptedModel([curation_reply({
-        "candidates": [{"kind": "ongoing", "key": "学做菜", "value": "最近在学做菜", "keywords": ["做菜"],
+        "candidates": [{"kind": "ongoing", "key": "学做菜", "value": "最近在学做菜", "keywords": ["做菜"], "sensitivity": "none",
                         "evidence": [{"message_id": old, "quote": "我最近在学做菜"}, {"message_id": today, "quote": "最近一直在学做菜"}]}],
-        "merges": [{"memory_ids": [a["id"], b["id"]], "key": "称呼", "value": "叫我小林", "reason": "重复"}],
+        "merges": [{"memory_ids": [a["id"], b["id"]], "key": "称呼", "value": "叫我小林", "reason": "重复", "sensitivity": "none"}],
         "conflicts": [],
-        "updates": [{"memory_id": c["id"], "value": "住在杭州", "reason": "用户说搬家了", "evidence": [{"message_id": moved, "quote": "我已经搬到杭州了"}]}],
+        "updates": [{"memory_id": c["id"], "value": "住在杭州", "reason": "用户说搬家了", "sensitivity": "none", "evidence": [{"message_id": moved, "quote": "我已经搬到杭州了"}]}],
     })])
     curator = MemoryCurator(Runtime(store, tmp_path / "data", model))
     result = await curator.run("personal:local-user", trigger="manual", now=now)

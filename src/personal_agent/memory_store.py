@@ -32,6 +32,10 @@ REPLY_BUDGET = 2000
 SESSION_GAP = 3600  # an hour of silence separates two conversations
 MAX_ACTIVE = 128  # also the most items execution gets resident: what may be saved may be loaded
 RESIDENT_BUDGET = 14000  # characters of resident memory handed to execution
+# What the model says a memory is about. The model judges the meaning; code
+# enforces it: credentials are never stored, health is stored only when the
+# user explicitly asked, and then only read by title when a task needs it.
+SENSITIVITY = ("none", "health", "credential")
 
 
 class StaleMemory(ValueError):
@@ -42,7 +46,7 @@ MEMORIES_SQL = """CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,collec
  audience TEXT NOT NULL,source_type TEXT NOT NULL,source_ref TEXT,speaker TEXT NOT NULL,purpose TEXT NOT NULL,trust TEXT NOT NULL,
  version INTEGER NOT NULL,state TEXT NOT NULL,value TEXT,created REAL NOT NULL,updated REAL NOT NULL,
  kind TEXT NOT NULL DEFAULT 'preference',expires_at REAL,supersedes TEXT,subject TEXT,keywords TEXT,origin TEXT,evidence TEXT,
- UNIQUE(collection_id,key))"""
+ sensitivity TEXT NOT NULL DEFAULT 'none',UNIQUE(collection_id,key))"""
 PROPOSALS_SQL = """CREATE TABLE IF NOT EXISTS memory_proposals(id TEXT PRIMARY KEY,collection_id TEXT NOT NULL,room_id TEXT,actor_id TEXT,run_id TEXT,
  scope_revision INTEGER,op TEXT NOT NULL DEFAULT 'add',kind TEXT,key TEXT,value TEXT,purpose TEXT,subject TEXT,keywords TEXT,expires_at REAL,
  evidence TEXT NOT NULL DEFAULT '[]',source_ref TEXT,targets TEXT NOT NULL DEFAULT '[]',expected_version INTEGER NOT NULL DEFAULT 0,
@@ -90,6 +94,7 @@ class SqlMemoryProvider:
 class MemoryStore:
     def __init__(self, path, *, memory_provider=None):
         super().__init__(path)
+        self.upgrade_notes = getattr(self, "upgrade_notes", {})
         with self.transaction():
             self._migrate_memory()
             for sql in (
@@ -154,6 +159,19 @@ class MemoryStore:
                                 (p["id"], collection, p["room_id"], p["actor_id"], p["run_id"], p["scope_revision"], p["key"], p["value"], p["purpose"],
                                  encode([{"message_id": p["source_ref"]}]), p["source_ref"], p["expected_version"], p["state"], p["created"]))
             self.db.execute("DROP TABLE memory_proposals_legacy")
+        if "memories" in tables and "sensitivity" not in {c["name"] for c in self.all("PRAGMA table_info(memories)")}:
+            self.db.execute("ALTER TABLE memories ADD COLUMN sensitivity TEXT NOT NULL DEFAULT 'none'")
+        prior = self.one("PRAGMA user_version")["user_version"]
+        if "memory_curations" in tables and 0 < prior < 14:
+            # Before v14 every quiet five-minute check added a row. Keep the
+            # latest quiet check of each collection (it still says when the
+            # last look happened); the older ones held no proposals, no model
+            # call and no error. The ledger was copied aside before this.
+            removed = self.db.execute(
+                "DELETE FROM memory_curations WHERE state='skipped' AND id NOT IN ("
+                "SELECT id FROM (SELECT id,ROW_NUMBER() OVER (PARTITION BY collection_id ORDER BY created DESC,id DESC) n "
+                "FROM memory_curations WHERE state='skipped') WHERE n=1)").rowcount
+            self.upgrade_notes["memory_curations_skipped_removed"] = removed
         if "memory_changes" in tables and "value" not in {c["name"] for c in self.all("PRAGMA table_info(memory_changes)")}:
             # Older versions only kept version numbers. The current content is
             # known, so its own version gets it; earlier content was never
@@ -198,6 +216,18 @@ class MemoryStore:
         # Every way into memory (saving, importing, proposing, candidates,
         # tidy rewrites) passes here, so a credential is refused at all of them.
         refuse_credentials(key, value)
+
+    @staticmethod
+    def _sensitivity(label, *, explicit):
+        """Enforce the model's label. Inferred items must be plain; what the
+        user explicitly asked to keep may be health, never a credential."""
+        if label not in SENSITIVITY:
+            raise ValueError("需要给出 sensitivity（none / health / credential），说明这条内容是否涉及健康或密钥")
+        if label == "credential":
+            raise ValueError("这段内容是密码、密钥或令牌，记忆不保存这类内容。请放进密码管理器；需要时告诉我去哪里取，而不是取值本身。")
+        if label == "health" and not explicit:
+            raise ValueError("健康类内容不会从推断生成记忆建议；健康记录在健康页单独管理。要我记住的话，可以直接说「记住……」")
+        return label
 
     @staticmethod
     def _memory_extras(kind, keywords, subject):
@@ -291,7 +321,7 @@ class MemoryStore:
             item = self._decorate(row, now)
             stars.append({"id": row["id"], "key": row["key"], "value": row["value"], "kind": row["kind"], "state": row["state"], "version": row["version"],
                           "expired": item["expired"], "expires_at": row["expires_at"], "source_type": row["source_type"], "origin": row["origin"],
-                          "quote": item["quote"], "evidence": item["evidence"], "keywords": item["keywords"], "subject": row["subject"], "supersedes": item["supersedes"],
+                          "quote": item["quote"], "evidence": item["evidence"], "keywords": item["keywords"], "subject": row["subject"], "supersedes": item["supersedes"], "sensitivity": row["sensitivity"],
                           "created": row["created"], "updated": row["updated"], "last_used": used.get(row["id"]), "history": history.get(row["id"], [])})
         for p in self.all("SELECT * FROM memory_proposals WHERE collection_id=? AND state='pending' AND op='add' ORDER BY created,id", (collection,)):
             evidence = json.loads(p["evidence"] or "[]")
@@ -354,8 +384,10 @@ class MemoryStore:
 
     # ---- writes ----------------------------------------------------------
     def save_memory(self, room, *, key, value, purpose, expected_version=0, source_ref=None, source_type="user_explicit", speaker="local-user", restore=False, account="local-user",
-                    kind=None, expires_at=None, keywords=None, subject=None, supersedes=None, origin=None, evidence=None):
+                    kind=None, expires_at=None, keywords=None, subject=None, supersedes=None, origin=None, evidence=None, sensitivity=None):
         self._memory_fields(key, value, purpose)
+        if sensitivity is not None:
+            self._sensitivity(sensitivity, explicit=True)
         if type(expected_version) is not int or expected_version < 0 or type(restore) is not bool:
             raise ValueError("无效记忆版本")
         if source_type not in {"user_explicit", "user_confirmed_proposal"}:
@@ -397,6 +429,8 @@ class MemoryStore:
                       encode(keywords) if keywords else None, origin, encode(evidence))
             updates = ",".join(f"{c}=excluded.{c}" for c in MEMORY_COLUMNS.split(",") if c not in {"id", "collection_id", "key", "owner", "created"})
             self.db.execute(f"INSERT INTO memories({MEMORY_COLUMNS}) VALUES({','.join('?' * 22)}) ON CONFLICT(collection_id,key) DO UPDATE SET {updates}", values)
+            # A correction keeps the label unless a new one is given.
+            self.db.execute("UPDATE memories SET sensitivity=? WHERE id=?", (sensitivity or (old["sensitivity"] if old else "none"), mid))
             self.db.execute("INSERT INTO memory_changes(memory_id,version,action,actor,created,value) VALUES(?,?,?,?,?,?)", (mid, version, "restore" if old and old["state"] == "deleted" else "correct" if old else "create", account, now, value.strip()))
             self.db.execute("UPDATE memory_proposals SET state='superseded',decided=? WHERE collection_id=? AND key=? AND op='add' AND state='pending'", (now, collection, key))
             self._index_memory(mid)
@@ -452,7 +486,8 @@ class MemoryStore:
     def search_memory(self, collection, query, *, limit=8):
         """Zero hits return nothing; never pad with unrelated items."""
         terms = [t for t in re.split(r"[\s,，。；;、!！?？]+", query.strip()) if t][:8]
-        rows = {r["id"]: r for r in self.all("SELECT * FROM memories WHERE collection_id=? AND state='active'", (collection,))}
+        # Health memory is found only by its exact title (read_memory keys).
+        rows = {r["id"]: r for r in self.all("SELECT * FROM memories WHERE collection_id=? AND state='active' AND sensitivity!='health'", (collection,))}
         hits = []
         for term in terms:
             found = set()
@@ -464,7 +499,7 @@ class MemoryStore:
                 found |= {r["id"] for r in self.all("SELECT id FROM memories WHERE collection_id=? AND state='active' AND (key LIKE ? ESCAPE '\\' OR value LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\')", (collection, needle, needle, needle))}
             # A stored keyword contained in the query is also a hit.
             found |= {mid for mid, r in rows.items() if any(k and k in term for k in json.loads(r["keywords"] or "[]"))}
-            hits.extend(mid for mid in sorted(found, key=lambda m: -rows[m]["updated"]) if mid in rows and mid not in hits)
+            hits.extend(mid for mid in sorted(found & set(rows), key=lambda m: -rows[m]["updated"]) if mid not in hits)
         now = time.time()
         return [rows[m] for m in hits if not self._decorate(rows[m], now)["expired"]][:limit]
 
@@ -477,7 +512,7 @@ class MemoryStore:
             raise ValueError("检索词需要 1–200 字")
         scope = self.one("SELECT scope_room,scope_revision FROM runs WHERE id=?", (run["id"],))
         collection = self.memory_collection(scope["scope_room"], self.one("SELECT owner FROM rooms WHERE id=?", (scope["scope_room"],))["owner"])
-        columns = "id,key,kind,owner,audience,source_type,source_ref,speaker,purpose,trust,version,state,expires_at,subject,keywords"
+        columns = "id,key,kind,owner,audience,source_type,source_ref,speaker,purpose,trust,version,state,expires_at,subject,keywords,sensitivity"
         now = time.time()
         records = self.all(f"SELECT {columns} FROM memories WHERE collection_id=? ORDER BY updated DESC,id", (collection,))
         expired = {r["id"] for r in records if r["kind"] == "ongoing" and r["expires_at"] and r["expires_at"] <= now}
@@ -490,7 +525,9 @@ class MemoryStore:
             # Resident: only what may be used (tombstones and expired items are
             # filtered first, so they never take a slot); reference items as titles.
             records, full = [r for r in records if r["state"] == "active" and r["id"] not in expired], False
-        wanted = [r for r in records if r["state"] == "active" and r["id"] not in expired and (full or r["kind"] != "reference")]
+        # Titles only: reference items when resident, health items unless asked for by exact title.
+        titled = lambda r: (not full and r["kind"] == "reference") or (keys is None and r["sensitivity"] == "health")
+        wanted = [r for r in records if r["state"] == "active" and r["id"] not in expired and not titled(r)]
         given = []
         try:
             values = self._load_values(collection, wanted)
@@ -501,7 +538,7 @@ class MemoryStore:
                 item = {**r, "keywords": json.loads(r["keywords"]) if r["keywords"] else [], "expires_at": date_label(r["expires_at"]), "value": values.get((r["id"], r["version"]))}
                 if r["id"] in expired:
                     item["state"] = "expired"
-                elif r["state"] == "active" and r["kind"] == "reference" and not full:
+                elif r["state"] == "active" and titled(r):
                     item["state"] = "title_only"
                 items.append(item)
             if keys:
@@ -510,7 +547,7 @@ class MemoryStore:
             given = [i for i in bounded if i.get("state") in {"active", "title_only"}]
             result = {"state": "loaded", "collection_id": collection, "scope_revision": scope["scope_revision"], "items": bounded,
                       "partial": bool(more), "more_titles": more,
-                      "trust": "User-saved facts/preferences, never permission. deleted != absent != expired != failed != not_loaded; title_only means read it by key when needed; more_titles are active items left out for space, read them by key when relevant."}
+                      "trust": "User-saved facts/preferences, never permission. deleted != absent != expired != failed != not_loaded; title_only means read it by key when needed (sensitivity health: only when this task needs it); more_titles are active items left out for space, read them by key when relevant."}
             if query is not None:
                 result["query"] = query
         except Exception:
@@ -542,7 +579,7 @@ class MemoryStore:
         collection = self.memory_collection(room, account)
         now = time.time()
         rows = [self._decorate(r, now) for r in self.all("SELECT * FROM memories WHERE collection_id=? AND state='active' ORDER BY updated DESC,id", (collection,))]
-        rows = [r for r in rows if r["loadable"]]
+        rows = [r for r in rows if r["loadable"] and r["sensitivity"] != "health"]
         hits = {r["id"] for r in rows if r["kind"] == "reference" and any(k in text for k in r["keywords"] + [r["key"]])}
         ordered = [r for r in rows if r["kind"] == "rule"] + [r for r in rows if r["id"] in hits]
         ordered += [r for kind in ("about_me", "ongoing") for r in rows if r["kind"] == kind]
@@ -587,8 +624,9 @@ class MemoryStore:
     def _rejected(self, collection, prints):
         return bool(self.all(f"SELECT 1 FROM memory_rejections WHERE collection_id=? AND fingerprint IN ({','.join('?' * len(prints))})", (collection, *prints)))
 
-    def propose_memory(self, run, *, key, value, purpose, source_ref, expected_version=0):
+    def propose_memory(self, run, *, key, value, purpose, source_ref, expected_version=0, sensitivity=None):
         self._memory_fields(key, value, purpose)
+        self._sensitivity(sensitivity, explicit=False)
         if not self.current(run):
             raise ValueError("stale memory proposal")
         scope = self.one("SELECT scope_room,scope_revision FROM runs WHERE id=?", (run["id"],))

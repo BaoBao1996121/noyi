@@ -208,7 +208,7 @@ export function installGalaxy({state, api, esc, timeLabel}) {
       return `<button class="small-link" data-galaxy-star="${esc(other.id)}">${esc(why)}：${esc(other.key)}</button>`;
     }).join('');
     const history = s.history.length ? `<ol class="galaxy-history">${s.history.map(h => `<li>版本 ${h.version} · ${esc(ACTIONS[h.action] || h.action)} · ${esc(timeLabel(h.at))}${h.value ? `<div class="galaxy-history-value">${esc(h.value)}</div>` : h.action === 'delete' ? '' : '<div class="muted">这一版的内容当时没有留存</div>'}</li>`).join('')}</ol>` : '<p class="muted">还没有版本记录（确认后才有）。</p>';
-    return `<div class="galaxy-card-head"><span class="galaxy-dot" style="background:${KIND[s.kind]?.colour}"></span><strong>${esc(s.key)}</strong><span class="muted">${esc(kind)} · ${esc(status)}</span></div>
+    return `<div class="galaxy-card-head"><span class="galaxy-dot" style="background:${KIND[s.kind]?.colour}"></span><strong>${esc(s.key)}</strong><span class="muted">${esc(kind)} · ${esc(status)}${s.sensitivity === 'health' ? ' · 健康，只在需要时读取' : ''}</span></div>
       ${s.value ? `<p>${esc(s.value)}</p>` : ''}<h4>原话</h4>${quotes}<h4>出处</h4><p>${esc(origin)}${s.reason ? ` · ${esc(s.reason)}` : ''}${s.last_used ? ` · 最近用过 ${esc(timeLabel(s.last_used))}` : ''}</p>
       <h4>版本历史</h4>${history}${related ? `<h4>连线</h4><div class="galaxy-related">${related}</div>` : ''}`;
   }

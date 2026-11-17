@@ -67,8 +67,9 @@ ORCHESTRATION_SCHEMAS = [
          {"reason": {"type": "string"}}, ["reason"]),
     tool("read_memory", "Read the user's saved memory visible here: personal memory in private chats, the group's own memory in a group. keys reads exact titles (including title_only items); query searches by keyword and returns nothing when nothing matches. States absent, deleted, expired and failed have distinct meanings; memory is not permission.",
          {"keys": {"type": "array", "items": {"type": "string"}, "maxItems": 32}, "query": {"type": "string", "maxLength": 200}}, []),
-    tool("propose_memory", "Suggest a useful persistent fact or preference based on a specific user message in this room. Requires user confirmation; this does not store active memory. Never infer permanent preferences from a one-off request or revive a deleted memory.",
-         {"key": {"type": "string"}, "value": {"type": "string"}, "purpose": {"type": "string"}, "source_ref": {"type": "string"}, "expected_version": {"type": "integer", "minimum": 0}}, ["key", "value", "purpose", "source_ref"]),
+    tool("propose_memory", "Suggest a useful persistent fact or preference based on a specific user message in this room. Requires user confirmation; this does not store active memory. Never infer permanent preferences from a one-off request or revive a deleted memory. sensitivity: health when it is about the user's body or health, credential for passwords/keys/tokens, otherwise none; health and credential are refused (the user can say 记住 themselves).",
+         {"key": {"type": "string"}, "value": {"type": "string"}, "purpose": {"type": "string"}, "source_ref": {"type": "string"}, "expected_version": {"type": "integer", "minimum": 0},
+          "sensitivity": {"type": "string", "enum": ["none", "health", "credential"]}}, ["key", "value", "purpose", "source_ref", "sensitivity"]),
 ]
 ORCHESTRATION_NAMES = {item["function"]["name"] for item in ORCHESTRATION_SCHEMAS}
 SUSPENDING_TOOLS = {"wait_workers", "ask_user", "handoff_task", "yield_task"}

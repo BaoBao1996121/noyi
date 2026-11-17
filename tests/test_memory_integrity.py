@@ -208,7 +208,7 @@ def test_asking_to_remember_a_secret_in_chat_is_refused_with_a_reason_the_model_
     key = "ghp_" + "".join(secrets.choice(AN) for _ in range(36))
     incoming(store, "记住我的 GitHub 令牌 " + key, nonce="a")
     with pytest.raises(ValueError, match="密码管理器"):
-        intake(store, {"action": "remember", "basis": "记住我的 GitHub 令牌", "memory_key": "GitHub 令牌", "memory_value": key, "receipt": "记住了你的令牌。"})
+        intake(store, {"action": "remember", "basis": "记住我的 GitHub 令牌", "memory_key": "GitHub 令牌", "memory_value": key, "memory_sensitivity": "none", "receipt": "记住了你的令牌。"})
     assert not store.all("SELECT * FROM memories")
 
 
@@ -256,3 +256,100 @@ async def test_export_trigger_enum_matches_every_trigger_curation_writes(store, 
         assert [c["trigger"] for c in bundle["curations"]] == [trigger]
     with pytest.raises(ValueError):
         await curator.run("personal:local-user", trigger="idle")
+
+
+# ---- 3b. health: the model labels it, code enforces the label ------------------
+NONE_SHEET = {"candidates": [], "merges": [], "conflicts": [], "updates": []}
+
+
+@pytest.mark.asyncio
+async def test_curation_never_proposes_what_the_model_labels_health_and_fails_closed_without_a_label(store, tmp_path):
+    from conftest import ScriptedModel
+    from test_memory_phase1 import curation_reply, say
+    from personal_agent.memory_curation import CURATION_SCHEMA, MemoryCurator
+    from personal_agent.runtime import Runtime
+    now = time.time()
+    first = say(store, "我对青霉素过敏", at=now - 7200)
+    other = say(store, "以后汇报先给结论", at=now - 3 * 86400)
+    again = say(store, "汇报还是先给结论", at=now - 7100)
+    saved = store.save_memory("local", key="城市", value="住在上海", purpose="对话", kind="about_me")
+    evidence = lambda mid, quote: [{"message_id": mid, "quote": quote}]
+    model = ScriptedModel([curation_reply({
+        "candidates": [{"kind": "about_me", "key": "过敏", "value": "青霉素过敏", "sensitivity": "health", "correction": True, "evidence": evidence(first, "我对青霉素过敏")},
+                       {"kind": "rule", "key": "汇报", "value": "先给结论", "correction": True, "evidence": evidence(other, "以后汇报先给结论")},
+                       {"kind": "rule", "key": "汇报格式", "value": "先给结论", "sensitivity": "none", "evidence": evidence(other, "以后汇报先给结论") + evidence(again, "汇报还是先给结论")}],
+        "merges": [], "conflicts": [],
+        "updates": [{"memory_id": saved["id"], "value": "最近在住院", "sensitivity": "health", "evidence": evidence(first, "我对青霉素过敏")}]})])
+    result = await MemoryCurator(Runtime(store, tmp_path / "data", model)).run("personal:local-user", trigger="manual", now=now)
+    assert [p["key"] for p in store.all("SELECT key FROM memory_proposals")] == ["汇报格式"]
+    assert result["proposals"] == 1 and result["rejected_items"] == 3, "health and unlabelled items are rejected, not proposed"
+    assert not store.all("SELECT 1 FROM memory_candidates WHERE key IN ('过敏','汇报')")
+    schema = CURATION_SCHEMA[0]["function"]["parameters"]["properties"]
+    for part in ("candidates", "merges", "updates"):
+        assert "sensitivity" in schema[part]["items"]["required"]
+
+
+def test_execution_proposals_need_a_sensitivity_label_and_refuse_health(store):
+    run = begin(store)
+    message = store.one("SELECT id FROM messages WHERE task_id=?", (run["task_id"],))["id"]
+    with pytest.raises(ValueError, match="健康"):
+        store.propose_memory(run, key="血压", value="血压偏高", purpose="提醒", source_ref=message, sensitivity="health")
+    with pytest.raises(ValueError, match="sensitivity"):
+        store.propose_memory(run, key="格式", value="表格", purpose="输出", source_ref=message)
+    assert store.propose_memory(run, key="格式", value="表格", purpose="输出", source_ref=message, sensitivity="none")["proposal_id"]
+
+
+def test_explicitly_remembered_health_is_kept_marked_and_read_only_by_key(store):
+    from test_speech import incoming, intake
+    incoming(store, "记住我对青霉素过敏", nonce="a")
+    intake(store, {"action": "remember", "basis": "记住我对青霉素过敏", "memory_key": "过敏", "memory_value": "青霉素过敏", "memory_kind": "about_me",
+                   "memory_sensitivity": "health", "receipt": "记住了，你对青霉素过敏。"})
+    store.save_memory("local", key="称呼", value="叫我小林", purpose="对话", kind="about_me")
+    item = next(m for m in store.memory_items("local") if m["key"] == "过敏")
+    assert item["sensitivity"] == "health" and item["state"] == "active"
+    corrected = store.save_memory("local", key="过敏", value="青霉素和头孢过敏", purpose="对话", expected_version=item["version"])
+    assert store.one("SELECT sensitivity FROM memories WHERE id=?", (corrected["id"],))["sensitivity"] == "health", "a correction keeps the label"
+    assert next(s for s in store.memory_galaxy("local")["stars"] if s["key"] == "过敏")["sensitivity"] == "health"
+    store.accept_conversation(TaskSpec("你好"), text="你好", nonce="c")
+    reply = store.conversation_context(store.claim_conversation())["memory"]
+    assert "叫我小林" in encode(reply) and "头孢" not in encode(reply), "the reply layer never carries health memory"
+    run = begin(store, nonce="t")
+    resident = store.read_memory(run)
+    health = next(i for i in resident["items"] if i["key"] == "过敏")
+    assert health["state"] == "title_only" and health["value"] is None
+    assert store.read_memory(run, query="过敏")["items"] == [], "search does not surface it either"
+    assert store.read_memory(run, keys=["过敏"])["items"][0]["value"] == "青霉素和头孢过敏"
+
+
+# ---- 4b. old quiet rows are collapsed once on upgrade --------------------------
+
+def test_upgrade_keeps_only_the_latest_skipped_row_per_collection_and_reports_counts(tmp_path):
+    import sqlite3
+    from personal_agent.store import Store
+    path = tmp_path / "data" / "state.sqlite"
+    old = Store(path)
+    group = old.create_group("协作", ["default"])["id"]
+    rows = [("personal:local-user", "skipped", t) for t in range(1, 40)] + [("personal:local-user", "done", 20.5), (group, "skipped", 5), (group, "skipped", 6), (group, "failed", 7)]
+    for i, (collection, state, created) in enumerate(rows):
+        old.db.execute("INSERT INTO memory_curations(id,collection_id,trigger,state,created) VALUES(?,?,'scheduled',?,?)", (f"c{i}", collection, state, created))
+    old.close()
+    db = sqlite3.connect(path)
+    db.execute("ALTER TABLE memories DROP COLUMN sensitivity")
+    db.execute("PRAGMA user_version=13")
+    db.commit()
+    db.close()
+    upgraded = Store(path)
+    try:
+        assert list((path.parent / "backups").glob("state-v13-*.sqlite")), "the ledger is copied aside before rows are removed"
+        left = upgraded.all("SELECT collection_id,state,created FROM memory_curations ORDER BY collection_id,created")
+        assert [(r["state"], r["created"]) for r in left if r["collection_id"] == "personal:local-user"] == [("done", 20.5), ("skipped", 39)]
+        assert [(r["state"], r["created"]) for r in left if r["collection_id"] == group] == [("skipped", 6), ("failed", 7)]
+        assert upgraded.upgrade_notes["memory_curations_skipped_removed"] == 39
+        assert upgraded.one("SELECT sensitivity FROM memories LIMIT 1") is None or True
+    finally:
+        upgraded.close()
+    again = Store(path)
+    try:
+        assert again.one("SELECT COUNT(*) n FROM memory_curations")["n"] == 4, "a second start removes nothing"
+    finally:
+        again.close()

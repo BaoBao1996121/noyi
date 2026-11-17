@@ -42,6 +42,7 @@ CONVERSATION_SCHEMA = [{"type": "function", "function": {
         "memory_value": {"type": "string", "description": "For remember: the preference/fact exactly as the user stated it."},
         "memory_kind": {"type": "string", "enum": ["rule", "preference", "about_me", "ongoing", "reference"], "description": "For remember: rule = how to always work/deliver; preference = taste/habit; about_me = stable fact about the user; ongoing = something true for a while (a current project, trip, plan); reference = information to look up when needed (address, account name, link)."},
         "memory_expires": {"type": "string", "description": "For remember with memory_kind ongoing: YYYY-MM-DD when the user said it ends; omit if they did not say."},
+        "memory_sensitivity": {"type": "string", "enum": ["none", "health", "credential"], "description": "Required for remember: health when it is about the user's body or health (illness, allergy, medication, weight, mental state); credential for passwords, keys or tokens (refused: tell the user to keep it in a password manager); none otherwise. Health memory is kept but never shown in chat replies; tasks read it only when they need it."},
         "task_id": {"type": "string", "description": "Exact ID from current room candidates, never guess."},
         "source_task_id": {"type": "string", "description": "For new_task only: inherit exact authorized sources of the task the user explicitly refers to, without inheriting its old requirements."},
         "result_kind": {"type":"string","enum":["artifact","action_receipt","answer"],"description":"For new_task: answer = a question to answer in chat that needs careful thinking (see the prompt); action_receipt ONLY when user merely requests creating/changing an ongoing arrangement. Any current document/analysis/result, including mixed current work plus future follow-up, requires artifact. Default artifact."},
@@ -570,7 +571,7 @@ class ConversationStore:
         return result
 
     def apply_conversation(self, run, decision):
-        if not isinstance(decision, dict) or set(decision) - {"action","text","receipt","memory_key","memory_value","memory_kind","memory_expires","task_id","source_task_id","result_kind","goal_id","goal_action","actor_id","question_id","control","reference","basis","source_basis","exclude_prior_results","include_delivered_result","promise","due_at","due_basis","commitment_id","commitment_op"}:
+        if not isinstance(decision, dict) or set(decision) - {"action","text","receipt","memory_key","memory_value","memory_kind","memory_expires","memory_sensitivity","task_id","source_task_id","result_kind","goal_id","goal_action","actor_id","question_id","control","reference","basis","source_basis","exclude_prior_results","include_delivered_result","promise","due_at","due_basis","commitment_id","commitment_op"}:
             raise ValueError("无效的会话判断")
         action = decision.get("action")
         if action not in CONVERSATION_SCHEMA[0]["function"]["parameters"]["properties"]["action"]["enum"]:
@@ -689,6 +690,7 @@ class ConversationStore:
         self._memory_fields(key, value, "用户在对话中明确要求记住")
         kind = decision.get("memory_kind") or "preference"
         self._memory_extras(kind, None, None)
+        sensitivity = self._sensitivity(decision.get("memory_sensitivity"), explicit=True)
         expires = parse_expiry(decision.get("memory_expires")) if kind == "ongoing" and decision.get("memory_expires") else None
         collection = self.memory_collection(item["room_id"], item["account"])
         old = self.one("SELECT version FROM memories WHERE collection_id=? AND key=?", (collection, key))
@@ -700,7 +702,7 @@ class ConversationStore:
         # Finish intake first: correcting a memory stops work holding the old value, this run included.
         result = self.finish_conversation(run, content, decision=decision, receipt={"memory_key": key, "memory_kind": kind})
         saved = self.save_memory(item["room_id"], key=key, value=value, purpose="用户在对话中明确要求记住", expected_version=old["version"] if old else 0,
-                                 source_ref=item["message_id"], speaker=item["account"], restore=True, account=item["account"], kind=kind, expires_at=expires)
+                                 source_ref=item["message_id"], speaker=item["account"], restore=True, account=item["account"], kind=kind, expires_at=expires, sensitivity=sensitivity)
         return {**result, "memory_id": saved["id"], "memory_version": saved["version"]}
 
     @staticmethod

@@ -85,7 +85,7 @@ def test_arrangement_only_and_direct_tasks_do_not_announce_start(store):
 
 def test_explicit_remember_saves_immediately_and_restates(store):
     incoming(store, "记住，以后交付先写一句结论，再列三条要点", nonce="a")
-    intake(store, {"action": "remember", "basis": "记住，以后交付先写一句结论", "memory_key": "交付格式", "memory_value": "先写一句结论，再列三条要点", "receipt": "记住了，以后交付先给一句结论，再列三条要点。"})
+    intake(store, {"action": "remember", "basis": "记住，以后交付先写一句结论", "memory_key": "交付格式", "memory_value": "先写一句结论，再列三条要点", "memory_sensitivity": "none", "receipt": "记住了，以后交付先给一句结论，再列三条要点。"})
     memory = store.one("SELECT * FROM memories WHERE key='交付格式'")
     assert memory["state"] == "active" and memory["source_type"] == "user_explicit"
     assert memory["value"] == "先写一句结论，再列三条要点"

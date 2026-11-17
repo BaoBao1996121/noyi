@@ -233,11 +233,11 @@ def test_memory_suggestions_need_user_confirmation_and_original_scope(store):
     a, b, group = team(store)
     run = begin(store, a["id"], group["id"])
     original = store.one("SELECT id FROM messages WHERE task_id=? AND kind='user'", (run["task_id"],))
-    proposal = store.propose_memory(run, key="格式", value="只在这次输出表格", purpose="格式背景", source_ref=original["id"])
+    proposal = store.propose_memory(run, key="格式", value="只在这次输出表格", purpose="格式背景", source_ref=original["id"], sensitivity="none")
     assert not store.memory_items(group["id"]) and not proposal["stored_as_memory"]
     rejected = store.decide_memory(proposal["proposal_id"], accept=False)
     assert not rejected["stored_as_memory"] and not store.memory_items(group["id"])
-    proposal = store.propose_memory(run, key="周会", value="每周三", purpose="安排周会", source_ref=original["id"])
+    proposal = store.propose_memory(run, key="周会", value="每周三", purpose="安排周会", source_ref=original["id"], sensitivity="none")
     store.update_group(group["id"], name="changed", member_ids=[b["id"]], expected_revision=group["revision"])
     assert store.decide_memory(proposal["proposal_id"], accept=True)["state"] == "superseded"
     assert not store.memory_items(group["id"])
@@ -338,7 +338,7 @@ def test_ambiguous_followup_assignment_keeps_one_original_message_identity(store
 def test_memory_proposal_accepts_only_explicit_user_choice(store):
     run = begin(store)
     message = store.one("SELECT id FROM messages WHERE task_id=? AND kind='user'", (run["task_id"],))
-    proposal = store.propose_memory(run, key="偏好", value="简短清单", purpose="平常的输出格式", source_ref=message["id"])
+    proposal = store.propose_memory(run, key="偏好", value="简短清单", purpose="平常的输出格式", source_ref=message["id"], sensitivity="none")
     assert not store.memory_items("local")
     result = store.decide_memory(proposal["proposal_id"], accept=True)
     assert result["stored_as_memory"]

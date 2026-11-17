@@ -32,24 +32,26 @@ Call record_memory_curation exactly once with:
 - conflicts: two confirmed items that contradict each other; give the two memory_ids.
 - updates: a confirmed item the user's later words contradict; give memory_id, the new value and evidence.
 - outdated: a confirmed item that no longer seems true; give memory_id.
+Every candidate, merge and update needs sensitivity: health when it is about the user's body or health (illness, allergy, medication, weight, diet for health, mental state, appointments); credential for passwords, keys or tokens; none otherwise. Health and credential items are never proposed, so judge the meaning, not single words.
 Every item needs a short Chinese reason. Return empty lists when there is nothing. Do not invent message_ids or quotes."""
 
 EVIDENCE = {"type": "array", "maxItems": 12, "items": {"type": "object", "properties": {"message_id": {"type": "string"}, "quote": {"type": "string"}}, "required": ["message_id", "quote"], "additionalProperties": False}}
 REASON = {"type": "string", "maxLength": 200}
+SENSITIVITY = {"type": "string", "enum": ["none", "health", "credential"]}
 CURATION_SCHEMA = [{"type": "function", "function": {
     "name": "record_memory_curation", "description": "Return the tidy sheet. This proposes only; nothing is remembered until the user confirms.",
     "parameters": {"type": "object", "properties": {
         "candidates": {"type": "array", "maxItems": 40, "items": {"type": "object", "properties": {
             "candidate_id": {"type": "string"}, "kind": {"type": "string", "enum": list(KINDS)}, "key": {"type": "string"}, "value": {"type": "string"},
             "keywords": {"type": "array", "items": {"type": "string"}, "maxItems": 12}, "subject": {"type": "string"}, "expires": {"type": "string"},
-            "correction": {"type": "boolean"}, "evidence": EVIDENCE, "reason": REASON}, "required": ["kind", "key", "value", "evidence"], "additionalProperties": False}},
+            "correction": {"type": "boolean"}, "evidence": EVIDENCE, "reason": REASON, "sensitivity": SENSITIVITY}, "required": ["kind", "key", "value", "evidence", "sensitivity"], "additionalProperties": False}},
         "merges": {"type": "array", "maxItems": 20, "items": {"type": "object", "properties": {
-            "memory_ids": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 6}, "key": {"type": "string"}, "value": {"type": "string"}, "reason": REASON},
-            "required": ["memory_ids", "key", "value"], "additionalProperties": False}},
+            "memory_ids": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 6}, "key": {"type": "string"}, "value": {"type": "string"}, "reason": REASON, "sensitivity": SENSITIVITY},
+            "required": ["memory_ids", "key", "value", "sensitivity"], "additionalProperties": False}},
         "conflicts": {"type": "array", "maxItems": 20, "items": {"type": "object", "properties": {
             "memory_ids": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2}, "reason": REASON}, "required": ["memory_ids"], "additionalProperties": False}},
         "updates": {"type": "array", "maxItems": 20, "items": {"type": "object", "properties": {
-            "memory_id": {"type": "string"}, "value": {"type": "string"}, "evidence": EVIDENCE, "reason": REASON}, "required": ["memory_id", "value", "evidence"], "additionalProperties": False}},
+            "memory_id": {"type": "string"}, "value": {"type": "string"}, "evidence": EVIDENCE, "reason": REASON, "sensitivity": SENSITIVITY}, "required": ["memory_id", "value", "evidence", "sensitivity"], "additionalProperties": False}},
         "outdated": {"type": "array", "maxItems": 20, "items": {"type": "object", "properties": {
             "memory_id": {"type": "string"}, "reason": REASON}, "required": ["memory_id"], "additionalProperties": False}},
     }, "required": ["candidates", "merges", "conflicts", "updates"], "additionalProperties": False}}}]
@@ -187,6 +189,7 @@ class MemoryCurator:
             try:
                 if not isinstance(c, dict):
                     raise ValueError("候选格式无效")
+                store._sensitivity(c.get("sensitivity"), explicit=False)
                 result = store.record_memory_candidate(collection, kind=c.get("kind"), key=c.get("key"), value=c.get("value"), evidence=c.get("evidence"),
                                                        candidate_id=c.get("candidate_id"), correction=c.get("correction") is True, keywords=c.get("keywords"),
                                                        subject=c.get("subject"), expires_at=c.get("expires"), curation_id=cid, account=account)
@@ -195,21 +198,24 @@ class MemoryCurator:
             except (ValueError, TypeError, KeyError):
                 counts["rejected_items"] += 1
         for m in each("merges"):
-            self._propose(collection, counts, op="merge", targets=m.get("memory_ids") if isinstance(m, dict) else None, key=m.get("key") if isinstance(m, dict) else None,
+            self._propose(collection, counts, sensitivity=m.get("sensitivity") if isinstance(m, dict) else None, op="merge", targets=m.get("memory_ids") if isinstance(m, dict) else None, key=m.get("key") if isinstance(m, dict) else None,
                           value=m.get("value") if isinstance(m, dict) else None, reason=(m.get("reason") if isinstance(m, dict) else None) or "内容重复", curation_id=cid)
         for m in each("conflicts"):
             self._propose(collection, counts, op="conflict", targets=m.get("memory_ids") if isinstance(m, dict) else None,
                           reason=(m.get("reason") if isinstance(m, dict) else None) or "两条说法矛盾", curation_id=cid)
         for m in each("updates"):
             ok = isinstance(m, dict)
-            self._propose(collection, counts, op="conflict", targets=[m.get("memory_id")] if ok else None, value=m.get("value") if ok else None,
+            self._propose(collection, counts, sensitivity=m.get("sensitivity") if ok else None, op="conflict", targets=[m.get("memory_id")] if ok else None, value=m.get("value") if ok else None,
                           evidence=m.get("evidence") if ok else None, reason=(m.get("reason") if ok else None) or "你后来说法不同", curation_id=cid)
         for m in each("outdated"):
             ok = isinstance(m, dict)
             self._propose(collection, counts, op="delete", targets=[m.get("memory_id")] if ok else None, reason=(m.get("reason") if ok else None) or "可能已经不成立", curation_id=cid)
 
-    def _propose(self, collection, counts, **kwargs):
+    def _propose(self, collection, counts, sensitivity="none", **kwargs):
+        """Items that carry new content must be labelled; code-made items
+        (renewals, stale deletions, conflicts, outdated) carry none."""
         try:
+            self.store._sensitivity(sensitivity, explicit=False)
             with self.store.transaction():
                 if self.store.propose_memory_change(collection, account=collection[len("personal:"):], **kwargs):
                     counts["proposals"] += 1
