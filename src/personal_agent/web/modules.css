@@ -53,3 +53,15 @@
 .fulfilled-line{font-size:11px;color:#3a6b35;margin-top:4px}
 .question.closed{background:transparent;border-style:dashed;padding:12px 16px;margin-bottom:20px}.question.closed p{white-space:pre-wrap;color:#777;font-size:12px}.question.closed .muted{margin-top:4px}.question.closed time{margin-left:8px;color:#b0b0b0}
 .question p{white-space:pre-wrap}
+
+/* Live progress under 正在处理: collapsed to one line, opens to the full list. */
+.progress{max-width:min(92%,520px);font-size:11px;color:#999;text-align:left}
+.progress summary{cursor:pointer;list-style:none;text-align:center;line-height:1.8}
+.progress summary::-webkit-details-marker{display:none}
+.progress-summary{display:block;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.progress-summary:before{content:"▾ "}.progress[open] .progress-summary:before{content:"▴ "}
+.progress-body{margin-top:8px;padding:10px 14px;border:1px solid #eee;border-radius:10px;background:#fafafa;line-height:1.8}
+.progress-steps{margin:0 0 6px;padding:0;list-style:none}.progress-steps li{display:flex;gap:7px}
+.progress-steps li span{width:12px;flex-shrink:0;text-align:center}.progress-steps li.done{color:#9aa}.progress-steps li.doing{color:#444}
+.progress-action{color:#888}.progress-empty{color:#aaa}
+.conversation-progress .progress{max-width:100%}.conversation-progress .progress summary{text-align:left;padding:8px 11px;border-radius:8px;background:#f7f8f6}

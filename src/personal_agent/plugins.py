@@ -46,6 +46,9 @@ class ToolSpec:
     effect: str = "read"
     exclusive: bool = False
     available: Callable[[Any, dict], bool] | None = None
+    # Shown to the user only: recorded in the ledger like any call, but it
+    # spends no tool budget and counts as neither progress nor stagnation.
+    display_only: bool = False
 
     @property
     def name(self) -> str:

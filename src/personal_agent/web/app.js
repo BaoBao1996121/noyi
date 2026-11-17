@@ -3,12 +3,13 @@ import {installReplay,registerSkin} from './replay.js';
 import {pixelSkin} from './replay-pixel.js';
 import {installGalaxy} from './galaxy.js';
 import {placeQuestions} from './timeline.js';
+import {progressSummary,progressPanel,tick} from './progress.js';
 registerSkin(pixelSkin);
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => [...root.querySelectorAll(q)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels = {ready:'排队中',running:'正在处理',waiting_children:'后台协作中',waiting_dependencies:'等待前置成果复核',waiting_user:'等你回答',paused:'已暂停',stopped:'已停止',cancelled:'已取消',succeeded:'已完成',failed:'遇到问题',review:'待检查'};
-const state = {token:'', room:'local', workspace:'', storagePrefix:'', recipient:'', replyTo:null, task:null, tab:'details', data:null, online:false, uploads:[], urls:[], sending:false, composing:false, answers:{}, draftKey:'pa.draft.local', signature:'', detailSignature:'', retry:null};
+const state = {token:'', room:'local', workspace:'', storagePrefix:'', recipient:'', replyTo:null, task:null, tab:'details', data:null, online:false, uploads:[], urls:[], sending:false, composing:false, answers:{}, draftKey:'pa.draft.local', progressOpen:new Set(), clockSkew:0, signature:'', detailSignature:'', retry:null};
 let toastTimer;
 const timeLabel = seconds => seconds ? new Date(seconds*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
 const pill = status => `<span class="pill ${esc(status)}">${esc(labels[status] || status)}</span>`;
@@ -103,6 +104,14 @@ function draftLine(id){const d=state.data.drafts?.[id];if(!d)return '';
   if(d.state==='writing'){if(state.data.intake?.[id]==='answered')return '';return `<article class="message assistant draft"><div class="message-label">正在回复…</div><div class="bubble">${esc(d.text)}</div></article>`;}
   return `<article class="message system draft-notice"><div class="bubble">${d.state==='corrected'?'刚才显示的回复已更正为下面这条':'刚才显示的回复没有通过核对，已撤回'}</div></article>`;}
 function intakeLine(id){const s=state.data.intake?.[id];return s&&intakeLabels[s]?`<div class="intake-state ${s}">${intakeLabels[s]}</div>`:'';}
+// Server clock, so "12 秒前" is right even when this device's clock is off.
+const serverNow=()=>Date.now()/1000+state.clockSkew;
+// Collapsed by default; whether it is open survives re-renders until the work ends.
+function progressBlock(t,{link=false}={}){
+  const p=state.data.progress?.[t.id]||{plan:[],action:null,thinking_since:null},now=serverNow(),summary=progressSummary(p,now);
+  const head=link?`${esc(labels[t.status])}：${esc(taskTitle(t))}`:esc(labels[t.status]);
+  return `<details class="progress" data-progress-task="${esc(t.id)}"${state.progressOpen.has(t.id)?' open':''}><summary>${head} <i class="spinner-dot"></i><i class="spinner-dot"></i><i class="spinner-dot"></i>${summary?`<span class="progress-summary">${summary}</span>`:''}</summary><div class="progress-body">${progressPanel(p,now)}${link?`<button class="small-link" data-task="${esc(t.id)}">看这件事</button>`:''}</div></details>`;
+}
 function messageView(force=false){
   const data=state.data, task=selected();
   const visible=id=>!id||!data.tasks.some(x=>x.id===id&&x.parent_task_id&&!data.bots.some(b=>b.id===x.actor_id));
@@ -112,7 +121,7 @@ function messageView(force=false){
   const messages=data.messages.filter(m=>['web','cli','conversation'].includes(m.source)&&visible(m.task_id)&&focused(m.task_id));
   const deliveries=data.deliveries.filter(d=>visible(d.task_id)&&!['question','clarification'].includes(d.kind)&&focused(d.task_id));
   const questions=data.questions.filter(q=>!state.task||q.task_id===state.task||data.tasks.some(t=>t.id===q.task_id&&t.root_task_id===state.task));
-  const sig=JSON.stringify({messages,deliveries,questions,intake:data.intake,drafts:data.drafts,task:task?.status,unassigned:data.unassigned,routes:data.pending_routes,selected:state.task,room:state.room});
+  const sig=JSON.stringify({messages,deliveries,questions,intake:data.intake,drafts:data.drafts,progress:data.progress,task:task?.status,unassigned:data.unassigned,routes:data.pending_routes,selected:state.task,room:state.room});
   if(!force&&sig===state.signature)return;
   state.signature=sig;
   const box=$('#messages'), bottom=box.scrollHeight-box.scrollTop-box.clientHeight<90, oldScroll=box.scrollTop;
@@ -129,10 +138,10 @@ function messageView(force=false){
   }else{
     const placed=placeQuestions(items,questions,questionCard);
     box.innerHTML=placed.history.join('')+placed.pinned.join('')+(data.pending_routes||[]).map(p=>`<article class="question"><div class="question-label">选择接手对象</div><p>${esc(p.content)}</p><button class="button" data-route="${p.id}">分配这条消息</button></article>`).join('')+(data.unassigned||[]).map(f=>`<article class="question"><div class="question-label">待分配的补充</div><p>${esc(f.content)}</p><button class="button" data-followup-route="${f.id}">选择对应任务</button></article>`).join('');
-    if(task&&['ready','running','waiting_children'].includes(task.status))box.insertAdjacentHTML('beforeend',`<article class="message system"><div class="bubble">${esc(labels[task.status])} <i class="spinner-dot"></i><i class="spinner-dot"></i><i class="spinner-dot"></i></div></article>`);
+    if(task&&['ready','running','waiting_children'].includes(task.status))box.insertAdjacentHTML('beforeend',`<article class="message system">${progressBlock(task)}</article>`);
   }
   if(bottom||force)box.scrollTop=box.scrollHeight;else box.scrollTop=oldScroll;
-  if(!task){const ongoing=roots().filter(t=>['ready','running','waiting_children'].includes(t.status));if(ongoing.length)box.insertAdjacentHTML('beforeend',`<div class="conversation-progress">${ongoing.slice(0,3).map(t=>`<button data-task="${t.id}">${esc(labels[t.status])}：${esc(taskTitle(t))}</button>`).join('')}</div>`);}
+  if(!task){const ongoing=roots().filter(t=>['ready','running','waiting_children'].includes(t.status));if(ongoing.length)box.insertAdjacentHTML('beforeend',`<div class="conversation-progress">${ongoing.slice(0,3).map(t=>progressBlock(t,{link:true})).join('')}</div>`);}
   $('#task-focus').classList.toggle('hidden',!task);
   $('#task-focus').innerHTML=task?`<span>正在查看：${esc(taskTitle(task))}</span><button data-clear-task title="查看全部对话">×</button>`:'';
 }
@@ -176,7 +185,7 @@ async function detailView(force=false){
 async function refresh(force=false,wait=false){
   const requestedRoom=state.room;
   // wait: the server answers as soon as the ledger changes, so a reply shows the moment it is written.
-  try{const data=await api('/api/state?room='+encodeURIComponent(requestedRoom)+(wait&&state.version&&!STATIC?'&since='+encodeURIComponent(state.version):''));if(!wait||state.room===requestedRoom)state.version=data.version;if(state.room!==requestedRoom)return;if(data.workspace_id!==state.workspace){switchWorkspace(await api('/api/bootstrap'));await refresh(true);return;}state.data=data;state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
+  try{const data=await api('/api/state?room='+encodeURIComponent(requestedRoom)+(wait&&state.version&&!STATIC?'&since='+encodeURIComponent(state.version):''));if(!wait||state.room===requestedRoom)state.version=data.version;if(state.room!==requestedRoom)return;if(data.workspace_id!==state.workspace){switchWorkspace(await api('/api/bootstrap'));await refresh(true);return;}state.data=data;state.clockSkew=(data.server_time||Date.now()/1000)-Date.now()/1000;for(const id of state.progressOpen)if(!data.progress?.[id])state.progressOpen.delete(id);state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
   catch(e){try{const boot=await api('/api/bootstrap');if(boot.workspace_id!==state.workspace){switchWorkspace(boot);await refresh(true);return;}}catch{}state.online=false;$('#connection').textContent='连接中断 · 草稿已保留';$('#banner').textContent='连接暂时中断。已输入的内容会保留，恢复后可以继续。';$('#banner').classList.remove('hidden');}
 }
 function saveDraft(){localStorage.setItem(state.draftKey,JSON.stringify({text:$('#message-input').value,uploads:state.uploads,urls:state.urls,task:state.task,retry:state.retry,recipient:state.recipient,replyTo:state.replyTo}));}
@@ -298,6 +307,8 @@ $('#show-details').onclick=()=>{if(innerWidth<=900)$('#app').classList.toggle('s
 $('#mobile-nav').onclick=()=>$('#app').classList.toggle('show-nav');
 $('#jump-bottom').onclick=()=>{$('#messages').scrollTop=$('#messages').scrollHeight;};
 $('#messages').onscroll=()=>{const b=$('#messages');$('#jump-bottom').classList.toggle('hidden',b.scrollHeight-b.scrollTop-b.clientHeight<150);};
+document.addEventListener('toggle',e=>{const id=e.target.dataset?.progressTask;if(id)e.target.open?state.progressOpen.add(id):state.progressOpen.delete(id);},true);
+setInterval(()=>tick($('#messages'),serverNow()),1000);
 document.addEventListener('input',e=>{if(e.target.dataset.answerInput)state.answers[e.target.dataset.answerInput]=e.target.value;});
 document.addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b)return;

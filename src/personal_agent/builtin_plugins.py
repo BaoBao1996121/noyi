@@ -188,5 +188,33 @@ def outcome_plugin():
     return Plugin("core.outcome", "1", [ToolSpec(REPORT_UNABLE, _report_unable, _validate_report_unable, exclusive=True)])
 
 
+# A progress list the model writes while it works, shown on the page only.
+# The ledger keeps every version (it is an ordinary operation, so replay shows
+# it), but nothing reads it as a promise, a result or acceptance evidence.
+PLAN_STATES = ("pending", "doing", "done")
+UPDATE_PLAN = tool("update_plan", "Show the user your current step list while you work. Send the whole list each time. Display only: it is not a promise, a result or evidence, and does not finish anything.",
+    {"steps": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": "object", "properties": {
+        "text": {"type": "string", "description": "A short step in the user's language, under 40 characters."},
+        "state": {"type": "string", "enum": list(PLAN_STATES)}}, "required": ["text", "state"], "additionalProperties": False}}}, ["steps"])
+PLAN_GUIDE = """Progress list: when the work needs more than one tool call, list 3-6 short steps of how you will do it with update_plan, in the user's language, and send the whole list again with update_plan as each step finishes or the plan changes. Send update_plan in the same response as the tool calls that start the next step, never as a response of its own, and never together with submit_result. The user sees this list only as progress while you work: it is not a promise, a result or evidence, so put no commitments, findings or answers in it."""
+
+
+def validate_plan(args):
+    steps = args.get("steps") if isinstance(args, dict) and set(args) == {"steps"} else None
+    if not isinstance(steps, list) or not 1 <= len(steps) <= 8:
+        raise ValueError("进度清单需要 1 到 8 步")
+    for step in steps:
+        if (not isinstance(step, dict) or set(step) != {"text", "state"} or step["state"] not in PLAN_STATES
+                or not isinstance(step["text"], str) or not 1 <= len(step["text"].strip()) <= 80):
+            raise ValueError("每一步需要 80 字以内的说明和状态 pending、doing 或 done")
+
+
+def progress_plugin():
+    def available(runtime, run):
+        return not runtime.store.task(run["task_id"])["parent_task_id"]
+    return Plugin("core.progress", "1", [ToolSpec(UPDATE_PLAN, lambda call, args: {"shown": len(args["steps"]), "scope": "display only; not a promise, result or evidence"},
+                                                  validate_plan, available=available, display_only=True)])
+
+
 def builtin_plugins():
-    return [artifacts_plugin(), orchestration_plugin(), following_plugin(), outcome_plugin()]
+    return [artifacts_plugin(), orchestration_plugin(), following_plugin(), outcome_plugin(), progress_plugin()]

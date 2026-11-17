@@ -21,6 +21,7 @@ from .tools import Toolset, MAX_SOURCE_BYTES, MAX_IMAGE_BYTES, atomic_write, ima
 from .goal_api import goal_snapshot, goal_action
 from .memory_curation import MemoryCurator
 from .memory_store import KINDS
+from .replay import _target as replay_target
 from .remote import COOKIE, COOKIE_MAX_AGE, DEVICE, REMOTE, RemoteConfig, RemoteGate
 from .push import PushChannel, load_vapid
 from .service import FileChannel
@@ -163,6 +164,8 @@ class Console:
                 "goals": goal_snapshot(self.store, room),
                 "unassigned": pending, "server_time": time.time(), "ready": getattr(self.model, "ready", True),
                 "intake": self.store.intake_states(room),
+                # Display only: what execution is doing now (see progress()).
+                "progress": self.progress(room, tasks),
                 # Display-only text being written; not a delivery (see drafts.py).
                 "drafts": self.service.runtime.drafts.for_room(room),
                 "model": {"name": config.name, "base_url": config.base_url, "provider": config.provider}, "service_error": self.service_error or self.service.triggers.error,
@@ -177,6 +180,33 @@ class Console:
                 "memory_kinds": KINDS,
                 "memory_proposals": self.store.memory_proposals(room),
                 "memory_curation": self.store.one("SELECT state,trigger,proposals,error,created,ended FROM memory_curations WHERE collection_id=? ORDER BY created DESC LIMIT 1", (self.store.memory_collection(room),))}
+
+    def progress(self, room, tasks):
+        """Live progress of work under way in this room, keyed by root task.
+
+        plan: the latest step list the model wrote (display only). action: the
+        latest real tool call anywhere in the task tree, read from the ledger,
+        so a stuck task shows how long ago anything actually happened.
+        thinking_since: when the model request now waiting began. Three
+        queries whatever the number of tasks, steps or calls.
+        """
+        active = "('ready','running','waiting_children')"
+        tree = f"FROM tasks t JOIN tasks root ON root.id=t.root_task_id WHERE root.room_id=? AND root.parent_task_id IS NULL AND root.status IN {active}"
+        out = {t["id"]: {"plan": [], "action": None, "thinking_since": None} for t in tasks if not t["parent_task_id"] and t["status"] in {"ready", "running", "waiting_children"}}
+        if not out:
+            return {}
+        for row in self.store.all(f"SELECT root_id,arguments FROM (SELECT root.id root_id,o.arguments,ROW_NUMBER() OVER (PARTITION BY root.id ORDER BY o.created DESC,o.rowid DESC) n {tree.replace('FROM tasks t', 'FROM operations o JOIN tasks t ON t.id=o.task_id')} AND o.task_id=root.id AND o.tool='update_plan' AND o.status='succeeded') WHERE n=1", (room,)):
+            out.setdefault(row["root_id"], {"plan": [], "action": None, "thinking_since": None})["plan"] = json.loads(row["arguments"]).get("steps", [])
+        names = {s["id"]: s.get("description") for t in tasks for s in t["spec"]["sources"]}
+        for row in self.store.all(f"SELECT * FROM (SELECT root.id root_id,o.tool,o.arguments,o.result,o.status,o.created,o.ended,ROW_NUMBER() OVER (PARTITION BY root.id ORDER BY o.created DESC,o.rowid DESC) n {tree.replace('FROM tasks t', 'FROM operations o JOIN tasks t ON t.id=o.task_id')} AND o.tool<>'update_plan') WHERE n=1", (room,)):
+            if row["root_id"] in out:
+                args, result = json.loads(row["arguments"] or "{}"), json.loads(row["result"] or "{}")
+                target = (result.get("title") if isinstance(result, dict) else None) or names.get(args.get("source_id")) or replay_target(args if isinstance(args, dict) else {})
+                out[row["root_id"]]["action"] = {"tool": row["tool"], "target": target, "status": row["status"], "at": row["created"], "ended": row["ended"]}
+        for row in self.store.all(f"SELECT root.id root_id,MAX(m.created) since {tree.replace('FROM tasks t', 'FROM model_requests m JOIN runs u ON u.id=m.run_id JOIN tasks t ON t.id=u.task_id')} AND m.state='dispatching' GROUP BY root.id", (room,)):
+            if row["root_id"] in out:
+                out[row["root_id"]]["thinking_since"] = row["since"]
+        return out
 
     def detail(self, task_id):
         task = self.task(task_id)
@@ -494,7 +524,7 @@ async def shutdown(request):
     return web.json_response({"accepted": True, "instance_id": c.instance_id})
 
 
-STATIC_FILES = {"index.html", "app.js", "timeline.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
+STATIC_FILES = {"index.html", "app.js", "timeline.js", "progress.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
                 "replay-pixel.js", "galaxy.js", "galaxy.css", "mobile.css", "mobile.js", "pair.js", "pair.css", "pair.html", "sw.js",
                 "icon-192.png", "icon-512.png", "apple-touch-icon.png"}
 

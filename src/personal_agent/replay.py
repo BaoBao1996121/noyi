@@ -218,7 +218,13 @@ class ReplayView:
         out = []
         for op in self.store.all(f"SELECT * FROM operations WHERE task_id IN ({self.marks}) ORDER BY created,id", self.tasks):
             arguments, result = _loads(op["arguments"]), _loads(op["result"])
-            facts = [["工具", op["tool"]], ["状态", OP_STATES.get(op["status"], op["status"])], ["对象", _target(arguments)],
+            if op["tool"] == "update_plan" and op["status"] == "succeeded":
+                # The model's own step list, shown as it was; display only.
+                marks = {"done": "✓", "doing": "▸", "pending": "○"}
+                text = "\n".join(f"{marks.get(s.get('state'), '○')} {s.get('text', '')}" for s in arguments.get("steps", []))
+                out.append(_event("tool", "plan", "ok", "更新进度清单", at=op["created"], text=text, facts=[["说明", "只是展示，不算承诺或成果"]]))
+                continue
+            facts =[["工具", op["tool"]], ["状态", OP_STATES.get(op["status"], op["status"])], ["对象", _target(arguments)],
                      ["成果校验值", result.get("sha256")], ["验收", ("通过" if result.get("passed") else "没通过") if "passed" in result else None]]
             tone = "ok" if op["status"] == "succeeded" and result.get("passed") is not False else "warn"
             out.append(_event("tool", "operation", tone, op["tool"], at=op["created"], end=op.get("ended"), has_end=True, ongoing=op["status"] == "running", facts=facts))

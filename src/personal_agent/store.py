@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS operations(
  tool TEXT NOT NULL, arguments TEXT NOT NULL, status TEXT NOT NULL,
  result TEXT, created REAL NOT NULL
 );
+CREATE INDEX IF NOT EXISTS operations_task ON operations(task_id,created);
 CREATE TABLE IF NOT EXISTS deliveries(
  id TEXT PRIMARY KEY, task_id TEXT, run_id TEXT NOT NULL UNIQUE,
  room_id TEXT NOT NULL, content TEXT NOT NULL, artifact TEXT,

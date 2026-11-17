@@ -76,7 +76,9 @@ def test_hidden_management_tools_are_neither_offered_nor_executable(store, tmp_p
     runtime = Runtime(store, tmp_path / "data", ScriptedModel([]))
     names = {t["function"]["name"] for t in runtime.schemas(run)}
     assert not names & HIDDEN_TOOLS
-    assert len(names) <= 20
+    # X-8 cut the visible tools to 19; update_plan (live progress list,
+    # display only, 2026-11-17) is the one added since.
+    assert len(names) <= 21
     for name in HIDDEN_TOOLS:
         assert runtime.plugins.spec(name).available(runtime, run) is False
 
