@@ -202,13 +202,13 @@ Get-ScheduledTask -TaskPath '\Noyi\' | Select-Object TaskName, State, @{n='Logon
 Get-ScheduledTask -TaskPath '\Noyi\' | Get-ScheduledTaskInfo | Select-Object TaskName, LastRunTime, LastTaskResult, NextRunTime
 ```
 
-**必须补做的修正**：`schtasks /Create` 建出来的任务默认带「运行超过 3 天就停止」（`TimeLimit` 显示 `PT72H`），还默认「用电池时不启动、切到电池就停止」。守护进程要一直跑，不修正的话 3 天后就会被系统停掉，要等下次开机才会再起来。在**管理员**窗口执行：
+**运行时限和电池设置**：`schtasks /Create` 建出来的任务默认「运行超过 3 天就停止」（`TimeLimit` 显示 `PT72H`），还默认「用电池时不启动、切到电池就停止」。守护进程要一直跑。安装脚本（2026-11-17 起）建完任务会自动去掉这两项并核对，改不掉就直接报错。上面那条命令的 `TimeLimit` 列应显示 `PT0S`。如果显示的是 `PT72H`（比如用的是旧版脚本），在**管理员**窗口手动执行：
 
 ```powershell
 foreach ($n in 'Service','Upgrade','OpsPush') { $t = Get-ScheduledTask -TaskPath '\Noyi\' -TaskName $n; $t.Settings.ExecutionTimeLimit = 'PT0S'; $t.Settings.DisallowStartIfOnBatteries = $false; $t.Settings.StopIfGoingOnBatteries = $false; Set-ScheduledTask -InputObject $t | Out-Null }
 ```
 
-改的是任务设置，正在运行的守护进程不受影响，下次启动时生效。以后每次重跑安装脚本，都要再执行一次这条命令。
+改的是任务设置，正在运行的守护进程不受影响，下次启动时生效。
 
 **确认成功**：
 
@@ -589,8 +589,7 @@ Get-Content D:\Noyi\data\logs\server.log -Tail 60 -Encoding UTF8
   ```
 
   标签名换成 `failed` 里那个。
-- **3 天后服务自己停了**：第 4 节的运行时限修正没做，或者重跑安装脚本后没有再做一次。
-- **笔记本拔了电源就停**：同样是第 4 节的电池设置没改。
+- **3 天后服务自己停了，或笔记本拔了电源就停**：用第 4 节的命令看 `TimeLimit`，不是 `PT0S` 就执行那里的修正命令。
 - **重启后手机连不上，登录桌面后又好了**：Tailscale 没开无人值守模式，见 6.1。
 - **日志回传失败**：`ops-last.json` 的 `ok` 是 `false`。`stage` 是 `push` 时，通常是 22 端口被挡或部署公钥没有写权限；没推出去的提交会留在本地，下个小时自动重推。`stage` 是 `export` 时，导出器拒绝了这份数据（校验没通过），什么都没发出去，看 `server.log`。
 - **端口 8765 被占用**：公司那套桌面启动方式（`noyi start`）如果也装在这台电脑上，会抢同一个端口。家里电脑只用计划任务这一套。

@@ -93,6 +93,17 @@ foreach ($t in $tasks) {
   # S4U: runs whether or not you are logged in, without storing your Windows password.
   $cmd = "schtasks /Create /F /TN `"\Noyi\$($t.Name)`" /TR `"\`"$pythonw\`" $($t.Args -replace '"','\"')`" $($t.Trigger) /RU `"$user`" /NP /RL LIMITED"
   if ($DryRun) { Write-Host "[dry-run] $cmd" } else { cmd /c $cmd | Out-Null; if ($LASTEXITCODE) { throw "schtasks $($t.Name) failed" } }
+  # schtasks defaults: stop after 72 hours, do not start / stop on battery. The service must run indefinitely.
+  if ($DryRun) { Write-Host "[dry-run] \Noyi\$($t.Name): no time limit, run on battery" }
+  else {
+    $st = Get-ScheduledTask -TaskPath '\Noyi\' -TaskName $t.Name
+    $st.Settings.ExecutionTimeLimit = 'PT0S'
+    $st.Settings.DisallowStartIfOnBatteries = $false
+    $st.Settings.StopIfGoingOnBatteries = $false
+    Set-ScheduledTask -InputObject $st | Out-Null
+    $chk = (Get-ScheduledTask -TaskPath '\Noyi\' -TaskName $t.Name).Settings
+    if ($chk.ExecutionTimeLimit -ne 'PT0S' -or $chk.DisallowStartIfOnBatteries -or $chk.StopIfGoingOnBatteries) { throw "Could not clear time limit / battery settings on \Noyi\$($t.Name)" }
+  }
 }
 Run 'start the service task' { schtasks /Run /TN '\Noyi\Service' | Out-Null }
 Run "upgrade.py (first install of $latest)" { & $python (Join-Path $bin 'upgrade.py') --root $Root }
@@ -114,4 +125,5 @@ git -C $repoDir fetch --quiet origin; if ($LASTEXITCODE) { throw 'git fetch from
 Write-Host 'Upgrade check: OK'
 & $python (Join-Path $bin 'ops_push.py') --root $Root; if ($LASTEXITCODE) { throw 'Could not push to noyi-ops; check the deploy key has write access' }
 Write-Host 'Log upload: OK'
+Write-Host 'For phone access after a reboot without logging in, Tailscale must run unattended: tailscale set --unattended=true' -ForegroundColor Yellow
 Write-Host "`nDone. Restart the PC once to confirm Noyi starts by itself. Then follow docs/home-deploy.md for the phone." -ForegroundColor Green
