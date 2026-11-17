@@ -20,6 +20,8 @@ IDLE_SECONDS = 3600
 INPUT_LIMIT = 30000
 MIN_INTERVAL = 20 * 3600  # "once a day" without depending on the calendar edge
 STALE_DAYS = 90
+# Every value run() may write to memory_curations.trigger; the ops export reads this.
+TRIGGERS = ("scheduled", "manual")
 
 CURATION_PROMPT = """You tidy a personal assistant's long-term memory about one user. You never change memory: you return a tidy sheet that the user reviews item by item.
 Input: confirmed memory (id, kind, title, value), silent candidates gathered earlier, and the user's recent messages (message_id, time, text).
@@ -98,6 +100,8 @@ class MemoryCurator:
     async def run(self, collection, *, trigger, now=None, since=None):
         now = now or time.time()
         store = self.store
+        if trigger not in TRIGGERS:
+            raise ValueError("未知的整理触发方式")
         if not store._collection_rooms(collection):
             raise ValueError("没有这个记忆范围")
         if since is None:
@@ -214,6 +218,16 @@ class MemoryCurator:
 
     def _finish(self, cid, collection, state, counts, trigger):
         store = self.store
+        if state == "skipped" and not counts["rejected_items"]:
+            # A quiet streak is one row: the latest quiet check of the same
+            # trigger keeps the start of the streak and moves its end forward.
+            # Anything else (done, failed, rejected items) starts a new row.
+            latest = store.one("SELECT id,state,trigger FROM memory_curations WHERE collection_id=? AND id!=? ORDER BY created DESC LIMIT 1", (collection, cid))
+            if latest and latest["state"] == "skipped" and latest["trigger"] == trigger:
+                until = store.one("SELECT until FROM memory_curations WHERE id=?", (cid,))["until"]
+                store.db.execute("DELETE FROM memory_curations WHERE id=?", (cid,))
+                store.db.execute("UPDATE memory_curations SET until=?,ended=? WHERE id=?", (until, time.time(), latest["id"]))
+                return {"id": latest["id"], "state": state, **counts, "notified": False}
         notified = False
         if state == "done" and counts["proposals"]:
             # At most one nudge a day; the rest waits on the memory page.

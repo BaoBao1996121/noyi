@@ -210,3 +210,49 @@ def test_asking_to_remember_a_secret_in_chat_is_refused_with_a_reason_the_model_
     with pytest.raises(ValueError, match="密码管理器"):
         intake(store, {"action": "remember", "basis": "记住我的 GitHub 令牌", "memory_key": "GitHub 令牌", "memory_value": key, "receipt": "记住了你的令牌。"})
     assert not store.all("SELECT * FROM memories")
+
+
+# ---- 4. quiet curation checks and export enums --------------------------------
+
+@pytest.mark.asyncio
+async def test_quiet_curation_checks_update_one_row_instead_of_adding_one_each_time(store, tmp_path):
+    from conftest import ScriptedModel
+    from test_memory_phase1 import curation_reply, say
+    from personal_agent.memory_curation import MemoryCurator
+    from personal_agent.runtime import Runtime
+    now = time.time()
+    model = ScriptedModel([curation_reply({"candidates": [], "merges": [], "conflicts": [], "updates": []})])
+    curator = MemoryCurator(Runtime(store, tmp_path / "data", model))
+    say(store, "刚说的话", at=now - 7200)
+    assert [r["state"] for r in await curator.tick(now=now)] == ["done"]
+    for i in range(1, 13):  # an hour of five-minute checks with nothing new
+        await curator.tick(now=now + MIN_INTERVAL_FOR_TEST + 300 * i)
+    rows = store.all("SELECT state,created,until FROM memory_curations ORDER BY created")
+    assert [r["state"] for r in rows] == ["done", "skipped"], "a quiet streak is one row"
+    assert rows[1]["until"] == now + MIN_INTERVAL_FOR_TEST + 300 * 12, "it carries the latest check time"
+    say(store, "又说了新的话", at=now + MIN_INTERVAL_FOR_TEST + 4000)
+    model.steps.append(curation_reply({"candidates": [], "merges": [], "conflicts": [], "updates": []}))
+    await curator.tick(now=now + MIN_INTERVAL_FOR_TEST + 8000)
+    await curator.tick(now=now + MIN_INTERVAL_FOR_TEST + 8300)
+    await curator.tick(now=now + 2 * MIN_INTERVAL_FOR_TEST + 9000)
+    assert [r["state"] for r in store.all("SELECT state FROM memory_curations ORDER BY created")] == ["done", "skipped", "done", "skipped"]
+
+
+MIN_INTERVAL_FOR_TEST = 20 * 3600
+
+
+@pytest.mark.asyncio
+async def test_export_trigger_enum_matches_every_trigger_curation_writes(store, tmp_path):
+    from conftest import ScriptedModel
+    from personal_agent.memory_curation import TRIGGERS, MemoryCurator
+    from personal_agent.ops_export import ENUMS, build_bundle
+    from personal_agent.runtime import Runtime
+    assert ENUMS["memory_curations.trigger"] == set(TRIGGERS)
+    curator = MemoryCurator(Runtime(store, tmp_path / "data", ScriptedModel([])))
+    for trigger in TRIGGERS:
+        store.db.execute("DELETE FROM memory_curations")
+        await curator.run("personal:local-user", trigger=trigger)
+        bundle = build_bundle(store, since=0, until=10**10, salt="s", service={}, version={})
+        assert [c["trigger"] for c in bundle["curations"]] == [trigger]
+    with pytest.raises(ValueError):
+        await curator.run("personal:local-user", trigger="idle")

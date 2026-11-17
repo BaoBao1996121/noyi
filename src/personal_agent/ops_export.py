@@ -26,6 +26,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .health import HEALTH_TABLES, TIMEZONE
+from .memory_curation import TRIGGERS as CURATION_TRIGGERS
 
 EXPORTABLE_KINDS = {"id", "time", "count", "seconds", "enum"}
 P = "private"
@@ -93,7 +94,7 @@ ENUMS = {
     "tasks.acceptance": {"pending", "passed", "failed"},
     "tasks.auto_continue": {"on", "off", "paused"},
     "tasks.cancel_state": {"active", "cancelled", "forbidden"},
-    "memory_curations.trigger": {"idle", "manual", "daily"},
+    "memory_curations.trigger": set(CURATION_TRIGGERS),  # one source: what curation writes
     "memory_curations.state": {"running", "done", "failed", "skipped"},
     "memory_curations.error": {"ValueError", "TimeoutError", "RuntimeError", "model_error"},
     "feedback_marks.delivery_kind": {"result", "question", "commitment", "system", "health", "health_alert", "conversation", "progress"},
