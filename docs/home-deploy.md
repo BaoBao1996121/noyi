@@ -1,5 +1,7 @@
 # 家里电脑常驻部署（第①步「自己用起来」）
 
+> 在家里从零开始照着做，用逐条执行清单：[home-deploy-checklist.md](home-deploy-checklist.md)。本文讲原理和设计。
+
 家里一台 Windows 电脑一直开着跑 Noyi，手机经 Tailscale 访问。公司电脑发布新版本，家里自动升级，升级失败自动退回。运行日志（不含饮食、体重、照片和原话）每小时回传到私有仓库 `noyi-ops`。
 
 ## 布局
