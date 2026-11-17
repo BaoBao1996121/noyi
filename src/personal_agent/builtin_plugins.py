@@ -11,6 +11,7 @@ from .conversation_goals import CONVERSATION_GOAL_SCHEMAS, validate_conversation
 from .orchestration_tools import ORCHESTRATION_SCHEMAS, SUSPENDING_TOOLS, validate_orchestration_arguments
 from .plugins import Plugin, ToolSpec
 from .tools import TOOL_SCHEMAS, tool, validate_arguments, verify
+from .tool_review import artifact_errors as tool_review_errors, tool_review_plugin
 
 
 ACTION_COMPLETION = tool('complete_action', 'Finish an arrangement-only request citing the operation_id of each effect tool call that made the arrangement (start_following and similar). This accepts registration, a change, or starting a review/observation; a started review is not a finished report, an observation plan proves no improvement. For a requested document use submit_result.',
@@ -47,7 +48,7 @@ def _read_artifact(call, args):
 def _submit_result(call, args):
     store, run = call.runtime.store, call.run
     result = verify(call.toolset, store.operations(run["task_id"]), args)
-    errors = store.completion_errors(run) + store.artifact_version_errors(run, args["artifact_ref"]) + store.review_artifact_errors(run, args["artifact_ref"]) + store.executor_promise_errors(run, args.get("promise"))
+    errors = store.completion_errors(run) + store.artifact_version_errors(run, args["artifact_ref"]) + store.review_artifact_errors(run, args["artifact_ref"]) + store.executor_promise_errors(run, args.get("promise")) + tool_review_errors(store, run, args["artifact_ref"])
     if errors:
         result["passed"] = False
         result.setdefault("errors", []).extend(errors)
@@ -222,4 +223,4 @@ def progress_plugin():
 
 
 def builtin_plugins():
-    return [artifacts_plugin(), orchestration_plugin(), following_plugin(), outcome_plugin(), progress_plugin()]
+    return [artifacts_plugin(), orchestration_plugin(), following_plugin(), outcome_plugin(), progress_plugin(), tool_review_plugin()]

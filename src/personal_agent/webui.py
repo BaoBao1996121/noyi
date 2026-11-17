@@ -623,6 +623,9 @@ async def lifecycle(app):
                     except Exception as exc:
                         c.service_error = c.service_error or "memory_curation:" + type(exc).__name__
         if c.run_service:
+            # The weekly tool-chain review is an ordinary registered goal.
+            from .tool_review import ensure_tool_review
+            ensure_tool_review(c.store, c.data)
             c.service.prepare_engine()
             if hasattr(c.model, "prepare"):
                 # Failures surface on the first real call, where they are reported.

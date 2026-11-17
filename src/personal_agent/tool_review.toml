@@ -1,0 +1,26 @@
+# Weekly tool-chain review (tool_review.py). Override any field in
+# tool-review.toml inside the data directory; Noyi itself cannot edit either.
+[tool_review]
+enabled = true
+# Mondays 09:00 local time; a missed run (computer off) runs once when back.
+schedule = { kind = "calendar", time = "09:00", weekdays = [0], timezone = "Asia/Shanghai", missed = "coalesce" }
+window_days = 7
+# Longest pattern counted, in units of consecutive same-tool rounds.
+max_pattern_rounds = 4
+# A candidate must appear in this many tasks, this many times, and a template
+# would have to save at least this many model rounds over the window.
+min_tasks = 2
+min_occurrences = 3
+min_saved_rounds = 6
+max_candidates = 5
+# Display-only progress lists are not part of any chain.
+ignore_tools = ["update_plan"]
+# Budget for the review's own model and tool calls, for the life of the goal.
+calls_limit = 1000
+tools_limit = 3000
+
+# Existing composite tools and the round pattern each replaces, e.g.
+# [[tool_review.templates]]
+# name = "read_pages"
+# pattern = ["web_search", "fetch_page+"]
+templates = []

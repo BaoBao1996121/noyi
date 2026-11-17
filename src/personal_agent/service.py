@@ -203,6 +203,10 @@ class Service:
                 await self.triggers.tick()
                 await self.run_until_quiescent()
                 return
+            # A long-running service keeps the weekly tool-chain review; a
+            # one-shot run only drains work already there.
+            from .tool_review import ensure_tool_review
+            ensure_tool_review(self.store, self.data)
             job = asyncio.create_task(self.triggers.run())
             self.prepare_engine()
             try:
