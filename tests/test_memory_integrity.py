@@ -79,3 +79,61 @@ def test_resident_load_query_count_does_not_grow_with_memory_count(tmp_path):
         finally:
             store.close()
     assert counts[0] == counts[1], counts
+
+
+# ---- 2. every version keeps what it said --------------------------------------
+
+def test_each_version_keeps_its_own_content_through_corrections_renewal_and_deletion(store):
+    first = store.save_memory("local", key="称呼", value="叫我小林", purpose="对话")
+    second = store.save_memory("local", key="称呼", value="叫我林工", purpose="对话", expected_version=first["version"])
+    store.delete_memory("local", second["id"], expected_version=second["version"])
+    item = next(m for m in store.memory_items("local") if m["key"] == "称呼")
+    assert item["value"] is None, "a tombstone itself still holds no value"
+    assert [(h["version"], h["action"], h["value"]) for h in item["history"]] == [(1, "create", "叫我小林"), (2, "correct", "叫我林工"), (3, "delete", None)]
+    trip = store.save_memory("local", key="出差", value="下周出差", purpose="安排", kind="ongoing")
+    store.renew_memory("local", trip["id"], expected_version=trip["version"])
+    trip_item = next(m for m in store.memory_items("local") if m["key"] == "出差")
+    assert [h["value"] for h in trip_item["history"]] == ["下周出差", "下周出差"]
+
+
+def test_galaxy_history_shows_what_each_version_said(store):
+    first = store.save_memory("local", key="住址", value="B 区", purpose="寄快递", kind="reference")
+    store.save_memory("local", key="住址", value="C 区", purpose="寄快递", kind="reference", expected_version=first["version"])
+    star = next(s for s in store.memory_galaxy("local")["stars"] if s["key"] == "住址")
+    assert [(h["version"], h["value"]) for h in star["history"]] == [(1, "B 区"), (2, "C 区")]
+
+
+def test_history_never_reaches_a_model(store):
+    first = store.save_memory("local", key="时段", value="OLD_HISTORY_VALUE", purpose="排日程")
+    store.save_memory("local", key="时段", value="NEW_VALUE", purpose="排日程", expected_version=first["version"])
+    run = begin(store)
+    assert "OLD_HISTORY_VALUE" not in encode(store.read_memory(run))
+    assert "OLD_HISTORY_VALUE" not in encode(store.read_memory(run, keys=["时段"]))
+
+
+def test_upgrade_backs_up_then_adds_history_content_without_losing_rows(tmp_path):
+    import sqlite3
+    from personal_agent.store import Store
+    path = tmp_path / "data" / "state.sqlite"
+    old = Store(path)
+    saved = old.save_memory("local", key="称呼", value="叫我小林", purpose="对话")
+    gone = old.save_memory("local", key="旧事", value="不要了", purpose="对话")
+    old.delete_memory("local", gone["id"], expected_version=gone["version"])
+    old.close()
+    # Rebuild the table as version 12 had it: no content column.
+    db = sqlite3.connect(path)
+    db.executescript("""CREATE TABLE mc_old(id INTEGER PRIMARY KEY,memory_id TEXT NOT NULL,version INTEGER NOT NULL,action TEXT NOT NULL,actor TEXT NOT NULL,created REAL NOT NULL);
+        INSERT INTO mc_old SELECT id,memory_id,version,action,actor,created FROM memory_changes; DROP TABLE memory_changes; ALTER TABLE mc_old RENAME TO memory_changes; PRAGMA user_version=12;""")
+    before = {t: db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("memories", "memory_changes", "messages")}
+    db.close()
+    upgraded = Store(path)
+    try:
+        assert list((path.parent / "backups").glob("state-v12-*.sqlite")), "the old ledger is copied aside first"
+        assert {t: upgraded.one(f"SELECT COUNT(*) n FROM {t}")["n"] for t in before} == before
+        history = {h["action"]: h for h in next(m for m in upgraded.memory_items("local") if m["key"] == "称呼")["history"]}
+        assert history["create"]["value"] == "叫我小林", "the current version's content is filled in from the memory itself"
+        deleted = next(m for m in upgraded.memory_items("local") if m["key"] == "旧事")["history"]
+        assert [h["value"] for h in deleted] == [None, None], "content that was never recorded stays unknown, not invented"
+        assert upgraded.save_memory("local", key="称呼", value="叫我林工", purpose="对话", expected_version=saved["version"])["version"] == 2
+    finally:
+        upgraded.close()

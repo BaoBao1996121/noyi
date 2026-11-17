@@ -42,6 +42,7 @@
 .memory-column h3,.memory-group h3{font-size:13px;margin:0 0 8px}
 .memory-group h3 .muted,.memory-column h3 .muted{font-weight:normal;font-size:11px}
 .memory-source{display:block;font-size:11px;line-height:1.6;margin-top:4px;overflow-wrap:anywhere}
+.memory-history{margin-top:6px;font-size:12px}.memory-history ol{margin:4px 0 0;padding-left:18px}.memory-history li{margin-bottom:4px;white-space:pre-wrap;overflow-wrap:anywhere}
 .memory-badge{display:inline-block;font-size:11px;color:#8a5a00;background:#fff4dc;border-radius:4px;padding:1px 6px;margin-top:4px}
 .memory-target{font-size:12px;line-height:1.6;margin:4px 0;overflow-wrap:anywhere}
 .memory-proposal p{font-size:13px;line-height:1.7}

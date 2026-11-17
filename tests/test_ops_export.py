@@ -13,7 +13,7 @@ from personal_agent.webui import Console
 
 # Tables that hold the user's words, health data, photos or memory: every column private.
 MUST_BE_PRIVATE = {"health_profile", "health_metrics", "health_meals", "health_exercise", "health_nightly", "health_alerts",
-                   "messages", "memories", "memory_candidates", "memory_proposals", "uploads", "attentions",
+                   "messages", "memories", "memory_candidates", "memory_proposals", "memory_changes", "uploads", "attentions",
                    "conversation_inputs", "commitments", "commitment_events", "ingress_receipts", "answer_receipts",
                    "goals", "goal_history", "user_feedback", "memory_search_content", "local_metadata"}
 

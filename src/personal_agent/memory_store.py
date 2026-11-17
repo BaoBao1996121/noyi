@@ -93,7 +93,8 @@ class MemoryStore:
             self._migrate_memory()
             for sql in (
                 MEMORIES_SQL, PROPOSALS_SQL,
-                "CREATE TABLE IF NOT EXISTS memory_changes(id INTEGER PRIMARY KEY,memory_id TEXT NOT NULL,version INTEGER NOT NULL,action TEXT NOT NULL,actor TEXT NOT NULL,created REAL NOT NULL)",
+                # value: what this version said (NULL for a deletion, or when it was never recorded).
+                "CREATE TABLE IF NOT EXISTS memory_changes(id INTEGER PRIMARY KEY,memory_id TEXT NOT NULL,version INTEGER NOT NULL,action TEXT NOT NULL,actor TEXT NOT NULL,created REAL NOT NULL,value TEXT)",
                 "CREATE TABLE IF NOT EXISTS memory_loads(id INTEGER PRIMARY KEY,run_id TEXT NOT NULL,collection_id TEXT NOT NULL,state TEXT NOT NULL,manifest TEXT NOT NULL,created REAL NOT NULL)",
                 # Silent candidates: inferred, never resident, never shown as memory.
                 "CREATE TABLE IF NOT EXISTS memory_candidates(id TEXT PRIMARY KEY,collection_id TEXT NOT NULL,kind TEXT NOT NULL,key TEXT NOT NULL,value TEXT NOT NULL,subject TEXT,keywords TEXT,expires_at REAL,evidence TEXT NOT NULL,correction INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL,proposal_id TEXT,created REAL NOT NULL,updated REAL NOT NULL)",
@@ -152,6 +153,12 @@ class MemoryStore:
                                 (p["id"], collection, p["room_id"], p["actor_id"], p["run_id"], p["scope_revision"], p["key"], p["value"], p["purpose"],
                                  encode([{"message_id": p["source_ref"]}]), p["source_ref"], p["expected_version"], p["state"], p["created"]))
             self.db.execute("DROP TABLE memory_proposals_legacy")
+        if "memory_changes" in tables and "value" not in {c["name"] for c in self.all("PRAGMA table_info(memory_changes)")}:
+            # Older versions only kept version numbers. The current content is
+            # known, so its own version gets it; earlier content was never
+            # recorded and stays NULL rather than being guessed.
+            self.db.execute("ALTER TABLE memory_changes ADD COLUMN value TEXT")
+            self.db.execute("UPDATE memory_changes SET value=(SELECT m.value FROM memories m WHERE m.id=memory_changes.memory_id AND m.version=memory_changes.version AND m.state='active')")
 
     # ---- scope -----------------------------------------------------------
     def memory_collection(self, room, account="local-user"):
@@ -256,9 +263,10 @@ class MemoryStore:
         collection = self.memory_collection(room, account)
         order = {k: i for i, k in enumerate(KINDS)}
         rows = [self._decorate(r) for r in self.all("SELECT * FROM memories WHERE collection_id=? ORDER BY updated DESC,id", (collection,))]
-        used = self.memory_last_used(collection)
+        used, history = self.memory_last_used(collection), self.memory_history(collection)
         for row in rows:
             row["last_used"] = used.get(row["id"])
+            row["history"] = history.get(row["id"], [])
         return sorted(rows, key=lambda r: order.get(r["kind"], 9))
 
     def memory_galaxy(self, room, *, account="local-user"):
@@ -272,9 +280,7 @@ class MemoryStore:
         """
         collection = self.memory_collection(room, account)
         now = time.time()
-        history = {}
-        for change in self.all("SELECT memory_id,version,action,created FROM memory_changes WHERE memory_id IN (SELECT id FROM memories WHERE collection_id=?) ORDER BY created,id", (collection,)):
-            history.setdefault(change["memory_id"], []).append({"version": change["version"], "action": change["action"], "at": change["created"]})
+        history = self.memory_history(collection)
         used = self.memory_last_used(collection)
         stars = []
         for row in self.all("SELECT * FROM memories WHERE collection_id=? ORDER BY created,id", (collection,)):
@@ -316,6 +322,15 @@ class MemoryStore:
             for a, b in zip(members, members[1:]):
                 link(kind, a, b, label if kind == "keyword" else None)
         return {"now": now, "kinds": KINDS, "stars": stars, "links": links}
+
+    def memory_history(self, collection):
+        """Every version of every item in one collection, with what it said.
+
+        Shown to the user only; models read current values through read_memory."""
+        history = {}
+        for change in self.all("SELECT memory_id,version,action,created,value FROM memory_changes WHERE memory_id IN (SELECT id FROM memories WHERE collection_id=?) ORDER BY created,id", (collection,)):
+            history.setdefault(change["memory_id"], []).append({"version": change["version"], "action": change["action"], "at": change["created"], "value": change["value"]})
+        return history
 
     def memory_last_used(self, collection, since=None):
         """When each item was last actually handed to a model (from load manifests)."""
@@ -378,7 +393,7 @@ class MemoryStore:
                       encode(keywords) if keywords else None, origin, encode(evidence))
             updates = ",".join(f"{c}=excluded.{c}" for c in MEMORY_COLUMNS.split(",") if c not in {"id", "collection_id", "key", "owner", "created"})
             self.db.execute(f"INSERT INTO memories({MEMORY_COLUMNS}) VALUES({','.join('?' * 22)}) ON CONFLICT(collection_id,key) DO UPDATE SET {updates}", values)
-            self.db.execute("INSERT INTO memory_changes(memory_id,version,action,actor,created) VALUES(?,?,?,?,?)", (mid, version, "restore" if old and old["state"] == "deleted" else "correct" if old else "create", account, now))
+            self.db.execute("INSERT INTO memory_changes(memory_id,version,action,actor,created,value) VALUES(?,?,?,?,?,?)", (mid, version, "restore" if old and old["state"] == "deleted" else "correct" if old else "create", account, now, value.strip()))
             self.db.execute("UPDATE memory_proposals SET state='superseded',decided=? WHERE collection_id=? AND key=? AND op='add' AND state='pending'", (now, collection, key))
             self._index_memory(mid)
             if old and old["state"] == "active":
@@ -395,7 +410,7 @@ class MemoryStore:
                 return {"id": memory_id, "version": old["version"], "state": "deleted"}
             version, now = old["version"] + 1, time.time()
             self.db.execute("UPDATE memories SET state='deleted',value=NULL,version=?,updated=? WHERE id=?", (version, now, memory_id))
-            self.db.execute("INSERT INTO memory_changes(memory_id,version,action,actor,created) VALUES(?,?,?,?,?)", (memory_id, version, "delete", account, now))
+            self.db.execute("INSERT INTO memory_changes(memory_id,version,action,actor,created,value) VALUES(?,?,?,?,?,NULL)", (memory_id, version, "delete", account, now))
             self.db.execute("UPDATE memory_proposals SET state='superseded',decided=? WHERE collection_id=? AND key=? AND op='add' AND state='pending'", (now, collection, old["key"]))
             self._index_memory(memory_id)
             self._invalidate_collection(collection, "memory_deleted")
@@ -413,7 +428,7 @@ class MemoryStore:
             now = time.time()
             expiry = max(now, old["expires_at"] or now) + days * DAY
             self.db.execute("UPDATE memories SET expires_at=?,version=version+1,updated=? WHERE id=?", (expiry, now, memory_id))
-            self.db.execute("INSERT INTO memory_changes(memory_id,version,action,actor,created) VALUES(?,?,?,?,?)", (memory_id, old["version"] + 1, "renew", account, now))
+            self.db.execute("INSERT INTO memory_changes(memory_id,version,action,actor,created,value) VALUES(?,?,?,?,?,?)", (memory_id, old["version"] + 1, "renew", account, now, old["value"]))
         return {"id": memory_id, "version": old["version"] + 1, "state": "active", "expires_at": expiry}
 
     # ---- reads -----------------------------------------------------------

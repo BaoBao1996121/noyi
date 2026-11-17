@@ -219,11 +219,13 @@ const MEMORY_KINDS=[['rule','规则','以后都要这样做'],['preference','偏
 const kindLabel=k=>(MEMORY_KINDS.find(x=>x[0]===k)||[k,k])[1];
 const dateLabel=t=>t?new Date(t*1000).toLocaleDateString('zh-CN'):'';
 function memorySource(m){const origin=m.origin?esc(m.origin):m.source_type==='user_explicit'?'你明确保存':'你确认的建议';return `<small class="muted memory-source">${m.quote?`「${esc(m.quote)}」 · `:''}${origin} · ${esc(timeLabel(m.updated||m.created))}</small>`;}
+const MEMORY_ACTIONS={create:'新建',correct:'修改',delete:'删除',restore:'明确恢复',renew:'续期'};
+function memoryHistory(m){const h=m.history||[];return h.length>1?`<details class="memory-history"><summary>看历次版本（${h.length}）</summary><ol>${h.slice().reverse().map(v=>`<li><small class="muted">版本 ${v.version} · ${esc(MEMORY_ACTIONS[v.action]||v.action)} · ${esc(timeLabel(v.at))}</small>${v.value?`<div>${esc(v.value)}</div>`:v.action==='delete'?'':'<div class="muted">这一版的内容当时没有留存</div>'}</li>`).join('')}</ol></details>`:'';}
 function memoryCard(m){
   const status=m.state==='deleted'?'<span class="muted">已删除 · 已停止加载旧内容</span>':m.expired?`<span class="memory-badge">已于 ${dateLabel(m.expires_at)} 到期 · 已停用</span>`:'';
   const value=m.state==='deleted'?'':`<p>${esc(m.value)}</p>`;
   const extra=[m.kind==='ongoing'&&!m.expired&&m.expires_at?`到 ${dateLabel(m.expires_at)}`:'',m.keywords?.length?'关键词：'+m.keywords.map(esc).join('、'):'',m.subject?'说的是：'+esc(m.subject):'',m.state==='active'?(m.last_used?'最近用过：'+esc(timeLabel(m.last_used)):'90 天内没用到'):''].filter(Boolean).join(' · ');
-  return `<article class="detail-card memory-card"><strong>${esc(m.key)}</strong><span class="memory-version">版本 ${m.version}</span>${status}${value}${extra?`<small class="muted">${extra}</small>`:''}${memorySource(m)}<div class="task-buttons"><button class="button" data-edit-memory="${m.id}">${m.state==='deleted'?'明确恢复':'修改'}</button>${m.state==='active'&&m.kind==='ongoing'?`<button class="button" data-renew-memory="${m.id}">续 30 天</button>`:''}${m.state==='active'?`<button class="button" data-delete-memory="${m.id}">删除</button>`:''}</div></article>`;
+  return `<article class="detail-card memory-card"><strong>${esc(m.key)}</strong><span class="memory-version">版本 ${m.version}</span>${status}${value}${extra?`<small class="muted">${extra}</small>`:''}${memorySource(m)}${memoryHistory(m)}<div class="task-buttons"><button class="button" data-edit-memory="${m.id}">${m.state==='deleted'?'明确恢复':'修改'}</button>${m.state==='active'&&m.kind==='ongoing'?`<button class="button" data-renew-memory="${m.id}">续 30 天</button>`:''}${m.state==='active'?`<button class="button" data-delete-memory="${m.id}">删除</button>`:''}</div></article>`;
 }
 function proposalEvidence(p){const quotes=(p.evidence||[]).filter(e=>e.quote);return quotes.length?`<small class="muted memory-source">你说过：${quotes.slice(0,3).map(e=>`「${esc(e.quote)}」${e.created?' '+esc(timeLabel(e.created)):''}`).join('；')}</small>`:'';}
 function proposalCard(p){

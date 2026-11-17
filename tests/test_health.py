@@ -193,7 +193,7 @@ def test_upgrade_to_v12_backs_up_first_and_keeps_health_out_of_older_copies(tmp_
     upgraded = Store(path)
     try:
         assert list((path.parent / "backups").glob("state-v11-*.sqlite"))
-        assert upgraded.one("PRAGMA user_version")["user_version"] == 12
+        assert upgraded.one("PRAGMA user_version")["user_version"] == Store.SCHEMA_VERSION
         assert upgraded.one("SELECT name FROM sqlite_master WHERE name='health_meals'")
     finally:
         upgraded.close()

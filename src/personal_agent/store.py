@@ -340,7 +340,7 @@ from .push import PushStore
 class Store(PushStore, HealthStore, ReplayStore, CommitmentStore, SpeechStore, ConversationStore, ReviewStore, AdmissionStore, GoalStore, MemoryStore, IdentityStore, LifecycleStore, CollaborationStore, BaseStore):
     """Durable task ledger with versioned collaboration protocols."""
 
-    SCHEMA_VERSION = 12  # 12: local-only health records; 11: operations.ended for replay; 10: commitment ledger; 9: shared personal memory
+    SCHEMA_VERSION = 13  # 13: memory history keeps each version's content; 12: local-only health records; 11: operations.ended for replay; 10: commitment ledger; 9: shared personal memory
 
     def __init__(self, path):
         # Any older ledger is copied aside before any version changes it.

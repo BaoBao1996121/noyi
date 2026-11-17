@@ -19,6 +19,7 @@
 .galaxy-card-head .muted{font-size:11px}
 .galaxy-dot{width:10px;height:10px;border-radius:50%;flex:none}
 .galaxy-history{margin:0;padding-left:2px;list-style:none;font-size:12px;color:#555}
+.galaxy-history-value{color:#222;margin:2px 0 6px;white-space:pre-wrap;overflow-wrap:anywhere}
 .galaxy-related{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
 .galaxy.full{position:fixed;inset:0;z-index:50;background:#fcfcfc;padding:20px 40px;overflow:auto;display:grid;grid-template-columns:1fr 340px;grid-template-rows:auto 1fr auto;gap:10px 16px}
 .galaxy.full .galaxy-bar{grid-column:1/3}
