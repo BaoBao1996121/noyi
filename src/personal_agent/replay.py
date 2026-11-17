@@ -30,7 +30,7 @@ TRIGGERS = {"user_task": "你交代的", "conversation": "对话里接下的", "
             "followup": "你补充了要求", "child_result": "后台协作有结果", "answer": "你回答了问题"}
 OP_STATES = {"succeeded": "成功", "failed": "失败", "interrupted": "中断", "running": "进行中"}
 REQUEST_STATES = {"completed": "完成", "failed": "失败", "unknown": "结果未知", "dispatching": "进行中"}
-DONE_REASONS = {"accepted", "following_action_completed"}
+DONE_REASONS = {"accepted", "following_action_completed", "answered"}
 TOLD_KINDS = {"blocked", "overdue_told", "blocked_told", "disclosed", "unable", "released"}
 
 

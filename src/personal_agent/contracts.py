@@ -83,7 +83,7 @@ class TaskSpec:
     conversation: list[dict] = field(default_factory=list)
 
     def validate(self) -> None:
-        if self.result_kind not in {'artifact', 'action_receipt'}:
+        if self.result_kind not in {'artifact', 'action_receipt', 'answer'}:
             raise ValueError('invalid result contract')
         if not isinstance(self.objective, str) or not self.objective.strip():
             raise ValueError("objective must not be empty")

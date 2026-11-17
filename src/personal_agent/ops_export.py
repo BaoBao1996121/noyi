@@ -79,7 +79,7 @@ ENUMS = {
     "runs.end_reason": {"accepted", "conversation_reply", "scope_changed", "waiting_user", "requirements_updated", "memory_curation",
                         "interrupted", "time_budget", "timeout", "model_or_runtime_error", "model_budget", "tool_budget",
                         "stagnation_budget", "output_limit", "no_accepted_artifact", "engine_ended_without_acceptance",
-                        "unable_reported", "cancelled", "waiting_children", "waiting_dependencies", "action_completed", "chat_tool_denied"},
+                        "unable_reported", "cancelled", "waiting_children", "waiting_dependencies", "action_completed", "chat_tool_denied", "answered"},
     "runs.stop_reason": {"scope_changed", "user_stop", "cancel", "requirements_updated", "memory_changed"},
     "model_requests.state": {"dispatching", "completed", "failed", "unknown"},
     "steps.kind": {"model", "acceptance", "recovery", "conversation_rejected", "nudge", "tool_error"},
@@ -113,7 +113,8 @@ def _tool_names():
     from .health import TOOLS as HEALTH_TOOLS
     from .web_tools import FETCH, SEARCH
     from .conversation import CONVERSATION_SCHEMA
-    names = {s.name for p in builtin_plugins() for s in p.tools}
+    from .runtime import ANSWER_TOOL
+    names = {s.name for p in builtin_plugins() for s in p.tools} | {ANSWER_TOOL["function"]["name"]}
     names |= {t["function"]["name"] for t in HEALTH_TOOLS + [FETCH, SEARCH] + CONVERSATION_SCHEMA}
     return names
 

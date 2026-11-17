@@ -363,6 +363,9 @@ class CommitmentStore:
             action = self.one("SELECT result FROM operations WHERE run_id=? AND tool='complete_action' AND status='succeeded' ORDER BY created DESC LIMIT 1", (run["id"],))
             for ref in (json.loads(action["result"]).get("effect_refs", []) if action else []):
                 evidence.append({"kind": "operation", "task_id": task["id"], "id": ref})
+            answered = self.one("SELECT id FROM operations WHERE run_id=? AND tool='deliver_answer' AND status='succeeded' ORDER BY created DESC LIMIT 1", (run["id"],))
+            if answered:
+                evidence.append({"kind": "operation", "task_id": task["id"], "id": answered["id"]})
             due = list(self._open_for_task(task["id"]))
             for row in self.all("SELECT * FROM commitments WHERE task_id=? AND state='open' AND kind IN ('scheduled','standing')", (task["id"],)):
                 self._commitment_event(row, "arrangement_confirmed", {"delivery_id": delivery["id"] if delivery else None, "evidence": evidence})
