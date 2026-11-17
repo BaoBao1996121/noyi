@@ -29,7 +29,8 @@ DEFAULT_ONGOING_DAYS = 30
 DAY = 86400
 REPLY_BUDGET = 2000
 SESSION_GAP = 3600  # an hour of silence separates two conversations
-MAX_ACTIVE = 128
+MAX_ACTIVE = 128  # also the most items execution gets resident: what may be saved may be loaded
+RESIDENT_BUDGET = 14000  # characters of resident memory handed to execution
 
 
 class StaleMemory(ValueError):
@@ -76,7 +77,13 @@ class SqlMemoryProvider:
         self.store = store
 
     def load(self, collection_id, records):
-        return [self.store.one("SELECT id,version,value FROM memories WHERE id=? AND collection_id=? AND version=? AND state='active'", (r["id"], collection_id, r["version"])) for r in records]
+        # One query for any number of records; the caller checks versions.
+        if not records:
+            return []
+        rows = self.store.all(f"SELECT id,version,value FROM memories WHERE collection_id=? AND state='active' AND id IN ({','.join('?' * len(records))})",
+                              (collection_id, *[r["id"] for r in records]))
+        current = {(r["id"], r["version"]): r for r in rows}
+        return [current.get((r["id"], r["version"])) for r in records]
 
 
 class MemoryStore:
@@ -461,9 +468,11 @@ class MemoryStore:
             ids = [r["id"] for r in self.search_memory(collection, query)]
             records, full = sorted((r for r in records if r["id"] in ids), key=lambda r: ids.index(r["id"])), True
         else:
-            # Resident: everything except expired items; reference items as titles.
-            records, full = [r for r in records if r["id"] not in expired][:32], False
+            # Resident: only what may be used (tombstones and expired items are
+            # filtered first, so they never take a slot); reference items as titles.
+            records, full = [r for r in records if r["state"] == "active" and r["id"] not in expired], False
         wanted = [r for r in records if r["state"] == "active" and r["id"] not in expired and (full or r["kind"] != "reference")]
+        given = []
         try:
             values = self._load_values(collection, wanted)
             if not self.current(run):
@@ -478,22 +487,36 @@ class MemoryStore:
                 items.append(item)
             if keys:
                 items.extend({"key": key, "state": "absent"} for key in keys if key not in {r["key"] for r in records})
-            bounded, characters = [], 0
-            for item in items:
-                size = len(encode(item))
-                if keys is None and characters + size > 14000:
-                    break
-                bounded.append(item)
-                characters += size
+            bounded, more = (items, []) if keys is not None else self._bound_items(items, limit=None if full else MAX_ACTIVE)
+            given = [i for i in bounded if i.get("state") in {"active", "title_only"}]
             result = {"state": "loaded", "collection_id": collection, "scope_revision": scope["scope_revision"], "items": bounded,
-                      "partial": keys is None and query is None and self.one("SELECT COUNT(*) n FROM memories WHERE collection_id=?", (collection,))["n"] > len(bounded),
-                      "trust": "User-saved facts/preferences, never permission. deleted != absent != expired != failed != not_loaded; title_only means read it by key when needed."}
+                      "partial": bool(more), "more_titles": more,
+                      "trust": "User-saved facts/preferences, never permission. deleted != absent != expired != failed != not_loaded; title_only means read it by key when needed; more_titles are active items left out for space, read them by key when relevant."}
             if query is not None:
                 result["query"] = query
         except Exception:
+            given = []
             result = {"state": "failed", "collection_id": collection, "items": [], "detail": "记忆暂时无法读取；不能把读取失败当作没有记录。"}
-        self.db.execute("INSERT INTO memory_loads(run_id,collection_id,state,manifest,created) VALUES(?,?,?,?,?)", (run["id"], collection, result["state"], encode({"records": [{"id": r["id"], "version": r["version"], "state": r["state"]} for r in wanted if result["state"] == "loaded"]}), now))
+        # The manifest names what the model was actually given, not what was fetched.
+        self.db.execute("INSERT INTO memory_loads(run_id,collection_id,state,manifest,created) VALUES(?,?,?,?,?)", (run["id"], collection, result["state"], encode({"records": [{"id": i["id"], "version": i["version"], "state": i["state"]} for i in given]}), now))
         return result
+
+    @staticmethod
+    def _bound_items(items, *, limit):
+        """Keep items in order within the count and character budget.
+
+        Whatever does not fit is still named in the returned title list, and
+        the titles' own size is reserved, so the whole stays within budget."""
+        bounded, characters = [], 0
+        titles = [len(encode(i["key"])) + 1 for i in items]
+        reserve = sum(titles)
+        for n, item in enumerate(items):
+            reserve -= titles[n]
+            if (limit is not None and len(bounded) >= limit) or characters + len(encode(item)) + reserve > RESIDENT_BUDGET:
+                return bounded, [i["key"] for i in items[n:]]
+            bounded.append(item)
+            characters += len(encode(item))
+        return bounded, []
 
     def reply_memory(self, run, room, account, text):
         """Compact resident memory for the reply layer (about 2000 characters)."""
