@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import Layout, TAG, bootstrap, read_json, release_env, release_python, write_json  # noqa: E402
+from common import Layout, RELEASE, bootstrap, read_json, release_env, release_python, write_json  # noqa: E402
 
 UPGRADE_RESULT = {"ok", "rehearsal_failed", "health_failed_rolled_back", "rolled_back", "none", "install"}
 
@@ -32,9 +32,9 @@ def service_status(layout, cfg):
         if type(sup.get(key)) is int:
             status[key] = sup[key]
     tag = sup.get("tag")
-    status["tag"] = tag if isinstance(tag, str) and TAG.fullmatch(tag) else "none"
+    status["tag"] = tag if isinstance(tag, str) and RELEASE.fullmatch(tag) else "none"
     prev = up.get("previous_tag")
-    if isinstance(prev, str) and TAG.fullmatch(prev):
+    if isinstance(prev, str) and RELEASE.fullmatch(prev):
         status["previous_tag"] = prev
     if up.get("last_result") in UPGRADE_RESULT:
         status["upgrade_result"] = up["last_result"]

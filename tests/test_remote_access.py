@@ -9,6 +9,37 @@ from personal_agent.webui import create_app
 HOST = "noyi-home.tail1234.ts.net"
 
 
+async def test_home_update_requires_pairing_token_confirmation_and_fixed_target(client, tmp_path):
+    import json
+    import os
+    from personal_agent.webui import CONSOLE
+    updates = client.app[CONSOLE].home_updates
+    updates.root = tmp_path
+    (tmp_path / "supervisor.json").write_text(json.dumps({"supervisor_pid": os.getpid()}))
+    assert (await client.get('/api/home-update', headers=remote())).status == 401
+    cookie, _ = await pair(client)
+    boot = await (await client.get('/api/bootstrap', headers=remote(cookie=cookie))).json()
+    headers = remote({'Origin': 'https://' + HOST, 'X-PA-Token': boot['token']}, cookie)
+    assert (await client.get('/api/home-update', headers=headers)).status == 200
+    assert (await client.post('/api/home-update', json={'confirm': True}, headers=remote(cookie=cookie))).status == 403
+    assert (await client.post('/api/home-update', json={'confirm': True}, headers={**headers, 'Origin':'https://evil.example'})).status == 403
+    for body in ({}, {'confirm': True, 'ref':'attacker'}, {'confirm': True, 'root':'other'}):
+        assert (await client.post('/api/home-update', json=body, headers=headers)).status == 400
+    for repeat in (False, True):
+        r = await client.post('/api/home-update', json={'confirm': True}, headers=headers)
+        assert r.status == 202
+        assert (await r.json())['already_running'] == repeat
+    assert json.loads((tmp_path / 'update-request.json').read_text()) == {}
+    client.app[CONSOLE].store.db.execute('UPDATE paired_devices SET revoked=1')
+    assert (await client.post('/api/home-update', json={'confirm': True}, headers=headers)).status == 401
+
+
+async def test_home_update_disabled_without_home_deployment(client):
+    token = (await (await client.get('/api/bootstrap')).json())['token']
+    assert (await (await client.get('/api/home-update')).json()) == {'available': False}
+    assert (await client.post('/api/home-update', json={'confirm': True}, headers={'X-PA-Token':token})).status == 400
+
+
 @pytest.fixture
 async def client(store, tmp_path, monkeypatch):
     monkeypatch.setenv("NOYI_REMOTE_HOSTS", HOST)

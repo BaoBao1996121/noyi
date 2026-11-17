@@ -18,14 +18,17 @@ Layout under the root (default D:\\Noyi):
 from __future__ import annotations
 
 import json
+from http.client import HTTPException
 import os
 import re
+import sys
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 TAG = re.compile(r"home-(\d{8})-(\d{1,3})")
+RELEASE = re.compile(r"(?:home-\d{8}-\d{1,3}|main-[0-9a-f]{40})")
 DEFAULTS = {
     "port": 8765,
     "install": True,              # create the venv and run npm ci for each release
@@ -36,7 +39,7 @@ DEFAULTS = {
     "crash_limit": 5,
     "crash_window": 600,
     "keep_backups": 10,
-    "smoke": ["tests/test_store.py", "tests/test_health.py", "tests/test_ops_export.py"],
+    "smoke": ["tests/test_store.py", "tests/test_health.py", "tests/test_ops_export.py", "tests/test_remote_access.py"],
 }
 
 
@@ -57,7 +60,7 @@ class Layout:
         self.lock = self.root / "upgrade.lock"
 
     def release(self, tag):
-        if not TAG.fullmatch(tag):
+        if not RELEASE.fullmatch(tag):
             raise ValueError("not a home release tag: " + tag)
         return self.releases / tag
 
@@ -94,6 +97,8 @@ def release_python(layout, cfg, tag):
 
 def release_env(layout, cfg, tag):
     env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+    env["NOYI_HOME_ROOT"] = str(layout.root)
+    env["NOYI_HOME_PYTHON"] = sys.executable
     if cfg.get("pythonpath_src"):
         env["PYTHONPATH"] = str(layout.release(tag) / "src")
     return env
@@ -110,7 +115,7 @@ def http(port, path, *, body=None, token=None, timeout=3):
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=None if body is None else json.dumps(body).encode(), headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=timeout) as response:
             raw = response.read()
             try:
                 return response.status, json.loads(raw)
@@ -118,7 +123,7 @@ def http(port, path, *, body=None, token=None, timeout=3):
                 return response.status, None
     except urllib.error.HTTPError as exc:
         return exc.code, None
-    except (OSError, ValueError):
+    except (OSError, ValueError, HTTPException):
         return 0, None
 
 

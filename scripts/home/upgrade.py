@@ -21,6 +21,7 @@ Run every 10 minutes by the scheduled task "\\Noyi\\Upgrade", and once by the in
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -56,6 +57,32 @@ class Upgrader:
         self.state.setdefault("failed", {})
 
     # ---- choosing -----------------------------------------------------------------
+    def progress(self, phase, target=None):
+        write_json(self.layout.root / "update-progress.json", {
+            "phase": phase, "target": target, "pid": os.getpid(), "updated": iso()})
+
+    def main_candidate(self):
+        code, out = git(self.layout, "fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main")
+        if code:
+            raise UpgradeFailed("none", "fetch", out)
+        code, sha = git(self.layout, "rev-parse", "refs/remotes/origin/main^{commit}")
+        sha = sha.strip()
+        if code or len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
+            raise UpgradeFailed("none", "fetch", "invalid main commit")
+        current = (read_json(self.layout.current, {}) or {}).get("tag")
+        if current:
+            code, old = run(["git", "-C", str(self.layout.release(current)), "rev-parse", "HEAD"])
+            if code:
+                raise UpgradeFailed("none", "current", "cannot identify current commit")
+            if old.strip() == sha:
+                return []
+            if git(self.layout, "merge-base", "--is-ancestor", old.strip(), sha)[0]:
+                raise UpgradeFailed("none", "history", "main is not a forward update")
+        target = "main-" + sha
+        if target in self.state["failed"]:
+            raise UpgradeFailed("none", "previous_failure", "publish a corrected commit before retrying")
+        return [target]
+
     def candidates(self):
         code, out = git(self.layout, "fetch", "--quiet", "--force", "--tags", "origin", "+refs/heads/main:refs/remotes/origin/main")
         if code:
@@ -64,6 +91,10 @@ class Upgrader:
         tags = sorted((t for t in out.split() if TAG.fullmatch(t)), key=tag_key)
         current = (read_json(self.layout.current, {}) or {}).get("tag")
         newer = [t for t in tags if not current or tag_key(t) > tag_key(current)]
+        if current and current.startswith("main-"):
+            # A periodic tag check must never roll a manually updated main back.
+            newer = [t for t in newer if git(self.layout, "merge-base", "--is-ancestor", current[5:], t + "^{commit}")[0] == 0
+                     and git(self.layout, "rev-parse", t + "^{commit}")[1].strip() != current[5:]]
         good = []
         for tag in newer:
             if tag in self.state["failed"]:
@@ -81,10 +112,16 @@ class Upgrader:
         if target.exists():
             shutil.rmtree(target)                         # a half-prepared earlier attempt
         target.parent.mkdir(parents=True, exist_ok=True)
-        code, out = run(["git", "clone", "--quiet", "--no-hardlinks", "--branch", tag, str(self.layout.repo), str(target)], timeout=600)
+        if tag.startswith("main-"):
+            code, out = run(["git", "clone", "--quiet", "--no-hardlinks", "--no-checkout", str(self.layout.repo), str(target)], timeout=600)
+            if not code:
+                code, out = run(["git", "-C", str(target), "checkout", "--quiet", "--detach", tag[5:]], timeout=600)
+        else:
+            code, out = run(["git", "clone", "--quiet", "--no-hardlinks", "--branch", tag, str(self.layout.repo), str(target)], timeout=600)
         if code:
             raise UpgradeFailed("rehearsal_failed", "checkout", out)
         if self.cfg["install"]:
+            self.progress("installing", tag)
             py = sys.executable
             steps = [[py, "-m", "venv", str(target / ".venv")],
                      [release_python(self.layout, self.cfg, tag), "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "-r", "requirements-lock.txt"],
@@ -95,6 +132,7 @@ class Upgrader:
                 if code:
                     raise UpgradeFailed("rehearsal_failed", "install", out)
         if self.cfg["smoke"]:
+            self.progress("testing", tag)
             code, out = run([release_python(self.layout, self.cfg, tag), "-m", "pytest", "-q", "-p", "no:cacheprovider", *self.cfg["smoke"]],
                             cwd=target, env=release_env(self.layout, self.cfg, tag), timeout=1800)
             if code:
@@ -147,7 +185,7 @@ class Upgrader:
             shutil.copyfile(backup, place / "state.sqlite")
         port = self.cfg["port"] + 1
         env = release_env(self.layout, self.cfg, tag)
-        for name in ("NOYI_DEEPSEEK_KEY", "NOYI_REMOTE_HOSTS"):
+        for name in ("NOYI_DEEPSEEK_KEY", "NOYI_REMOTE_HOSTS", "NOYI_HOME_ROOT", "NOYI_HOME_PYTHON"):
             env.pop(name, None)                            # the copy never talks to a model or a phone
         cmd = [release_python(self.layout, self.cfg, tag), "-m", "personal_agent", "--data", str(place), "web", "--port", str(port), "--rehearsal"]
         with (place / "rehearsal.log").open("wb") as log:
@@ -238,10 +276,11 @@ class Upgrader:
         self.prune_backups()
 
     # ---- the whole thing ---------------------------------------------------------------
-    def upgrade(self, tag=None):
+    def upgrade(self, tag=None, *, main=False):
         previous = (read_json(self.layout.current, {}) or {}).get("tag")
+        self.progress("checking")
         try:
-            tags = [tag] if tag else self.candidates()
+            tags = self.main_candidate() if main else ([tag] if tag else self.candidates())
         except UpgradeFailed as exc:
             return self.record("none", None, previous, f"{exc.stage}: {exc.detail[-300:]}")
         if not tags:
@@ -249,9 +288,13 @@ class Upgrader:
         tag = tags[-1]
         self.log(f"upgrading {previous or '(nothing)'} -> {tag}")
         try:
+            self.progress("preparing", tag)
             self.prepare(tag)
+            self.progress("backup", tag)
             first = self.backup("pre-" + tag)
+            self.progress("rehearsal", tag)
             self.rehearse(tag, first)
+            self.progress("switching", tag)
             self.switch(tag, previous)
         except UpgradeFailed as exc:
             self.state["failed"][tag] = {"stage": exc.stage, "at": iso()}
@@ -268,6 +311,7 @@ class Upgrader:
         if result != "none":
             self.state.update({"last_upgrade": now, "last_result": result, "tag": tag, "previous_tag": previous})
         write_json(self.layout.upgrade, self.state)
+        self.progress("done", tag)
         return result
 
 
@@ -275,25 +319,30 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", type=Path, default=Path(r"D:\Noyi"))
     parser.add_argument("--tag", help="upgrade to this tag (still checked against origin/main)")
+    parser.add_argument("--main", action="store_true", help="manually update to the fetched main commit")
     args = parser.parse_args()
     layout = Layout(args.root)
-    try:
-        with open(layout.lock, "x", encoding="utf-8") as lock:
-            lock.write(iso())
-    except FileExistsError:
-        if time.time() - layout.lock.stat().st_mtime < 3 * 3600:
-            print("another upgrade is running")
-            return
-        layout.lock.write_text(iso(), encoding="utf-8")     # left over from a crash hours ago
+    # OS lock survives a service restart and is automatically released on crash.
+    # Never unlink it: removing a locked file allows two concurrent upgraders.
+    from update_lock import acquire, release
+    lock = acquire(layout.lock)
+    if lock is None:
+        print("another upgrade is running")
+        return
     try:
         upgrader = Upgrader(layout)
         if args.tag:
             if not TAG.fullmatch(args.tag) or args.tag not in upgrader.candidates():
                 print(f"{args.tag} is not an eligible release (not newer, failed before, or not on origin/main)")
                 sys.exit(2)
-        print(upgrader.upgrade(args.tag))
+        if args.main and args.tag:
+            parser.error("--main and --tag are mutually exclusive")
+        print(upgrader.upgrade(args.tag, main=args.main))
+    except Exception:
+        write_json(layout.root / "update-progress.json", {"phase": "error", "updated": iso()})
+        raise
     finally:
-        layout.lock.unlink(missing_ok=True)
+        release(lock)
 
 
 if __name__ == "__main__":

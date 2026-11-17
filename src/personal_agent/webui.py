@@ -25,6 +25,7 @@ from .replay import _target as replay_target
 from .remote import COOKIE, COOKIE_MAX_AGE, DEVICE, REMOTE, RemoteConfig, RemoteGate
 from .push import PushChannel, load_vapid
 from .service import FileChannel
+from .home_updates import HomeUpdates
 
 
 WEB = Path(__file__).with_name("web")
@@ -120,6 +121,7 @@ class Console:
         self.run_service = run_service
         self.service_error = None
         self.remote = RemoteGate(store, RemoteConfig.load())
+        self.home_updates = HomeUpdates(self.data)
         self.store.db.execute("CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY,room_id TEXT NOT NULL,account TEXT NOT NULL,name TEXT NOT NULL,path TEXT NOT NULL,sha256 TEXT NOT NULL,bytes INTEGER NOT NULL,created REAL NOT NULL)")
 
     def room(self, room_id="local"):
@@ -325,6 +327,17 @@ async def boot(request):
                               "remote_hosts": sorted(c.remote.config.hosts) if not request.get(REMOTE) else []})
 
 
+async def update_status(request):
+    return web.json_response(request.app[CONSOLE].home_updates.status())
+
+
+async def update_start(request):
+    body = await json_body(request)
+    if body != {"confirm": True}:
+        raise ValueError("请确认更新到 GitHub main 的最新代码")
+    return web.json_response(request.app[CONSOLE].home_updates.request(), status=202)
+
+
 def ledger_version(store, drafts=None):
     """Changes whenever the ledger does (this service's writes or another
     process's) or a reply draft grows."""
@@ -525,7 +538,7 @@ async def shutdown(request):
 
 
 STATIC_FILES = {"index.html", "app.js", "timeline.js", "progress.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
-                "replay-pixel.js", "galaxy.js", "galaxy.css", "mobile.css", "mobile.js", "pair.js", "pair.css", "pair.html", "sw.js",
+                "replay-pixel.js", "galaxy.js", "galaxy.css", "mobile.css", "mobile.js", "updates.js", "pair.js", "pair.css", "pair.html", "sw.js",
                 "icon-192.png", "icon-512.png", "apple-touch-icon.png"}
 
 
@@ -651,6 +664,7 @@ def create_app(store, data, model, *, run_service=True, shutdown_event=None, plu
     app = web.Application(middlewares=[security], client_max_size=MAX_IMAGE_BYTES + 20000)
     app[CONSOLE] = Console(store, data, model, run_service=run_service, shutdown_event=shutdown_event, plugins=plugins)
     app.add_routes([web.get("/", static), web.get("/assets/{name}", static), web.get("/api/bootstrap", boot),
+                    web.get("/api/home-update", update_status), web.post("/api/home-update", update_start),
                     web.get("/manifest.webmanifest", manifest), web.get("/sw.js", service_worker),
                     web.post("/api/pairing", pairing), web.post("/api/pair", pair), web.get("/api/devices", devices), web.post("/api/devices/revoke", revoke_device),
                     web.post("/api/push/subscribe", push_subscribe), web.post("/api/seen", seen), web.post("/api/feedback", feedback),

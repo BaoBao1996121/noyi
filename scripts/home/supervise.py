@@ -48,6 +48,7 @@ class Supervisor:
         self.layout = layout
         self.cfg = layout.config()
         self.proc = None
+        self.update_worker = None
         self.tag = None
         self.started = None
         self.crashes = []          # timestamps, last 24 h
@@ -106,6 +107,31 @@ class Supervisor:
         stop_file = self.layout.root / "stop-supervisor"
         wait_until = 0.0
         while True:
+            if self.update_worker and self.update_worker.poll() is not None:
+                progress = read_json(self.layout.root / "update-progress.json", {})
+                if progress.get("phase") == "starting":
+                    write_json(self.layout.root / "update-progress.json", {"phase": "error", "updated": iso()})
+                self.update_worker = None
+            # The updater must be the supervisor's child, not the web server's:
+            # stopping/killing the old web server must not kill its own updater.
+            request = self.layout.root / "update-request.json"
+            if request.exists():
+                try:
+                    write_json(self.layout.root / "update-progress.json", {"phase": "starting", "pid": os.getpid(), "updated": iso()})
+                    logs = self.layout.data / "logs"
+                    logs.mkdir(parents=True, exist_ok=True)
+                    with (logs / "update.log").open("ab") as log:
+                        worker = subprocess.Popen([sys.executable, str(self.layout.bin / "upgrade.py"),
+                                                   "--root", str(self.layout.root), "--main"],
+                                                  cwd=self.layout.root, stdin=subprocess.DEVNULL,
+                                                  stdout=log, stderr=log,
+                                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                    self.update_worker = worker
+                    # The worker owns progress once it takes the update lock.
+                    request.unlink(missing_ok=True)
+                except OSError:
+                    write_json(self.layout.root / "update-progress.json", {"phase": "error", "updated": iso()})
+                    request.unlink(missing_ok=True)
             if stop_file.exists():
                 self.stop_child()
                 stop_file.unlink(missing_ok=True)

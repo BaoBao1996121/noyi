@@ -179,6 +179,56 @@ def test_upgrade_drill_ok_then_every_failure_keeps_the_ledger(drill):
         "home-20261114-3", "home-20261114-4", "home-20261114-5"}
 
 
+def test_main_update_without_tag_and_no_periodic_downgrade(drill):
+    assert drill.upgrade() == 'install'
+    # Push only a main commit, exactly the user's company-PC workflow.
+    (drill.src / 'VERSION').write_text('2')
+    git(drill.src, 'add', '-A')
+    git(drill.src, 'commit', '-qm', 'untagged main update')
+    git(drill.src, 'push', '-q', 'origin', 'main')
+    import shutil
+    drill.layout.bin.mkdir(exist_ok=True)
+    for name in ('upgrade.py', 'common.py', 'update_lock.py'):
+        shutil.copyfile(HOME / name, drill.layout.bin / name)
+    (drill.root / 'update-request.json').write_text('{}')
+    deadline = time.time() + 90
+    while time.time() < deadline:
+        state = read_json(drill.layout.upgrade, {})
+        if state.get('result') == 'ok':
+            break
+        time.sleep(.2)
+    assert state.get('result') == 'ok', (drill.root / 'data/logs/update.log').read_text()
+    current = drill.current()
+    assert current.startswith('main-') and len(current) == 45
+    assert drill.ledger() == (2, [1, 2])
+    assert Upgrader(drill.layout).upgrade(main=True) == 'none'
+    assert drill.upgrade() == 'none' and drill.current() == current
+    # A bad untagged change is rehearsed on a copy and never replaces the app.
+    (drill.src / 'VERSION').write_text('3')
+    (drill.src / 'MODE').write_text('migrate_fail')
+    git(drill.src, 'add', '-A')
+    git(drill.src, 'commit', '-qm', 'bad main update')
+    git(drill.src, 'push', '-q', 'origin', 'main')
+    assert Upgrader(drill.layout).upgrade(main=True) == 'rehearsal_failed'
+    assert drill.current() == current and drill.ledger() == (2, [1, 2])
+    assert Upgrader(drill.layout).upgrade(main=True) == 'none'
+
+
+def test_update_lock_excludes_other_process_and_recovers_after_crash(tmp_path):
+    from update_lock import acquire, release
+    path = tmp_path / 'update.lock'
+    handle = acquire(path)
+    assert handle is not None
+    code = "import sys;sys.path.insert(0,sys.argv[1]);from update_lock import acquire;h=acquire(sys.argv[2]);sys.exit(0 if h is None else 1)"
+    assert subprocess.run([sys.executable, '-c', code, str(HOME), str(path)]).returncode == 0
+    release(handle)
+    crash = "import sys,os;sys.path.insert(0,sys.argv[1]);from update_lock import acquire;h=acquire(sys.argv[2]);os._exit(0 if h else 1)"
+    assert subprocess.run([sys.executable, '-c', crash, str(HOME), str(path)]).returncode == 0
+    handle = acquire(path)
+    assert handle is not None
+    release(handle)
+
+
 def test_supervisor_restarts_after_a_crash_and_stops_a_crash_loop(tmp_path):
     from common import Layout, write_json
     root = tmp_path / "Noyi"

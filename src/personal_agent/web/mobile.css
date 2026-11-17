@@ -1,5 +1,9 @@
 /* Phone layout and the extras in mobile.js. Desktop rules live in style.css. */
 .camera{font-size:19px!important}
+#home-update-version{overflow-wrap:anywhere;font-size:13px;margin-bottom:12px}
+#home-update-status{margin-bottom:8px}
+#home-update-time{display:block;margin-bottom:14px;color:#737373}
+#open-home-update{flex-shrink:0;white-space:nowrap}
 .message.alert .bubble{background:#fbf3e6;border:1px solid #f0dfbf}
 .missed{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f1f6fd;color:#3d5f86;font-size:12px;padding:10px 18px;border-bottom:1px solid #e1ebf7}
 .missed span{flex:1;min-width:180px}
