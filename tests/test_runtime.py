@@ -283,7 +283,9 @@ async def test_truncated_chat_is_not_delivered_as_complete_answer(store, tmp_pat
 
 @pytest.mark.asyncio
 async def test_timeout_during_pending_read_finalizes_operation_as_interrupted(store, tmp_path, spec, monkeypatch):
-    spec.max_seconds = 1
+    # The budget must outlast starting the Pi child (0.3-1 s cold on Windows),
+    # or the deadline fires before the read and the test checks nothing.
+    spec.max_seconds = 3
     submitted = store.submit(spec, nonce="read-timeout")
     entered = asyncio.Event()
 
@@ -294,7 +296,7 @@ async def test_timeout_during_pending_read_finalizes_operation_as_interrupted(st
 
     monkeypatch.setattr(Toolset, "read_source", blocked_read)
     model = ScriptedModel([tool_reply("read_source", {"source_id": "policy"})])
-    await asyncio.wait_for(Runtime(store, tmp_path / "data", model).execute(store.claim()), timeout=5)
+    await asyncio.wait_for(Runtime(store, tmp_path / "data", model).execute(store.claim()), timeout=10)
     assert entered.is_set()
     task = store.task(submitted["task_id"])
     assert task["status"] == "paused" and task["reason"] == "timeout"

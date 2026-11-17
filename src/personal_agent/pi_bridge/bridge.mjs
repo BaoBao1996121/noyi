@@ -108,8 +108,10 @@ export async function runSession(start, rpc, { signal } = {}) {
       throw new BridgeProtocolError('invalid tool schema');
     }
     toolNames.add(fn.name);
+    // The host marks side-effect-free reads `concurrent`. Pi runs a turn's
+    // calls together only when every call in it is such a read.
     return { name: fn.name, label: fn.name, description: fn.description ?? '', parameters: fn.parameters,
-      executionMode: 'sequential', execute: async (id, args) => {
+      executionMode: definition.concurrent === true ? 'parallel' : 'sequential', execute: async (id, args) => {
         executed.add(id);
         const response = await rpc('tool', { call: { id, function: { name: fn.name, arguments: JSON.stringify(args) } },
           batch_size: activeCalls.length });
@@ -122,7 +124,7 @@ export async function runSession(start, rpc, { signal } = {}) {
     baseUrl: '', reasoning: false, input: ['text'], contextWindow: 0, maxTokens: 0,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
   const agent = new Agent({ initialState: { model, tools, messages: fromOpenAI(start.messages, start.model) },
-    toolExecution: 'sequential',
+    toolExecution: 'parallel',
     streamFn: async (_model, context, options) => {
       const reply = await rpc('model', { messages: toOpenAI(context.messages) });
       const stream = new AssistantMessageEventStream();

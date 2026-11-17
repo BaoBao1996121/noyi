@@ -123,19 +123,50 @@ async def run_pi(messages, tools, model_name, handle, *, warm=None):
         proc.stdin.write((encode({"type": "start", "messages": messages,
                                   "tools": tools, "model": model_name}) + "\n").encode())
         await proc.stdin.drain()
-        while line := await proc.stdout.readline():
-            event = json.loads(line)
-            if event.get("type") == "request":
+        # Pi sends several tool requests at once only for calls the host marked
+        # concurrent; each is answered when it finishes. Every other request
+        # arrives alone, because Pi waits for its answer before going on.
+        inflight: set[asyncio.Task] = set()
+        failure: list[BaseException] = []
+
+        async def answer(event):
+            try:
                 result = await handle(event["method"], event.get("params", {}))
                 proc.stdin.write((encode({"id": event["id"], "result": result}) + "\n").encode())
                 await proc.stdin.drain()
-            elif event.get("type") == "done":
-                return
-            elif event.get("type") == "fatal":
-                raise RuntimeError("Pi execution failed")
-            else:
-                raise RuntimeError("invalid Pi transport event")
-        raise RuntimeError("Pi process exited before finishing")
+            except BaseException as exc:
+                # Ends the session; the read loop re-raises it once Pi has closed.
+                if not failure:
+                    failure.append(exc)
+                proc.stdin.close()
+
+        try:
+            while line := await proc.stdout.readline():
+                if failure:
+                    break
+                event = json.loads(line)
+                if event.get("type") == "request":
+                    job = asyncio.create_task(answer(event))
+                    inflight.add(job)
+                    job.add_done_callback(inflight.discard)
+                elif event.get("type") == "done":
+                    await asyncio.gather(*inflight, return_exceptions=True)
+                    if failure:
+                        raise failure[0]
+                    return
+                elif event.get("type") == "fatal":
+                    raise RuntimeError("Pi execution failed")
+                else:
+                    raise RuntimeError("invalid Pi transport event")
+            await asyncio.gather(*inflight, return_exceptions=True)
+            if failure:
+                raise failure[0]
+            raise RuntimeError("Pi process exited before finishing")
+        finally:
+            for job in list(inflight):
+                job.cancel()
+            if inflight:
+                await asyncio.gather(*inflight, return_exceptions=True)
     finally:
         # A service stop can cancel a run already being stopped by the user.
         # Shielding without awaiting again would leave cleanup running after

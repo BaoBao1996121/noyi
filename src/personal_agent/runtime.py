@@ -344,7 +344,11 @@ class Runtime:
             raise RuntimeError("unsupported Pi callback")
 
         self.store.step(run, "engine", {"identity": self.engine.identity})
-        await self.engine.run(self.context(run), schemas, getattr(getattr(self.model, "config", None), "name", "test-model"), handle)
+        # The engine learns which tools may run together from each tool's own
+        # declaration; the model request keeps the plain schemas.
+        engine_schemas = [{**s, "concurrent": True} if getattr(self.plugins.spec(s["function"]["name"]), "concurrent", False) else s
+                          for s in schemas]
+        await self.engine.run(self.context(run), engine_schemas, getattr(getattr(self.model, "config", None), "name", "test-model"), handle)
         if self.runnable(run):
             self.end(run, "review", "engine_ended_without_acceptance", acceptance="needs_review")
 

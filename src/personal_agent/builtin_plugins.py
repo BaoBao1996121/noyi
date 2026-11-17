@@ -65,9 +65,9 @@ def artifacts_plugin():
     def validator(name):
         return lambda args: validate_arguments(name, args)
     return Plugin("core.artifacts", "1", describe=_describe_artifacts, tools=[
-        ToolSpec(_schema("read_source"), _read_source, validator("read_source")),
+        ToolSpec(_schema("read_source"), _read_source, validator("read_source"), concurrent=True),
         ToolSpec(_schema("write_artifact"), _write_artifact, validator("write_artifact"), effect="local_write"),
-        ToolSpec(_schema("read_artifact"), _read_artifact, validator("read_artifact")),
+        ToolSpec(_schema("read_artifact"), _read_artifact, validator("read_artifact"), concurrent=True),
         ToolSpec(_schema("submit_result"), _submit_result, validator("submit_result"), exclusive=True),
     ])
 
@@ -98,13 +98,18 @@ def _orchestration_available(name):
     return available
 
 
+# Orchestration tools that only look: they write nothing but their own read
+# receipt, so several may run in one turn.
+READ_TOOLS = {"read_memory", "read_worker_result", "read_dependency", "read_review_evidence"}
+
+
 def orchestration_plugin():
     def spec(schema):
         name = schema["function"]["name"]
         return ToolSpec(schema, lambda call, args: call.runtime.orchestration.execute(call.run, name, args),
                         lambda args: validate_orchestration_arguments(name, args),
-                        effect="local_write", exclusive=name in SUSPENDING_TOOLS,
-                        available=_orchestration_available(name))
+                        effect="read" if name in READ_TOOLS else "local_write", exclusive=name in SUSPENDING_TOOLS,
+                        concurrent=name in READ_TOOLS, available=_orchestration_available(name))
     return Plugin("core.orchestration", "1", [spec(s) for s in ORCHESTRATION_SCHEMAS])
 
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import asyncio
 import json
 import os
 import re
+import weakref
 
 import httpx
 
@@ -88,6 +90,19 @@ def safe_child(root: Path, name: str) -> Path:
     return p
 
 
+_SNAPSHOT_LOCKS: "weakref.WeakValueDictionary[str, asyncio.Lock]" = weakref.WeakValueDictionary()
+
+
+def snapshot_lock(path: Path) -> asyncio.Lock:
+    """One writer per snapshot file: concurrent first reads share one fetch
+    instead of each replacing the version another receipt already names."""
+    key = os.path.normcase(str(path))
+    lock = _SNAPSHOT_LOCKS.get(key)
+    if lock is None:
+        lock = _SNAPSHOT_LOCKS[key] = asyncio.Lock()
+    return lock
+
+
 def atomic_write(path: Path, data: bytes):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(path.name + ".tmp")
@@ -130,9 +145,10 @@ class Toolset:
         cache = self._checked(self.root / "sources" / (digest(source_id.encode()) + ".txt"))
         try:
             image = self._checked(self.root / "sources" / (digest(source_id.encode()) + ".image"))
-            if image.exists():
-                return self._image_result(source_id, source, image, vision)
-            return await self._read_source(source_id, source, cache, offset, image, vision)
+            async with snapshot_lock(cache):
+                if image.exists():
+                    return self._image_result(source_id, source, image, vision)
+                return await self._read_source(source_id, source, cache, offset, image, vision)
         except (OSError, UnicodeError, httpx.HTTPError) as exc:
             raise SourceUnavailable("authorized source could not be read") from exc
 

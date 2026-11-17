@@ -49,6 +49,10 @@ class ToolSpec:
     # Shown to the user only: recorded in the ledger like any call, but it
     # spends no tool budget and counts as neither progress nor stagnation.
     display_only: bool = False
+    # May run at the same time as other such calls the model makes in one
+    # turn. Only side-effect-free reads qualify; everything else keeps the
+    # order the model wrote, and one ordered call keeps its whole turn ordered.
+    concurrent: bool = False
 
     @property
     def name(self) -> str:
@@ -116,6 +120,8 @@ class PluginRegistry:
                 raise ValueError(f"tool {name} is already provided by {self._tools[name][0].name}")
             if spec.effect not in EFFECTS:
                 raise ValueError(f"tool {name} has an unknown effect class")
+            if spec.concurrent and (spec.effect != "read" or spec.exclusive or spec.display_only):
+                raise ValueError(f"tool {name} can run concurrently only as a plain read")
             if not callable(spec.execute):
                 raise ValueError(f"tool {name} has no executor")
             self._tools[name] = (plugin, spec)

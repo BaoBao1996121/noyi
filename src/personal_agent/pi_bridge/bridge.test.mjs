@@ -74,6 +74,36 @@ test('sequential tools finish before turn callback, with correct whole-batch siz
   assert.deepEqual(order, ['a', 'a:done', 'b', 'b:done', 'turn_end']);
 });
 
+const parallelRead = { ...definition, concurrent: true };
+const writeDefinition = { type: 'function', function: { name: 'write_note', description: 'write a note',
+  parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false } } };
+
+async function batchOrder(tools, calls) {
+  const order = [];
+  await runSession({ ...start(), tools }, async (method, params) => {
+    if (method === 'model') return reply(calls);
+    if (method === 'tool') {
+      assert.equal(params.batch_size, calls.length);
+      order.push(params.call.id);
+      await new Promise(resolve => setTimeout(resolve, 20));
+      order.push(`${params.call.id}:done`);
+      return { result: { ok: true }, is_error: false, terminate: true };
+    }
+    if (method === 'turn_end') { order.push('turn_end'); return {}; }
+  });
+  return order;
+}
+
+test('tools the host marks parallel run together in one turn', async () => {
+  const order = await batchOrder([parallelRead], [call('read_source', '{"source_id":"source1"}', 'a'), call('read_source', '{"source_id":"source2"}', 'b')]);
+  assert.deepEqual(order, ['a', 'b', 'a:done', 'b:done', 'turn_end']);
+});
+
+test('one unmarked tool in the batch keeps the whole batch sequential', async () => {
+  const order = await batchOrder([parallelRead, writeDefinition], [call('read_source', '{"source_id":"source1"}', 'a'), call('write_note', '{"text":"x"}', 'b')]);
+  assert.deepEqual(order, ['a', 'a:done', 'b', 'b:done', 'turn_end']);
+});
+
 test('host budget halt ends Pi without extra callbacks', async () => {
   const seen = [];
   await runSession(start(), async method => { seen.push(method); return { halt: true }; });

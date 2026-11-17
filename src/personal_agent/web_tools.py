@@ -29,7 +29,7 @@ import httpx
 
 from .contracts import digest
 from .plugins import Plugin, ToolSpec
-from .tools import PAGE_CHARS, atomic_write, safe_child, tool
+from .tools import PAGE_CHARS, atomic_write, safe_child, snapshot_lock, tool
 
 SEARCH_URL = "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1/responses"
 DEEPSEEK_SEARCH_URL = "https://api.deepseek.com/v1/tools/search"
@@ -317,12 +317,16 @@ class WebTools:
         page_id = "page_" + digest(url.encode())[:10]
         root = call.toolset.root / "web"
         cache = safe_child(root, page_id + ".txt")
-        if not cache.exists():
-            final, title, text = await self.reader.read(url)
-            if not text.strip():
-                raise ValueError("page has no readable text")
-            root.mkdir(parents=True, exist_ok=True)
-            atomic_write(cache, ("\n".join([final, title]) + "\n" + text[:MAX_PAGE_CHARS]).encode("utf-8"))
+        # The first read of a page fixes its snapshot; a read of the same page
+        # running at the same time waits for it instead of fetching again and
+        # replacing the version the first receipt names.
+        async with snapshot_lock(cache):
+            if not cache.exists():
+                final, title, text = await self.reader.read(url)
+                if not text.strip():
+                    raise ValueError("page has no readable text")
+                root.mkdir(parents=True, exist_ok=True)
+                atomic_write(cache, ("\n".join([final, title]) + "\n" + text[:MAX_PAGE_CHARS]).encode("utf-8"))
         final, title, text = cache.read_text(encoding="utf-8").split("\n", 2)
         if offset > len(text):
             raise ValueError("offset past end")
@@ -340,8 +344,8 @@ def web_plugin(web: WebTools):
         if not web.config.enabled:
             return []
         return ["Search the web for current, live or external information and read public web pages, citing what was read."]
-    return Plugin("web", "1", [ToolSpec(SEARCH, web.search, effect="read", available=available),
-                               ToolSpec(FETCH, web.fetch, effect="read", available=available)], describe=describe)
+    return Plugin("web", "1", [ToolSpec(SEARCH, web.search, effect="read", concurrent=True, available=available),
+                               ToolSpec(FETCH, web.fetch, effect="read", concurrent=True, available=available)], describe=describe)
 
 
 def web_plugins(config_path=None, data=None):
