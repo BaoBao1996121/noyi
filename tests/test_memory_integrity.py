@@ -137,3 +137,76 @@ def test_upgrade_backs_up_then_adds_history_content_without_losing_rows(tmp_path
         assert upgraded.save_memory("local", key="称呼", value="叫我林工", purpose="对话", expected_version=saved["version"])["version"] == 2
     finally:
         upgraded.close()
+
+
+# ---- 3. credentials never become memory ---------------------------------------
+import secrets
+import string
+
+import pytest
+
+from personal_agent.credential_check import credential_shape
+
+AN = string.ascii_letters + string.digits
+ORDINARY = ["ThinkPadX1Carbon2024", "XiaomiRedmiK70Pro16GB512GB", "MacBookPro16M3Max36GB1TB", "node-v24.22.2-win-x64",
+            "SN-AB12-CD34-EF56-GH78", "2026-11-17T18:30:00", "WeChatMiniProgramDemo2024", "MyProject_v2_final_2024_Q3",
+            "https://www.bilibili.com/video/BV1GJ411x7h7", "https://mp.weixin.qq.com/s/AbCdEfGhIjKlMnOpQrStUv",
+            "顺丰单号 SF1234567890123", "手机 13800138000", "user_explicit_fact_not_permission", "github.com/BaoBao1996121/noyi",
+            "我喜欢简短的回复，先给结论"]
+
+
+def test_ordinary_names_ids_and_links_are_not_mistaken_for_credentials():
+    assert [t for t in ORDINARY if credential_shape(t)] == []
+
+
+@pytest.mark.parametrize("make", [
+    lambda: "sk-" + "".join(secrets.choice(AN) for _ in range(48)),
+    lambda: "ghp_" + "".join(secrets.choice(AN) for _ in range(36)),
+    lambda: secrets.token_urlsafe(32),
+    lambda: secrets.token_hex(20),
+    lambda: "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----",
+    lambda: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+    lambda: "数据库连上 postgres://admin:Hunter2pass@db.example.com/app",
+    lambda: "回调地址 https://hooks.example.com/notify?token=" + secrets.token_urlsafe(32),
+])
+def test_machine_made_secrets_are_recognised_by_shape(make):
+    hits = sum(bool(credential_shape("我的 key 是 " + make())) for _ in range(50))
+    assert hits >= 45, hits
+
+
+def test_every_path_into_memory_refuses_credentials_and_says_why(store):
+    key = "sk-" + "".join(secrets.choice(AN) for _ in range(48))
+    with pytest.raises(ValueError, match="不保存密码、密钥和令牌") as refused:
+        store.save_memory("local", key="接口", value="用这个 " + key, purpose="调用")
+    assert key not in str(refused.value), "the refusal never repeats the secret"
+    with pytest.raises(ValueError, match="不保存"):
+        store.import_memory_proposals("local", [{"kind": "reference", "key": "接口", "value": key}], origin="导入")
+    run = begin(store)
+    message = store.one("SELECT id FROM messages WHERE task_id=?", (run["task_id"],))["id"]
+    with pytest.raises(ValueError, match="不保存"):
+        store.propose_memory(run, key="接口密钥", value=key, purpose="调用", source_ref=message)
+    assert store.one("SELECT COUNT(*) n FROM memories")["n"] == 0
+    assert store.one("SELECT COUNT(*) n FROM memory_proposals")["n"] == 0
+
+
+def test_curation_cannot_turn_a_pasted_secret_into_a_suggestion(store):
+    from test_memory_phase1 import say
+    key = secrets.token_urlsafe(32)
+    mid = say(store, "记一下，服务器令牌 " + key)
+    with pytest.raises(ValueError, match="不保存"):
+        store.record_memory_candidate("personal:local-user", kind="reference", key="服务器令牌", value=key,
+                                      evidence=[{"message_id": mid, "quote": "服务器令牌 " + key}], correction=True)
+    saved = store.save_memory("local", key="服务器", value="在机房", purpose="运维")
+    with pytest.raises(ValueError, match="不保存"):
+        store.propose_memory_change("personal:local-user", op="conflict", targets=[saved["id"]], value="令牌 " + key, reason="更新",
+                                    evidence=[{"message_id": mid, "quote": "服务器令牌 " + key}], curation_id="c1")
+    assert store.one("SELECT COUNT(*) n FROM memory_candidates")["n"] == 0
+
+
+def test_asking_to_remember_a_secret_in_chat_is_refused_with_a_reason_the_model_can_relay(store):
+    from test_speech import incoming, intake
+    key = "ghp_" + "".join(secrets.choice(AN) for _ in range(36))
+    incoming(store, "记住我的 GitHub 令牌 " + key, nonce="a")
+    with pytest.raises(ValueError, match="密码管理器"):
+        intake(store, {"action": "remember", "basis": "记住我的 GitHub 令牌", "memory_key": "GitHub 令牌", "memory_value": key, "receipt": "记住了你的令牌。"})
+    assert not store.all("SELECT * FROM memories")

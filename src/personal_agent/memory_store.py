@@ -20,6 +20,7 @@ import uuid
 
 from .authority import verify_user_words
 from .contracts import encode
+from .credential_check import refuse_credentials
 
 KINDS = {"rule": "规则", "preference": "偏好", "about_me": "关于我", "ongoing": "进行中", "reference": "常用信息"}
 # Reply layer order: rules first; reference titles are an index, cheap to keep.
@@ -194,6 +195,9 @@ class MemoryStore:
             raise ValueError("记忆内容需要 1–4000 字")
         if not isinstance(purpose, str) or not 1 <= len(purpose.strip()) <= 200:
             raise ValueError("请说明这条记忆的用途（最多 200 字）")
+        # Every way into memory (saving, importing, proposing, candidates,
+        # tidy rewrites) passes here, so a credential is refused at all of them.
+        refuse_credentials(key, value)
 
     @staticmethod
     def _memory_extras(kind, keywords, subject):
