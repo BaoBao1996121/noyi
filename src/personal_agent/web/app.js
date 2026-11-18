@@ -1,12 +1,18 @@
 import {installGoals} from './goals.js';
 import {placeQuestions} from './timeline.js';
 import {progressSummary,progressPanel,tick} from './progress.js';
+import {createOutbox} from './outbox.js';
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => [...root.querySelectorAll(q)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const labels = {ready:'排队中',running:'正在处理',waiting_children:'后台协作中',waiting_dependencies:'等待前置成果复核',waiting_user:'等你回答',paused:'已暂停',stopped:'已停止',cancelled:'已取消',succeeded:'已完成',failed:'遇到问题',review:'待检查'};
-const state = {token:'', room:'local', workspace:'', storagePrefix:'', recipient:'', replyTo:null, task:null, tab:'details', data:null, online:false, uploads:[], urls:[], sending:false, composing:false, answers:{}, draftKey:'pa.draft.local', progressOpen:new Set(), clockSkew:0, signature:'', detailSignature:'', retry:null};
+const state = {token:'', room:'local', workspace:'', storagePrefix:'', recipient:'', replyTo:null, task:null, tab:'details', data:null, online:false, uploads:[], urls:[], composing:false, answers:{}, draftKey:'pa.draft.local', progressOpen:new Set(), clockSkew:0, signature:'', detailSignature:'', retry:null};
 let toastTimer;
+// Sent messages not in the conversation yet. Kept per library so a reload resends
+// what was cut off (same nonce) and still shows what did not go out.
+const outbox=createOutbox({post:payload=>api('/api/messages',payload),
+  save:items=>{if(state.storagePrefix)try{localStorage.setItem(state.storagePrefix+'outbox',JSON.stringify(items));}catch{}},
+  changed:()=>{if(state.data)messageView();}});
 const timeLabel = seconds => seconds ? new Date(seconds*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
 const pill = status => `<span class="pill ${esc(status)}">${esc(labels[status] || status)}</span>`;
 function toast(text){$('#toast').textContent=text;$('#toast').classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.add('hidden'),5000);}
@@ -30,8 +36,10 @@ async function api(path, body, options={}, retryToken=true){
     if(boot.workspace_id!==state.workspace){switchWorkspace(boot);await refresh(true);throw new Error('资料库已切换，请在当前会话重新确认操作');}
     if(boot.token!==state.token){state.token=boot.token;return api(path,body,options,false);}
   }
-  let data;try{data=await res.json();}catch{throw new Error(res.status===403?'页面凭证已更新，请刷新后重试':'服务返回了无法读取的内容');}
-  if(!res.ok)throw new Error(data.error||'操作未完成');
+  // status: the server answered (an error without it means the request never got there).
+  const failed=message=>Object.assign(new Error(message),{status:res.status});
+  let data;try{data=await res.json();}catch{throw failed(res.status===403?'页面凭证已更新，请刷新后重试':'服务返回了无法读取的内容');}
+  if(!res.ok)throw failed(data.error||'操作未完成');
   return data;
 }
 function rich(text){
@@ -117,7 +125,9 @@ function messageView(force=false){
   const messages=data.messages.filter(m=>['web','cli','conversation'].includes(m.source)&&visible(m.task_id)&&focused(m.task_id));
   const deliveries=data.deliveries.filter(d=>visible(d.task_id)&&!['question','clarification'].includes(d.kind)&&focused(d.task_id));
   const questions=data.questions.filter(q=>!state.task||q.task_id===state.task||data.tasks.some(t=>t.id===q.task_id&&t.root_task_id===state.task));
-  const sig=JSON.stringify({messages,deliveries,questions,intake:data.intake,drafts:data.drafts,progress:data.progress,task:task?.status,unassigned:data.unassigned,routes:data.pending_routes,selected:state.task,room:state.room});
+  // Sent from this page and not in the ledger snapshot yet: drawn last, the newest turn.
+  const outgoing=outbox.pending(state.room,data.messages).filter(i=>focused(i.payload.task_id));
+  const sig=JSON.stringify({outgoing:outgoing.map(i=>[i.nonce,i.state,i.error]),messages,deliveries,questions,intake:data.intake,drafts:data.drafts,progress:data.progress,task:task?.status,unassigned:data.unassigned,routes:data.pending_routes,selected:state.task,room:state.room});
   if(!force&&sig===state.signature)return;
   state.signature=sig;
   const box=$('#messages'), bottom=box.scrollHeight-box.scrollTop-box.clientHeight<90, oldScroll=box.scrollTop;
@@ -129,11 +139,11 @@ function messageView(force=false){
   // The intake receipt is a room reply, not task output; show it from the
   // task's origin right after the request it answered.
   const items=[...(originHtml?[{sort:-1,html:originHtml}]:[]),...(receipt&&asked?[{sort:(asked.created||0)+0.001,html:`<article class="message assistant"><div class="message-label">${esc(botName(task.actor_id))}</div><div class="bubble rich">${rich(receipt.content)}</div></article>`}]:[]),...messages.map(m=>({sort:m.created||0,html:`<article class="message user"><div class="message-label">你 ${m.actor_id!=='unassigned'?'→ '+esc(botName(m.actor_id)):''}<time>${esc(timeLabel(m.created))}</time><button class="small-link" data-reply="${m.id}" data-tid="${m.task_id||''}" data-actor="${m.actor_id}">回复</button></div><div class="bubble">${esc(m.content)}</div>${intakeLine(m.id)}</article>${draftLine(m.id)}`})),...deliveries.map(d=>({sort:d.created||0,html:`<article class="message ${d.kind==='system'||d.kind==='clarification'||d.kind==='commitment'?'system':'assistant'}${d.kind==='health_alert'?' alert':''}" data-delivery="${esc(d.id)}" data-delivery-state="${esc(d.state)}"><div class="message-label">${d.kind==='result'?esc(botName(d.actor_id)):''} <time>${esc(timeLabel(d.created))}</time>${d.actor_id?`<button class="small-link" data-reply="${d.id}" data-tid="${d.task_id||''}" data-actor="${d.actor_id}">回复</button>`:''}</div><div class="bubble rich">${rich(d.content)}</div>${d.artifact?artifactCard(d):''}${fulfilledLine(d)}</article>`}))].sort((a,b)=>a.sort-b.sort);
-  if(!items.length&&!questions.length){
+  if(!items.length&&!questions.length&&!outgoing.length){
     box.innerHTML='<div class="empty"><div class="hero-mark">✳</div><h2>把事情交给我，慢慢腾出手。</h2><p>整理资料、拆解任务、跟进进度。<br>你可以随时补充、暂停，或查看每一份成果。</p><div class="suggestions"><button class="suggestion" data-suggestion="帮我把这些资料整理成一份行动清单，标明优先级和待确认事项。"><span>▤</span>从一份资料开始<br><span class="muted">整理重点和下一步行动</span></button><button class="suggestion" data-suggestion="帮我规划接下来一周的个人工作，先问我需要了解的关键信息。"><span>☷</span>理清手头的事情<br><span class="muted">把想法变成可执行的计划</span></button></div></div>';
   }else{
     const placed=placeQuestions(items,questions,questionCard);
-    box.innerHTML=placed.history.join('')+placed.pinned.join('')+(data.pending_routes||[]).map(p=>`<article class="question"><div class="question-label">选择接手对象</div><p>${esc(p.content)}</p><button class="button" data-route="${p.id}">分配这条消息</button></article>`).join('')+(data.unassigned||[]).map(f=>`<article class="question"><div class="question-label">待分配的补充</div><p>${esc(f.content)}</p><button class="button" data-followup-route="${f.id}">选择对应任务</button></article>`).join('');
+    box.innerHTML=placed.history.join('')+placed.pinned.join('')+(data.pending_routes||[]).map(p=>`<article class="question"><div class="question-label">选择接手对象</div><p>${esc(p.content)}</p><button class="button" data-route="${p.id}">分配这条消息</button></article>`).join('')+(data.unassigned||[]).map(f=>`<article class="question"><div class="question-label">待分配的补充</div><p>${esc(f.content)}</p><button class="button" data-followup-route="${f.id}">选择对应任务</button></article>`).join('')+outgoing.map(outboxLine).join('');
     if(task&&['ready','running','waiting_children'].includes(task.status))box.insertAdjacentHTML('beforeend',`<article class="message system">${progressBlock(task)}</article>`);
   }
   if(bottom||force)box.scrollTop=box.scrollHeight;else box.scrollTop=oldScroll;
@@ -185,9 +195,9 @@ const early=(()=>{try{return JSON.parse(document.getElementById('noyi-early')?.t
 function rememberRoom(){if(!STATIC)document.cookie='noyi_room='+encodeURIComponent(state.room)+';path=/;max-age=31536000;samesite=strict'+(location.protocol==='https:'?';secure':'');}
 function takeEarlyState(room){if(!early?.state)return null;const data=early.state;early.state=null;return early.room===room&&data.workspace_id===state.workspace?data:null;}
 async function refresh(force=false,wait=false){
-  const requestedRoom=state.room;
+  const requestedRoom=state.room,asked=Date.now();
   // wait: the server answers as soon as the ledger changes, so a reply shows the moment it is written.
-  try{const data=await takeEarlyState(requestedRoom)||await api('/api/state?room='+encodeURIComponent(requestedRoom)+(wait&&state.version&&!STATIC?'&since='+encodeURIComponent(state.version):''));if(!wait||state.room===requestedRoom)state.version=data.version;if(state.room!==requestedRoom)return;if(data.workspace_id!==state.workspace){switchWorkspace(await api('/api/bootstrap'));await refresh(true);return;}state.data=data;state.clockSkew=(data.server_time||Date.now()/1000)-Date.now()/1000;for(const id of state.progressOpen)if(!data.progress?.[id])state.progressOpen.delete(id);state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
+  try{const data=await takeEarlyState(requestedRoom)||await api('/api/state?room='+encodeURIComponent(requestedRoom)+(wait&&state.version&&!STATIC?'&since='+encodeURIComponent(state.version):''));if(!wait||state.room===requestedRoom)state.version=data.version;if(state.room!==requestedRoom)return;if(data.workspace_id!==state.workspace){switchWorkspace(await api('/api/bootstrap'));await refresh(true);return;}state.data=data;outbox.reconcile(requestedRoom,data.messages,asked);state.clockSkew=(data.server_time||Date.now()/1000)-Date.now()/1000;for(const id of state.progressOpen)if(!data.progress?.[id])state.progressOpen.delete(id);state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
   catch(e){try{const boot=await api('/api/bootstrap');if(boot.workspace_id!==state.workspace){switchWorkspace(boot);await refresh(true);return;}}catch{}state.online=false;$('#connection').textContent='连接中断 · 草稿已保留';$('#banner').textContent='连接暂时中断。已输入的内容会保留，恢复后可以继续。';$('#banner').classList.remove('hidden');}
 }
 function saveDraft(){localStorage.setItem(state.draftKey,JSON.stringify({text:$('#message-input').value,uploads:state.uploads,urls:state.urls,task:state.task,retry:state.retry,recipient:state.recipient,replyTo:state.replyTo}));}
@@ -198,19 +208,40 @@ function composeAbout(text,actorId=null){
   goalsUI.show(false);state.task=null;state.replyTo=null;state.recipient=actorId||state.recipient;state.signature='';state.detailSignature='';state.retry=null;
   const input=$('#message-input');if(!input.value.trim())input.value=text;else toast('已有草稿已保留，你可以接着补充');saveDraft();roomView();messageView(true);detailView(true);input.focus();
 }
-async function chooseRoom(id){if(state.sending)return;goalsUI.show(false);saveDraft();state.room=id;localStorage.setItem(state.storagePrefix+'room',id);rememberRoom();state.signature='';state.detailSignature='';state.sideSignature='';restoreDraft();await refresh(true);$('#app').classList.remove('show-nav');}
+async function chooseRoom(id){goalsUI.show(false);saveDraft();state.room=id;localStorage.setItem(state.storagePrefix+'room',id);rememberRoom();state.signature='';state.detailSignature='';state.sideSignature='';restoreDraft();await refresh(true);$('#app').classList.remove('show-nav');}
 async function send(event){
-  event.preventDefault();if(state.sending||state.composing)return;
+  event.preventDefault();if(state.composing)return;
   const text=$('#message-input').value.trim();if(!text)return;
   const mode='auto';
   if(!state.data?.ready){openSettings();return;}
   const payload={text,mode,room:state.room,actor_id:state.recipient||null,reply_to:state.replyTo,task_id:state.task,uploads:state.uploads.map(u=>u.id),urls:state.urls};
+  // Unchanged text taken back from a failed send keeps its nonce: the server keeps one copy.
   const fingerprint=JSON.stringify(payload);
   const nonce=state.retry?.fingerprint===fingerprint?state.retry.nonce:crypto.randomUUID();
-  state.retry={fingerprint,nonce};saveDraft();state.sending=true;$('#send').disabled=true;
-  try{const receipt=await api('/api/messages',{...payload,nonce});$('#message-input').value='';state.uploads=[];state.urls=[];state.retry=null;state.replyTo=null;renderAttachments();state.task=null;state.signature='';state.detailSignature='';if(receipt.state==='context')toast('已记入群聊，没有启动新任务');saveDraft();await refresh(true);}
-  catch(e){toast(e.message+'；内容已保留，可以重试');}
-  finally{state.sending=false;$('#send').disabled=false;$('#message-input').focus();}
+  // The message shows now; the request runs behind it (outbox.js).
+  const uploads=state.uploads.slice();
+  $('#message-input').value='';state.uploads=[];state.urls=[];state.retry=null;state.replyTo=null;state.task=null;renderAttachments();saveDraft();
+  state.signature='';state.detailSignature='';roomView();
+  const sent=outbox.send(payload,nonce,{uploads});  // draws the conversation with the new message in it
+  $('#message-input').focus();$('#messages').scrollTop=$('#messages').scrollHeight;detailView(true);
+  try{const receipt=await sent;if(receipt?.state==='context')toast('已记入群聊，没有启动新任务');afterSend(payload.room);}
+  catch(e){if(e.status)toast(e.message);}
+}
+// No refresh here: the send changed the ledger, so the poll's waiting request
+// answers with the new state by itself (and every 1.5 s when offline or hidden).
+// Fetching /api/state again would download the same ~22 KB a second time.
+function afterSend(room){if(state.room===room&&state.data)outbox.reconcile(room,state.data.messages);}
+function outboxLine(item){
+  const files=[...(item.uploads||[]).map(u=>'▤ '+u.name),...(item.payload.urls||[]).map(u=>'↗ '+u)];
+  const status=item.state==='failed'?`<div class="intake-state failed outbox-failed">${item.rejected?'没发出去：'+esc(item.error):'没发出去'} <button class="small-link" data-outbox-retry="${esc(item.nonce)}">点一下重试</button><button class="small-link" data-outbox-edit="${esc(item.nonce)}">改一改</button></div>`
+    :`<div class="intake-state">${item.state==='sent'?'已送达':'发送中…'}</div>`;
+  return `<article class="message user outgoing ${esc(item.state)}" data-outbox="${esc(item.nonce)}"><div class="message-label">你 ${item.payload.actor_id?'→ '+esc(botName(item.payload.actor_id)):''}<time>${esc(timeLabel(item.created))}</time></div><div class="bubble">${esc(item.payload.text)}</div>${files.length?`<div class="outbox-files">${files.map(esc).join(' · ')}</div>`:''}${status}</article>`;
+}
+function editOutbox(nonce){
+  const input=$('#message-input');if(input.value.trim()){toast('输入框里还有草稿，先发出或清空再改这条');return;}
+  const item=outbox.take(nonce);if(!item)return;const p=item.payload;
+  input.value=p.text;state.uploads=item.uploads||[];state.urls=p.urls||[];state.task=p.task_id;state.replyTo=p.reply_to;state.recipient=p.actor_id||'';
+  state.retry={fingerprint:JSON.stringify(p),nonce:item.nonce};renderAttachments();saveDraft();state.signature='';roomView();messageView();input.focus();
 }
 function modal(title, html){$('#modal-title').textContent=title;$('#modal-content').innerHTML=html;$('#modal').showModal();}
 function botForm(bot=null){modal(bot?'编辑角色':'创建助理',`<p class="modal-note">每位助理都有独立私聊；你的个人记忆在所有私聊里共用，群聊不带。角色说明决定它如何帮你，不能扩大资料权限。</p><form id="bot-form" data-id="${bot?.id||''}" data-revision="${bot?.revision||0}"><label class="field">名称<input name="name" maxlength="40" value="${esc(bot?.name||'')}" required></label><label class="field">角色说明<textarea name="role" rows="5" maxlength="4000" required>${esc(bot?.role||'')}</textarea></label><div class="modal-actions"><button class="button primary">保存</button></div></form>`);}
@@ -348,6 +379,8 @@ document.addEventListener('click',async e=>{
   if(b.hasAttribute('data-download-backup')){b.disabled=true;try{await downloadBackup();}catch(error){toast(error.message);}finally{b.disabled=false;}}
   if(b.dataset.removeUpload!==undefined){state.uploads.splice(Number(b.dataset.removeUpload),1);renderAttachments();saveDraft();}
   if(b.dataset.removeUrl!==undefined){state.urls.splice(Number(b.dataset.removeUrl),1);renderAttachments();saveDraft();}
+  if(b.dataset.outboxRetry){const room=state.room;outbox.retry(b.dataset.outboxRetry).then(r=>{if(r?.state==='context')toast('已记入群聊，没有启动新任务');if(r)afterSend(room);},err=>{if(err.status)toast(err.message);});}
+  if(b.dataset.outboxEdit)editOutbox(b.dataset.outboxEdit);
   if(b.dataset.answer)await answer(b.dataset.answer,b.dataset.option);
   if(b.dataset.action){if(b.dataset.action==='cancel')modal('取消这项委托？',`<p class="modal-note">这会停止当前任务及其后台协作。已有记录和产物会保留，普通消息不会重新启动这项已取消的任务。</p><div class="modal-actions"><button class="button danger" data-confirm-cancel="${b.dataset.tid}">取消委托</button></div>`);else {b.disabled=true;try{await performAction(b.dataset.action,b.dataset.tid);}finally{b.disabled=false;}}}
   if(b.dataset.confirmCancel)await performAction('cancel',b.dataset.confirmCancel);
@@ -424,4 +457,5 @@ function switchWorkspace(boot){
   state.workspace=boot.workspace_id;state.storagePrefix='pa.'+state.workspace+'.';state.token=boot.token;
   state.room=localStorage.getItem(state.storagePrefix+'room')||'local';rememberRoom();state.data=null;state.task=null;state.answers={};continuationNonces.clear();
   state.signature='';state.detailSignature='';state.sideSignature='';goalsUI.show(false);restoreDraft();
+  let saved=[];try{saved=JSON.parse(localStorage.getItem(state.storagePrefix+'outbox')||'[]');}catch{}outbox.load(STATIC?[]:saved);
 }

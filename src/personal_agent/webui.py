@@ -145,7 +145,7 @@ class Console:
             for turn in t["spec"].get("conversation") or []:
                 if turn.get("speaker") != "user":
                     turn["content"] = chat_text(turn.get("content"))
-        messages = self.store.all("SELECT m.id,m.source,m.actor_id,m.task_id,m.kind,m.content,m.status,COALESCE(p.created,f.created,MIN(e.created),0) AS created FROM messages m LEFT JOIN events e ON e.message_id=m.id LEFT JOIN followups f ON f.message_id=m.id LEFT JOIN pending_routes p ON p.message_id=m.id WHERE m.room_id=? AND m.source NOT IN ('runtime','route') GROUP BY m.id ORDER BY m.rowid DESC LIMIT 300", (room,))
+        messages = self.store.all("SELECT m.id,m.source,m.actor_id,m.task_id,m.kind,m.content,m.status,CASE WHEN m.source='web' THEN m.client_nonce END AS nonce,COALESCE(p.created,f.created,MIN(e.created),0) AS created FROM messages m LEFT JOIN events e ON e.message_id=m.id LEFT JOIN followups f ON f.message_id=m.id LEFT JOIN pending_routes p ON p.message_id=m.id WHERE m.room_id=? AND m.source NOT IN ('runtime','route') GROUP BY m.id ORDER BY m.rowid DESC LIMIT 300", (room,))
         for message in messages:
             if message["source"] == "goal_review":
                 goal = self.store.one("SELECT g.title FROM goals g JOIN goal_review_requests r ON r.goal_id=g.id WHERE r.task_id=?", (message["task_id"],))
@@ -560,7 +560,7 @@ async def shutdown(request):
     return web.json_response({"accepted": True, "instance_id": c.instance_id})
 
 
-STATIC_FILES = {"index.html", "app.js", "timeline.js", "progress.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
+STATIC_FILES = {"index.html", "app.js", "timeline.js", "progress.js", "outbox.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
                 "replay-pixel.js", "galaxy.js", "galaxy.css", "mobile.css", "mobile.js", "updates.js", "pair.js", "pair.css", "pair.html", "sw.js",
                 "icon-192.png", "icon-512.png", "apple-touch-icon.png"}
 

@@ -66,3 +66,8 @@
 .progress-steps li span{width:12px;flex-shrink:0;text-align:center}.progress-steps li.done{color:#9aa}.progress-steps li.doing{color:#444}
 .progress-action{color:#888}.progress-empty{color:#aaa}
 .conversation-progress .progress{max-width:100%}.conversation-progress .progress summary{text-align:left;padding:8px 11px;border-radius:8px;background:#f7f8f6}
+.message.outgoing.sending .bubble{opacity:.65}
+.message.outgoing.failed .bubble{border:1px dashed #d8b4b4}
+.outbox-failed{display:flex;align-items:center;gap:4px}
+.outbox-failed .small-link{color:#b67b7b;font-size:11px;padding:2px 4px;margin-left:0}
+.outbox-files{font-size:11px;color:#888;margin-top:4px;max-width:80%;overflow-wrap:anywhere}

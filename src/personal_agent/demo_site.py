@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PERSONAL = (ROOT / ".pa" / "personal").resolve()
 WEB = Path(__file__).resolve().parent / "web"
 DEMO_MODEL = "demo-scripted"
-ASSETS = ["app.js", "timeline.js", "progress.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
+ASSETS = ["app.js", "timeline.js", "progress.js", "outbox.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
           "replay-pixel.js", "galaxy.js", "galaxy.css"]
 # Windows drive paths, UNC paths and the usual home/system roots on Unix.
 LOCAL_PATH = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]+[^\s\"'<>]*|(?<![\\\w])\\\\[A-Za-z][A-Za-z0-9.-]+\\[A-Za-z0-9$_.-]+"
