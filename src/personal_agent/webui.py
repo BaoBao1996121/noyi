@@ -246,7 +246,9 @@ class Console:
             path = self.data / upload["path"]
             if path.is_symlink() or not path.resolve().is_relative_to(self.data) or digest(path.read_bytes()) != upload["sha256"]:
                 raise ValueError("资料已更改，请重新上传")
-            sources.append({"id": "s_" + upload_id[:12], "kind": "file", "location": str(path.resolve()), "required": True, "description": upload["name"]})
+            sources.append({"id": "s_" + upload_id[:12], "kind": "file", "location": str(path.resolve()), "required": True, "description": upload["name"],
+                            # An uploaded photo is shown to models as these exact bytes.
+                            **({"expected_sha256": upload["sha256"]} if path.suffix == ".image" else {})})
         urls = body.get("urls", [])
         if not isinstance(urls, list) or len(urls) > 6 or any(not isinstance(u, str) for u in urls):
             raise ValueError("最多提供 6 个明确的资料网址")
