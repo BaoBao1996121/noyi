@@ -1,10 +1,6 @@
 import {installGoals} from './goals.js';
-import {installReplay,registerSkin} from './replay.js';
-import {pixelSkin} from './replay-pixel.js';
-import {installGalaxy} from './galaxy.js';
 import {placeQuestions} from './timeline.js';
 import {progressSummary,progressPanel,tick} from './progress.js';
-registerSkin(pixelSkin);
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => [...root.querySelectorAll(q)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -157,7 +153,7 @@ async function detailView(force=false){
   const box=$('#detail-content');
   if(state.tab==='memory'){memoryView(box);return;}
   if(state.tab==='commitments'){commitmentView(box);return;}
-  if(state.tab==='replay'){replayUI.mount(box);return;}
+  if(state.tab==='replay'){replayUI.mount(box).catch(e=>toast('回放没有加载出来：'+e.message));return;}
   if(state.tab==='library'){
     box.innerHTML='<div class="detail-heading">已交付的成果</div>'+ (artifacts.slice().reverse().map(artifactCard).join('')||'<div class="empty-detail">完成的清单、报告和资料<br>都会收在这里。</div>');return;
   }
@@ -182,10 +178,16 @@ async function detailView(force=false){
   box.innerHTML=html;
   try{const detail=await api('/api/tasks/'+task.id);if(state.task!==task.id||state.tab!=='details')return;$('#operation-list').innerHTML=detail.operations.map(o=>`<div class="log-row"><span>${esc(o.tool)}</span><span>${esc(o.status)}</span></div>`).join('')||'<p class="muted">还没有工具操作记录</p>';}catch(e){toast(e.message);}
 }
+// The page arrives with its first state inside it (webui.first_screen): no round trip before
+// the conversation shows. Used once, and only for the room and workspace it was made for.
+const early=(()=>{try{return JSON.parse(document.getElementById('noyi-early')?.textContent||'null');}catch{return null;}})();
+// Tells the server which room the next page should arrive with (a preference, checked there).
+function rememberRoom(){if(!STATIC)document.cookie='noyi_room='+encodeURIComponent(state.room)+';path=/;max-age=31536000;samesite=strict'+(location.protocol==='https:'?';secure':'');}
+function takeEarlyState(room){if(!early?.state)return null;const data=early.state;early.state=null;return early.room===room&&data.workspace_id===state.workspace?data:null;}
 async function refresh(force=false,wait=false){
   const requestedRoom=state.room;
   // wait: the server answers as soon as the ledger changes, so a reply shows the moment it is written.
-  try{const data=await api('/api/state?room='+encodeURIComponent(requestedRoom)+(wait&&state.version&&!STATIC?'&since='+encodeURIComponent(state.version):''));if(!wait||state.room===requestedRoom)state.version=data.version;if(state.room!==requestedRoom)return;if(data.workspace_id!==state.workspace){switchWorkspace(await api('/api/bootstrap'));await refresh(true);return;}state.data=data;state.clockSkew=(data.server_time||Date.now()/1000)-Date.now()/1000;for(const id of state.progressOpen)if(!data.progress?.[id])state.progressOpen.delete(id);state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
+  try{const data=await takeEarlyState(requestedRoom)||await api('/api/state?room='+encodeURIComponent(requestedRoom)+(wait&&state.version&&!STATIC?'&since='+encodeURIComponent(state.version):''));if(!wait||state.room===requestedRoom)state.version=data.version;if(state.room!==requestedRoom)return;if(data.workspace_id!==state.workspace){switchWorkspace(await api('/api/bootstrap'));await refresh(true);return;}state.data=data;state.clockSkew=(data.server_time||Date.now()/1000)-Date.now()/1000;for(const id of state.progressOpen)if(!data.progress?.[id])state.progressOpen.delete(id);state.online=true;if(state.task&&!selected())state.task=null;roomView();messageView(force);await detailView(force);goalsUI.render();}
   catch(e){try{const boot=await api('/api/bootstrap');if(boot.workspace_id!==state.workspace){switchWorkspace(boot);await refresh(true);return;}}catch{}state.online=false;$('#connection').textContent='连接中断 · 草稿已保留';$('#banner').textContent='连接暂时中断。已输入的内容会保留，恢复后可以继续。';$('#banner').classList.remove('hidden');}
 }
 function saveDraft(){localStorage.setItem(state.draftKey,JSON.stringify({text:$('#message-input').value,uploads:state.uploads,urls:state.urls,task:state.task,retry:state.retry,recipient:state.recipient,replyTo:state.replyTo}));}
@@ -196,7 +198,7 @@ function composeAbout(text,actorId=null){
   goalsUI.show(false);state.task=null;state.replyTo=null;state.recipient=actorId||state.recipient;state.signature='';state.detailSignature='';state.retry=null;
   const input=$('#message-input');if(!input.value.trim())input.value=text;else toast('已有草稿已保留，你可以接着补充');saveDraft();roomView();messageView(true);detailView(true);input.focus();
 }
-async function chooseRoom(id){if(state.sending)return;goalsUI.show(false);saveDraft();state.room=id;localStorage.setItem(state.storagePrefix+'room',id);state.signature='';state.detailSignature='';state.sideSignature='';restoreDraft();await refresh(true);$('#app').classList.remove('show-nav');}
+async function chooseRoom(id){if(state.sending)return;goalsUI.show(false);saveDraft();state.room=id;localStorage.setItem(state.storagePrefix+'room',id);rememberRoom();state.signature='';state.detailSignature='';state.sideSignature='';restoreDraft();await refresh(true);$('#app').classList.remove('show-nav');}
 async function send(event){
   event.preventDefault();if(state.sending||state.composing)return;
   const text=$('#message-input').value.trim();if(!text)return;
@@ -260,7 +262,7 @@ function memoryView(box){
   const switcher=`<div class="memory-switch" role="tablist"><button data-memory-mode="list" aria-selected="${state.memoryMode!=='galaxy'}">列表</button><button data-memory-mode="galaxy" aria-selected="${state.memoryMode==='galaxy'}">星系</button></div>`;
   if(state.memoryMode==='galaxy'){
     box.innerHTML=`<div class="detail-heading">${group?'群共享记忆':'它对我了解多少'}</div>${switcher}<p class="memory-note">五类记忆各成一个星团。亮星已确认，虚线是待确认，灰色残骸是被取代的旧记忆。拖动平移、滚轮缩放，点星看原话和版本。这里只读。</p>`;
-    galaxyUI.mount(box,state.room,JSON.stringify([state.room,d.memories.map(m=>[m.id,m.version,m.state]),d.memory_proposals.map(p=>p.id)]));
+    galaxyUI.mount(box,state.room,JSON.stringify([state.room,d.memories.map(m=>[m.id,m.version,m.state]),d.memory_proposals.map(p=>p.id)])).catch(e=>toast('星系没有加载出来：'+e.message));
     return;
   }
   const pending=d.memory_proposals.filter(p=>p.column!=='tidy'),tidy=d.memory_proposals.filter(p=>p.column==='tidy');
@@ -365,9 +367,12 @@ document.addEventListener('submit',async e=>{
   if(e.target.id==='url-form'){e.preventDefault();state.urls.push(new FormData(e.target).get('url'));renderAttachments();saveDraft();$('#modal').close();}
 });
 $$('.resizer').forEach(r=>r.addEventListener('pointerdown',e=>{r.setPointerCapture(e.pointerId);const move=e=>{const width=r.dataset.panel==='left'?e.clientX:innerWidth-e.clientX;document.documentElement.style.setProperty(r.dataset.panel==='left'?'--left':'--right',Math.max(220,Math.min(440,width))+'px');};r.addEventListener('pointermove',move);r.addEventListener('pointerup',()=>r.removeEventListener('pointermove',move),{once:true});}));
-const replayUI=installReplay({state,api,esc,timeLabel,pageUrl});
+// The replay and the galaxy are not on the first screen: their code (~57 KB) loads
+// the first time their tab is opened, not before the conversation can show.
+function lazy(load){let made;const get=()=>made||(made=load().catch(e=>{made=null;throw e;}));return new Proxy({},{get:(_,name)=>(...args)=>get().then(ui=>ui[name](...args))});}
+const replayUI=lazy(async()=>{const [{installReplay,registerSkin},{pixelSkin}]=await Promise.all([import('./replay.js'),import('./replay-pixel.js')]);registerSkin(pixelSkin);return installReplay({state,api,esc,timeLabel,pageUrl});});
 document.addEventListener('replay:closed',()=>detailView(true));
-const galaxyUI=installGalaxy({state,api,esc,timeLabel});
+const galaxyUI=lazy(async()=>{const {installGalaxy}=await import('./galaxy.js');return installGalaxy({state,api,esc,timeLabel});});
 try{state.memoryMode=localStorage.getItem('pa.memory.mode')||'list';}catch{state.memoryMode='list';}
 document.addEventListener('galaxy:closed',()=>detailView(true));
 const goalsUI=installGoals({state,api,modal,toast,refresh,esc,timeLabel,chooseTask,compose:composeAbout,request:sendIntent});
@@ -395,13 +400,13 @@ function staticChrome(){
   document.body.prepend(bar);
 }
 try{
-  const boot=await api('/api/bootstrap');switchWorkspace(boot);window.noyiBoot=boot;
+  const boot=early?.boot||await api('/api/bootstrap');switchWorkspace(boot);window.noyiBoot=boot;
   if(STATIC){staticChrome();state.room='local';}
   await refresh(true);
   if(STATIC){
     const play=applyLink();state.detailSignature='';await detailView(true);roomView();messageView(true);
-    const skin=new URLSearchParams(location.search).get('skin');if(skin)replayUI.setSkin(skin);
-    if(play&&state.tab==='replay')replayUI.autoplay();
+    const skin=new URLSearchParams(location.search).get('skin');if(skin)await replayUI.setSkin(skin);
+    if(play&&state.tab==='replay')await replayUI.autoplay();
   }else setTimeout(poll,1500);
 }catch(e){toast(STATIC?'演示数据读取失败：'+e.message:'无法连接本地服务，请确认启动窗口仍在运行。');console.error(e);}
 
@@ -417,6 +422,6 @@ async function downloadBackup(){
 function switchWorkspace(boot){
   if(state.workspace)saveDraft();
   state.workspace=boot.workspace_id;state.storagePrefix='pa.'+state.workspace+'.';state.token=boot.token;
-  state.room=localStorage.getItem(state.storagePrefix+'room')||'local';state.data=null;state.task=null;state.answers={};continuationNonces.clear();
+  state.room=localStorage.getItem(state.storagePrefix+'room')||'local';rememberRoom();state.data=null;state.task=null;state.answers={};continuationNonces.clear();
   state.signature='';state.detailSignature='';state.sideSignature='';goalsUI.show(false);restoreDraft();
 }

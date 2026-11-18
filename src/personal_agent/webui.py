@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 import secrets
 import time
+from urllib.parse import unquote
 import uuid
 
 from aiohttp import web
@@ -26,6 +27,7 @@ from .remote import COOKIE, COOKIE_MAX_AGE, DEVICE, REMOTE, RemoteConfig, Remote
 from .push import PushChannel, load_vapid
 from .service import FileChannel
 from .home_updates import HomeUpdates
+from .web_assets import Assets
 
 
 WEB = Path(__file__).with_name("web")
@@ -303,12 +305,27 @@ async def security(request, handler):
         # No tracebacks, filesystem locations, SDK bodies or credentials in responses.
         message = str(exc) if isinstance(exc, ValueError) else "请求无效或文件暂不可用"
         response = web.json_response({"error": message[:240]}, status=400)
-    response.headers.update({"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
+    # Static files set their own caching (web_assets.py); everything else,
+    # ledger data above all, is never stored by the browser.
+    response.headers.setdefault("Cache-Control", "no-store")
+    gzip_json(request, response)
+    response.headers.update({"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
                              "Cross-Origin-Resource-Policy": "same-origin", "X-Frame-Options": "DENY",
                              "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"})
     if response.headers.pop("X-Page-CSP", None):
         response.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
     return response
+
+
+def gzip_json(request, response):
+    """Compress JSON over 1 KB when the client accepts gzip.
+
+    /api/state is ~130 KB and ~22 KB compressed: on a phone far from home
+    that is most of the first screen's transfer.
+    """
+    if (type(response) is web.Response and response.content_type == "application/json" and not response.headers.get("Content-Encoding")
+            and response.body is not None and len(response.body) > 1024 and "gzip" in request.headers.get("Accept-Encoding", "")):
+        response.enable_compression(web.ContentCoding.gzip)
 
 
 async def json_body(request):
@@ -320,11 +337,15 @@ async def json_body(request):
     return body
 
 
-async def boot(request):
+def boot_data(request):
     c = request.app[CONSOLE]
-    return web.json_response({"token": c.token, "instance_id": c.instance_id, "workspace_id": c.workspace_id, "version": "0.6.0", "title": "Noyi",
+    return {"token": c.token, "instance_id": c.instance_id, "workspace_id": c.workspace_id, "version": "0.6.0", "title": "Noyi",
                               "remote": bool(request.get(REMOTE)), "push_public_key": c.channel.vapid.public if request.get(DEVICE) else None,
-                              "remote_hosts": sorted(c.remote.config.hosts) if not request.get(REMOTE) else []})
+                              "remote_hosts": sorted(c.remote.config.hosts) if not request.get(REMOTE) else []}
+
+
+async def boot(request):
+    return web.json_response(boot_data(request))
 
 
 async def update_status(request):
@@ -542,26 +563,58 @@ STATIC_FILES = {"index.html", "app.js", "timeline.js", "progress.js", "style.css
                 "icon-192.png", "icon-512.png", "apple-touch-icon.png"}
 
 
+ASSETS = web.AppKey("assets", Assets)
+
+
 async def static(request):
     name = request.match_info.get("name", "index.html")
     if name not in STATIC_FILES:
         raise web.HTTPNotFound()
     if name == "index.html" and request.get(REMOTE) and not request.get(DEVICE):
         name = "pair.html"
-    return web.FileResponse(WEB / name)
+    if name == "index.html":
+        return first_screen(request)
+    return request.app[ASSETS].respond(request, name)
+
+
+ROOM_COOKIE = "noyi_room"
+
+
+def first_screen(request):
+    """The page with its first state inside it.
+
+    Far from home every round trip costs hundreds of milliseconds. The page
+    used to load, then ask /api/bootstrap, then /api/state: three trips
+    before the conversation could show. Now the page carries both answers.
+    The room is the one the page last showed (a cookie it sets; only a
+    preference, checked here like any room id). The page is never stored:
+    it holds ledger data, exactly like /api/state.
+    """
+    c = request.app[CONSOLE]
+    room = unquote(request.cookies.get(ROOM_COOKIE, "local"))
+    try:
+        state = c.snapshot(room)
+    except ValueError:
+        room, state = "local", c.snapshot("local")
+    state["version"] = ledger_version(c.store, c.service.runtime.drafts)
+    early = json.dumps({"room": room, "boot": boot_data(request), "state": state}, ensure_ascii=False, separators=(",", ":"))
+    # Inside a non-executed data block; "<" escaped so text can never close it.
+    early = early.replace("<", "\\u003c")  # JSON escape: the browser reads it back as "<"
+    page = request.app[ASSETS].current()["index.html"].body.decode("utf-8")
+    page = page.replace("</head>", f'<script type="application/json" id="noyi-early">{early}</script>\n</head>', 1)
+    response = web.Response(text=page, content_type="text/html")
+    if "gzip" in request.headers.get("Accept-Encoding", ""):
+        response.enable_compression(web.ContentCoding.gzip)
+    return response
 
 
 async def manifest(request):
-    response = web.FileResponse(WEB / "manifest.webmanifest")
-    response.content_type = "application/manifest+json"
-    return response
+    return request.app[ASSETS].respond(request, "manifest.webmanifest")
 
 
 async def service_worker(request):
     # Served from the root so its scope covers the whole app.
-    response = web.FileResponse(WEB / "sw.js", headers={"Service-Worker-Allowed": "/"})
-    response.content_type = "text/javascript"
-    return response
+    return request.app[ASSETS].respond(request, "sw.js", headers={"Service-Worker-Allowed": "/"})
 
 
 async def pairing(request):
@@ -663,6 +716,7 @@ async def lifecycle(app):
 def create_app(store, data, model, *, run_service=True, shutdown_event=None, plugins=None):
     app = web.Application(middlewares=[security], client_max_size=MAX_IMAGE_BYTES + 20000)
     app[CONSOLE] = Console(store, data, model, run_service=run_service, shutdown_event=shutdown_event, plugins=plugins)
+    app[ASSETS] = Assets(WEB, STATIC_FILES | {"manifest.webmanifest"})
     app.add_routes([web.get("/", static), web.get("/assets/{name}", static), web.get("/api/bootstrap", boot),
                     web.get("/api/home-update", update_status), web.post("/api/home-update", update_start),
                     web.get("/manifest.webmanifest", manifest), web.get("/sw.js", service_worker),

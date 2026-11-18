@@ -169,5 +169,6 @@ def test_every_module_a_served_script_imports_is_served_too():
     from personal_agent.webui import STATIC_FILES
     for served in (STATIC_FILES, set(ASSETS)):
         for name in sorted(n for n in served if n.endswith(".js") and n not in {"sw.js"}):
-            for imported in re.findall(r"from\s+'\./([\w.-]+\.js)'", (WEB / name).read_text(encoding="utf-8")):
+            # Static imports and import() alike: a lazily loaded tab 404ing is the same bug.
+            for imported in re.findall(r"(?:from\s*|import\s*\(\s*)'\./([\w.-]+\.js)'", (WEB / name).read_text(encoding="utf-8")):
                 assert imported in served, f"{name} imports {imported}, which is not served"
