@@ -3,6 +3,7 @@
 These drive a real headless Chromium against a local test site (127.0.0.1).
 They need the Playwright headless shell: python -m playwright install chromium --only-shell
 """
+import asyncio
 import json
 import zipfile
 
@@ -61,9 +62,23 @@ class Site:
             self.ws_messages.append(message.data)
         return ws
 
+    async def hop(self, request):
+        # Replaces itself right after loading, like a search page that redirects once.
+        return web.Response(text="<!doctype html><title>跳转</title><p>旧页面</p><script>setTimeout(() => location.replace('/slow'), 30)</script>", content_type="text/html")
+
+    async def slow(self, request):
+        # The new document arrives in two parts: no body for a while.
+        response = web.StreamResponse(headers={"Content-Type": "text/html; charset=utf-8"})
+        await response.prepare(request)
+        await response.write("<!doctype html><html><head><title>结果</title>".encode() + b" " * 4096)
+        await asyncio.sleep(1.2)
+        await response.write("</head><body><p>新页面的结果</p></body></html>".encode())
+        await response.write_eof()
+        return response
+
     def app(self):
         app = web.Application()
-        app.add_routes([web.get(path, self.page) for path in PAGES] + [web.get("/wsock", self.wsock)]
+        app.add_routes([web.get(path, self.page) for path in PAGES] + [web.get("/wsock", self.wsock), web.get("/hop", self.hop), web.get("/slow", self.slow)]
                        + [web.route("*", path, self.record) for path in ("/post", "/search", "/beacon", "/api/like", "/delete", "/do-login")])
         return app
 
@@ -141,6 +156,13 @@ async def test_browser_tools_appear_only_after_the_package_is_loaded(store, tmp_
     assert "browser_open" not in seen[0] and "load_capability" in seen[0]
     assert {"browser_open", "browser_act", "browser_confirmed", "browser_login"} <= seen[1]
     assert "Browser tools operate" in result(model.requests[1]["messages"], "load_capability")["guide"]
+
+
+async def test_a_page_that_replaces_itself_while_loading_still_gives_a_snapshot(store, tmp_path, tools, site):
+    _, model = await run(store, tmp_path / "data", tools, open_page(site.base + "/hop") + [stop])
+    opened = result(model.requests[2]["messages"], "browser_open")
+    assert "error" not in opened, opened
+    assert "新页面的结果" in opened["snapshot"]
 
 
 # ---- confirmation ----------------------------------------------------------------------

@@ -446,6 +446,13 @@ class BrowserTools:
             except Exception:
                 before = None      # the page navigated while we waited; wait on the new document
 
+    async def _loaded(self, page):
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=NAV_TIMEOUT_MS)
+            await page.evaluate(SETTLE_JS)
+        except Exception:
+            pass                   # replaced again while waiting; the caller retries
+
     async def _redact(self, page, text):
         for match in reversed(list(VALUE_LINE.finditer(text))):
             try:
@@ -466,9 +473,17 @@ class BrowserTools:
         # Refs belong to one document. A page that replaces its document on
         # its own after loading (a script redirect) would leave the model with
         # dead refs, so the snapshot is retaken until the document is stable.
-        for _ in range(3):
+        # Caught mid-replacement, the new document may not have a body yet:
+        # wait for it to load instead of reporting an error.
+        for attempt in range(3):
             document = await self._document(page)
-            body = await page.locator("body").aria_snapshot(mode="ai", timeout=ACTION_TIMEOUT_MS)
+            try:
+                body = await page.locator("body").aria_snapshot(mode="ai", timeout=ACTION_TIMEOUT_MS)
+            except Exception:
+                if attempt == 2:
+                    raise
+                await self._loaded(page)
+                continue
             await asyncio.sleep(0)
             if await self._document(page) == document:
                 break
