@@ -80,7 +80,7 @@ ENUMS = {
     "runs.end_reason": {"accepted", "conversation_reply", "scope_changed", "waiting_user", "requirements_updated", "memory_curation",
                         "interrupted", "time_budget", "timeout", "model_or_runtime_error", "model_budget", "tool_budget",
                         "stagnation_budget", "output_limit", "no_accepted_artifact", "engine_ended_without_acceptance",
-                        "unable_reported", "cancelled", "waiting_children", "waiting_dependencies", "action_completed", "chat_tool_denied", "answered"},
+                        "unable_reported", "cancelled", "waiting_children", "waiting_dependencies", "action_completed", "chat_tool_denied", "answered", "answer_needs_tools"},
     "runs.stop_reason": {"scope_changed", "user_stop", "cancel", "requirements_updated", "memory_changed"},
     "model_requests.state": {"dispatching", "completed", "failed", "unknown"},
     "steps.kind": {"model", "acceptance", "recovery", "conversation_rejected", "nudge", "tool_error"},

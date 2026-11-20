@@ -136,6 +136,14 @@ class SpeechStore:
         facts = ([f"读了 {reads} 份资料"] if reads else []) + ([f"分出 {workers} 个子任务"] if workers else []) + [f"调用工具 {len(ops)} 次"]
         return f"还在做，已经 {max(1, round(elapsed / 60))} 分钟：" + "，".join(facts) + "。做完马上发你。"
 
+    def escalate_answer(self, run, op_id, args):
+        with self.transaction():
+            result = super().escalate_answer(run, op_id, args)
+            # The receipt already said the work is under way: no "started" line
+            # when it continues as ordinary work.
+            self.db.execute("INSERT OR IGNORE INTO speech_marks VALUES(?,?,?,?)", (run["task_id"], "started", op_id, time.time()))
+        return result
+
     def finish(self, run, **kwargs):
         if run.get("task_id") and kwargs.get("artifact") and kwargs.get("content"):
             kwargs["content"] = shape_delivery(kwargs["content"])

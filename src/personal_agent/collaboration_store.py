@@ -536,6 +536,29 @@ class CollaborationStore:
             self.db.execute("UPDATE events SET state='pending',claimed_by_run=NULL WHERE claimed_by_run=? AND state='claimed'", (run["id"],))
         return {"question_id": qid, "status": "waiting_user"}
 
+    def escalate_answer(self, run, op_id, args):
+        """A chat answer that needs outside information or tools becomes ordinary work.
+
+        Same task, same user message, same receipt and commitment: the run ends
+        without saying anything, the message goes back to pending and the task
+        continues with the full tool set. The receipt already told the user.
+        """
+        result = {"outcome": "continues_with_tools",
+                  "note": "The answer route had no tools. This task now continues as ordinary work with the full tool set; do the work, do not report unable for this reason again."}
+        with self.transaction():
+            if not self.current(run):
+                raise ValueError("stale run")
+            t = self.task(run["task_id"])
+            spec = dict(t["spec"], result_kind="artifact")
+            now = time.time()
+            self.db.execute("INSERT INTO operations(id,task_id,run_id,tool,arguments,status,result,created,ended) VALUES(?,?,?,?,?,?,?,?,?)",
+                            (op_id, t["id"], run["id"], "report_unable", encode(args), "succeeded", encode(result), now, now))
+            self._charge_elapsed(t, run)
+            self.db.execute("UPDATE tasks SET spec=?,status='ready',reason='answer_needs_tools',acceptance='pending' WHERE id=?", (encode(spec), t["id"]))
+            self.db.execute("UPDATE runs SET phase='ended',end_reason='answer_needs_tools',ended=? WHERE id=?", (now, run["id"]))
+            self.db.execute("UPDATE events SET state='pending',claimed_by_run=NULL WHERE claimed_by_run=? AND state='claimed'", (run["id"],))
+        return result
+
     def answer_attention(self, question_id, answer, *, nonce, account="local-user"):
         if not isinstance(answer, str) or not answer.strip() or not nonce:
             raise ValueError("answer and nonce required")

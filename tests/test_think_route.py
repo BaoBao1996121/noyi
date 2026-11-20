@@ -133,3 +133,62 @@ def test_answer_task_runs_with_thinking_even_when_reply_layer_does_not(monkeypat
         asyncio.run(model.complete([{"role": "user", "content": "x"}], [ANSWER_TOOL]))
     assert captured["extra_body"] == {"thinking": {"type": "enabled"}} and captured["reasoning_effort"] == "medium"
     assert "tool_choice" not in captured
+
+
+# ---- an answer that needs tools becomes ordinary work (2026-11-21) -----------------
+
+LOOKUP = {"action": "new_task", "result_kind": "answer", "receipt": "我去查一下 playwright 在 PyPI 上的最新版本号。"}
+
+
+@pytest.mark.asyncio
+async def test_answer_that_declares_it_needs_tools_continues_as_ordinary_work_with_one_receipt(store, tmp_path):
+    incoming(store, "playwright 在 PyPI 上最新版本是多少？")
+    seen = {}
+
+    def answer_route(messages, tools):
+        seen["answer_tools"] = {t["function"]["name"] for t in tools}
+        return tool_reply("report_unable", {"explanation": "要上网查。", "needs": "outside_information_or_tools"}, "u1")
+
+    def worker(messages, tools):
+        seen["worker_tools"] = {t["function"]["name"] for t in tools}
+        return tool_reply("report_unable", {"explanation": "测试到此为止。"}, "end")
+
+    model = ScriptedModel([tool_reply("resolve_conversation", LOOKUP), answer_route, worker])
+    runtime = Runtime(store, tmp_path / "data", model)
+    await runtime.execute(store.claim_conversation())
+    [task] = store.all("SELECT id FROM tasks")
+    commitments = store.all("SELECT id FROM commitments")
+    await runtime.execute(store.claim())
+    task = store.task(task["id"])
+    # Same task, same message, same promise; nothing more was said to the user.
+    assert task["spec"]["result_kind"] == "artifact" and task["status"] == "ready"
+    assert [d["content"] for d in store.all("SELECT content FROM deliveries ORDER BY rowid")] == [LOOKUP["receipt"]]
+    assert store.all("SELECT id FROM commitments") == commitments
+    assert store.one("SELECT state FROM commitments")["state"] == "open"
+    await runtime.execute(store.claim())
+    assert "deliver_answer" in seen["answer_tools"]
+    assert "write_artifact" in seen["worker_tools"] and "deliver_answer" not in seen["worker_tools"]
+    assert len(store.all("SELECT id FROM tasks")) == 1
+    said = [d["content"] for d in store.all("SELECT content FROM deliveries ORDER BY rowid")]
+    assert said.count(LOOKUP["receipt"]) == 1 and len(said) == 2      # the receipt, then the worker's own end
+
+
+@pytest.mark.asyncio
+async def test_answer_unable_for_other_reasons_is_still_told_to_the_user(store, tmp_path):
+    incoming(store, "帮我看看这张图里写了什么")
+    model = ScriptedModel([tool_reply("resolve_conversation", {**LOOKUP, "receipt": "我看一下这张图。"}),
+                           tool_reply("report_unable", {"explanation": "当前模型看不了图片，换个能看图的模型再试。", "needs": "nothing_available"}, "u1")])
+    runtime = Runtime(store, tmp_path / "data", model)
+    await runtime.execute(store.claim_conversation())
+    await runtime.execute(store.claim())
+    [task] = store.all("SELECT id FROM tasks")
+    task = store.task(task["id"])
+    assert task["spec"]["result_kind"] == "answer" and task["status"] == "paused" and task["reason"] == "unable_reported"
+    assert store.all("SELECT content FROM deliveries ORDER BY rowid")[-1]["content"].startswith("当前模型看不了图片")
+
+
+def test_answer_route_declares_needing_tools_in_a_structured_field():
+    from personal_agent.runtime import ANSWER_UNABLE
+    needs = ANSWER_UNABLE["function"]["parameters"]["properties"]["needs"]
+    assert set(needs["enum"]) == {"outside_information_or_tools", "nothing_available"}
+    assert "needs" in ANSWER_UNABLE["function"]["parameters"]["required"]

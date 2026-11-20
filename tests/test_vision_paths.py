@@ -128,7 +128,7 @@ async def test_blind_model_is_told_it_cannot_see_the_photo(store, tmp_path):
 async def test_blind_answer_task_is_told_it_cannot_see_the_photo(store, tmp_path):
     incoming(store, "这个吃了一半，多少热量", [photo_source(tmp_path)])
     model = Model([tool_reply("resolve_conversation", ANSWER),
-                   tool_reply("report_unable", {"explanation": "当前模型不能看图。"}, "u")], name="deepseek-v4-pro")
+                   tool_reply("report_unable", {"explanation": "当前模型不能看图。", "needs": "nothing_available"}, "u")], name="deepseek-v4-pro")
     runtime = Runtime(store, tmp_path / "data", model)
     await runtime.execute(store.claim_conversation())
     await runtime.execute(store.claim())
