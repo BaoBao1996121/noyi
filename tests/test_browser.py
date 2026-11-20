@@ -160,6 +160,9 @@ async def test_browser_tools_appear_only_after_the_package_is_loaded(store, tmp_
     assert "browser_open" not in seen[0] and "load_capability" in seen[0]
     assert {"browser_open", "browser_act", "browser_confirmed", "browser_login"} <= seen[1]
     assert "Browser tools operate" in result(model.requests[1]["messages"], "load_capability")["guide"]
+    # Before loading, the system prompt tells the model hidden packages exist, so
+    # it does not report "no browser" from the visible tool list alone.
+    assert "load_capability" in model.requests[0]["messages"][0]["content"]
 
 
 async def test_a_page_that_replaces_itself_while_loading_still_gives_a_snapshot(store, tmp_path, tools, site):

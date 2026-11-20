@@ -38,18 +38,18 @@ READ_CHARS = 8000
 MAX_TABS = 6
 ACTION_TIMEOUT_MS = 5000
 NAV_TIMEOUT_MS = 20000
-NET_QUIET_S = 0.3
+NAV_GRACE_S = 0.6   # measured: a search page's own redirect request starts about 0.46 s after load
 TICKET_SECONDS = 60
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 WRITE_TYPES = {"document", "fetch", "xhr", "eventsource", "other"}
 KEYS = {"Enter", "Tab", "Escape", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageDown", "PageUp", "Home", "End", "Space"}
 
 # Settle: no structural DOM change (nodes added or removed, text changed) for
-# 150 ms, at most 1 s. Attribute churn (animations, hover classes, timers
+# 150 ms, at most 0.5 s (the network has already gone quiet). Attribute churn (animations, hover classes, timers
 # that toggle styles) does not hold it open: it never changes what the
 # snapshot shows, and on busy pages it used to keep every call waiting 1-3 s.
 SETTLE_JS = """() => new Promise(done => {
-  let t = setTimeout(fin, 150); const cap = setTimeout(fin, 1000);
+  let t = setTimeout(fin, 150); const cap = setTimeout(fin, 500);
   const ob = new MutationObserver(() => { clearTimeout(t); t = setTimeout(fin, 150); });
   ob.observe(document, {subtree: true, childList: true, characterData: true});
   function fin() { ob.disconnect(); clearTimeout(cap); done(true); }
@@ -105,6 +105,11 @@ VALUE_LINE = re.compile(r"^(?P<head>\s*- '?(?:textbox|searchbox|combobox|spinbut
 # its load event (Navigation Timing), in wall-clock milliseconds; end 0 = not loaded yet.
 NAV_JS = """() => { const n = performance.getEntriesByType('navigation')[0];
   return n ? [performance.timeOrigin + n.startTime, n.loadEventEnd ? performance.timeOrigin + n.loadEventEnd : 0] : null; }"""
+
+
+def _site(host):
+    """Registrable-ish site of a host: the last two labels (bing.com, pypi.org)."""
+    return ".".join((host or "").lower().split(".")[-2:])
 
 
 def ms(start):
@@ -274,7 +279,8 @@ class Browser:
         page = await self._new_page(context)
         tab = Tab(task_id, page, used=time.monotonic())
         page.on("websocket", lambda ws: ws.on("framesent", lambda _: self._mark(tab, "websocket")))
-        page.on("load", lambda _: asyncio.ensure_future(self._record_load(tab)))
+        page.on("domcontentloaded", lambda _: self._loaded_doc(tab))
+        page.on("load", lambda _: (self._loaded_doc(tab), asyncio.ensure_future(self._record_load(tab))))
         page.on("request", lambda r: self._net(tab, r, True))
         page.on("requestfinished", lambda r: self._net(tab, r, False))
         page.on("requestfailed", lambda r: self._net(tab, r, False))
@@ -312,9 +318,19 @@ class Browser:
 
     @staticmethod
     def _net(tab, request, started):
-        if request.resource_type in {"document", "fetch", "xhr"}:
+        # Only the tab's own main documents. Subresources and fetch/xhr (search
+        # pages load their scripts through dozens of them, trackers never end)
+        # are not waited for: the DOM settle covers what they change on screen.
+        if request.resource_type == "document" and request.frame == tab.page.main_frame:
             (tab.inflight.add if started else tab.inflight.discard)(id(request))
             tab.net_at = time.monotonic()
+
+    @staticmethod
+    def _loaded_doc(tab):
+        # A redirected or replaced navigation may never report its request as
+        # finished; a document that loaded is not in flight any more.
+        tab.inflight.clear()
+        tab.net_at = time.monotonic()
 
     async def _record_load(self, tab):
         """Remember a document's loading span before a redirect replaces it."""
@@ -557,30 +573,40 @@ class BrowserTools:
         return {"browser_ms": total, "site_ms": min(total, round(site))}
 
     async def _settle(self, page, before):
+        # Wait for the main document to stop changing (lands on the final one if
+        # the page replaces itself) and, meanwhile, for its DOM to settle.
         for _ in range(3):
             try:
                 if page.url != before:
                     await page.wait_for_load_state("domcontentloaded", timeout=NAV_TIMEOUT_MS)
-                await page.evaluate(SETTLE_JS)
-                if await self._quiet(page):
+                # The DOM settles during the post-load grace, not after it.
+                dom = asyncio.ensure_future(page.evaluate(SETTLE_JS))
+                stable = await self._quiet(page)
+                try:
+                    await dom
+                except Exception:
+                    stable = False     # its document went away: a redirect
+                if stable:
                     return
-                before = None      # it started loading a new document; wait on that one
+                before = None          # it started loading a new document; wait on that one
             except Exception:
                 before = None      # the page navigated while we waited; wait on the new document
 
     async def _quiet(self, page):
-        """Wait until the page's own requests have been quiet for a moment (at most
-        1.5 s). A page that replaces itself shortly after loading (a search page's
-        redirect) does so here, before its snapshot hands the model dead refs.
-        False when a new document started loading meanwhile."""
+        """Wait while a main document is loading, and for NAV_GRACE_S after the last
+        one loaded (at most 2 s): pages often replace themselves by script shortly
+        after loading (a search page's redirect, a login bounce). Taking the
+        snapshot before that hands the model refs that are already dead. A call
+        that loaded nothing new returns at once. False when a new document
+        started meanwhile."""
         tab = self.browser._pages.get(id(page))
         if tab is None:
             return True
-        document, deadline = await self._document(page), time.monotonic() + 1.5
+        document, deadline = await self._document(page), time.monotonic() + 2.0
         while time.monotonic() < deadline:
-            if not tab.inflight and time.monotonic() - tab.net_at >= NET_QUIET_S:
+            if not tab.inflight and time.monotonic() - tab.net_at >= NAV_GRACE_S:
                 break
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.03)
         return await self._document(page) == document
 
     async def _loaded(self, page):
