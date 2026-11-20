@@ -15,7 +15,7 @@ from .tools import Toolset
 from .model import transient_error
 from .conversation_goals import ConversationGoals
 from .orchestration_tools import OrchestrationTools, public_context
-from .plugins import EFFECTS, PluginRegistry, ToolCall
+from .plugins import EFFECTS, LOAD_TOOL, PluginRegistry, ToolCall
 from .builtin_plugins import PLAN_GUIDE, REPORT_UNABLE, builtin_plugins
 from .tools import tool
 from .web_tools import WEB_GUIDE
@@ -129,6 +129,13 @@ class Runtime:
     def capabilities(self):
         """What the execution assistant can actually do now, from ready plugins."""
         return self.plugins.capabilities(self)
+
+    def loaded_packages(self, run):
+        """Capability packages this task has loaded; they stay loaded for its later runs."""
+        if not run or not run.get("task_id"):
+            return set()
+        rows = self.store.all("SELECT result FROM operations WHERE task_id=? AND tool=? AND status='succeeded'", (run["task_id"], LOAD_TOOL))
+        return {json.loads(r["result"]).get("loaded") for r in rows if r["result"]}
 
     def runnable(self, run):
         return self.store.current(run) and self.store.control_reason(run) is None
@@ -271,6 +278,7 @@ class Runtime:
                 start = time.monotonic()
                 messages = list(params["messages"])
                 if toolset:
+                    messages = self.plugins.shape_request(messages)
                     messages, compacted = compact_request(messages, self.store.lifecycle_context(run))
                     if compacted:
                         self.store.step(run, "context_compacted", {"request_characters": len(encode(messages)), "durable_evidence_retained": True})
@@ -288,6 +296,9 @@ class Runtime:
                     messages.append({"role": "system", "content": ANSWER_REMINDER})
                 if toolset and self.store.one("SELECT id FROM steps WHERE task_id=? AND kind='output_limit' LIMIT 1", (run["task_id"],)):
                     messages.append({"role": "system", "content": "Runtime repair: the previous output was truncated. Write a shorter artifact under 1500 Chinese characters, retaining essential requirements and citations. Incomplete tool calls were not executed."})
+                if toolset:
+                    # A package loaded this run adds its tools from the next request on.
+                    schemas[:] = self.schemas(run)
                 reply = await self.request(run, messages, schemas,
                                            (lambda: self.store.reserve(run, "model")) if toolset else None)
                 self.store.step(run, "model", {**asdict(reply), "seconds": time.monotonic()-start,
@@ -307,7 +318,12 @@ class Runtime:
             if method == "tool":
                 if not self.runnable(run):
                     return {"result": {"error": "inactive_run"}, "is_error": True, "terminate": True}
-                return await self.execute_tool(run, toolset, params["call"], params["batch_size"])
+                known = {t["function"]["name"] for t in schemas}
+                response = await self.execute_tool(run, toolset, params["call"], params["batch_size"])
+                if params["call"]["function"]["name"] == LOAD_TOOL and not response["is_error"]:
+                    added = [s for s in self.schemas(run) if s["function"]["name"] not in known]
+                    response["add_tools"] = [{**s, "concurrent": True} if getattr(self.plugins.spec(s["function"]["name"]), "concurrent", False) else s for s in added]
+                return response
             if method == "tool_rejected":
                 if params.get("reason") == "length" or not self.runnable(run):
                     return {}

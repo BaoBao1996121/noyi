@@ -98,7 +98,7 @@ function roomView(){
 function questionCard(q){
   const pending=q.state==='pending';
   const options=q.options.map((o,i)=>`<button class="button" data-answer="${q.id}" data-option="${i}" ${pending?'':'disabled'}>${esc(o)}</button>`).join('');
-  return `<article class="question${pending?'':' closed'}"><div class="question-label">${pending?'需要你补充':'问题记录'}${pending?'':` <time>${esc(timeLabel(q.created))}</time>`}</div><p>${esc(q.question)}</p>${pending?`<div class="question-options">${options}</div>`:''}${pending?`<div class="question-input"><input data-answer-input="${q.id}" placeholder="也可以直接输入你的回答" value="${esc(state.answers[q.id]||'')}"><button class="button" data-answer="${q.id}">回答</button></div>`:`<p class="muted">${q.state==='answered'?`已回答：${esc(q.answer)}`:'此问题已失效，无需回答'}</p>`}</article>`;
+  return `<article class="question${pending?'':' closed'}"><div class="question-label">${pending?'需要你补充':'问题记录'}${pending?'':` <time>${esc(timeLabel(q.created))}</time>`}</div><p>${esc(q.question)}</p>${pending&&q.live?`<p><button class="button primary" data-live="${q.id}">打开实时画面登录</button></p>`:''}${pending?`<div class="question-options">${options}</div>`:''}${pending?`<div class="question-input"><input data-answer-input="${q.id}" placeholder="也可以直接输入你的回答" value="${esc(state.answers[q.id]||'')}"><button class="button" data-answer="${q.id}">回答</button></div>`:`<p class="muted">${q.state==='answered'?`已回答：${esc(q.answer)}`:'此问题已失效，无需回答'}</p>`}</article>`;
 }
 // Where the assistant is with each message: stored, being read, done.
 const intakeLabels={received:'已送达',reading:'正在读…',failed:'没能处理'};

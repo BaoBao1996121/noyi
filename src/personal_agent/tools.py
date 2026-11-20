@@ -121,6 +121,12 @@ def validate_arguments(name: str, args: dict):
             raise ValueError(f"{key} must be string array")
 
 
+# Tools whose results are cited as [page_id]: a page snapshot saved under the
+# task's web/ folder (url, title, then the text, one per line), with the
+# text's sha256 in the result.
+PAGE_TOOLS = {"fetch_page", "browser_read"}
+
+
 def safe_child(root: Path, name: str) -> Path:
     if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}", name) or name.endswith("."):
         raise ValueError("use a simple ASCII filename, no directories")
@@ -325,7 +331,7 @@ def check_quotes(toolset: Toolset, operations: list[dict], quotes: list[dict]) -
             continue
         if o["tool"] == "read_source" and result.get("snapshot") and "image" not in result:
             snapshots.setdefault(result["source_id"], (toolset.root / result["snapshot"], result["sha256"], False))
-        elif o["tool"] == "fetch_page" and result.get("page_id"):
+        elif o["tool"] in PAGE_TOOLS and result.get("page_id"):
             snapshots.setdefault(result["page_id"], (toolset.root / "web" / (result["page_id"] + ".txt"), result["sha256"], True))
     checked = []
     for q in quotes:
@@ -402,11 +408,11 @@ def verify(toolset: Toolset, operations: list[dict], proposal: dict) -> dict:
             checks.append({"source": sid, "unavailable_disclosed": True})
     fetched = {}
     for o in operations:
-        if o["tool"] == "fetch_page" and o["status"] == "succeeded":
+        if o["tool"] in PAGE_TOOLS and o["status"] == "succeeded":
             fetched.setdefault(o["result"].get("page_id"), o["result"].get("sha256"))
     cited_pages = set(re.findall(r"\[(page_[0-9a-f]{10})\]", text))
     for page_id in sorted(cited_pages - set(fetched)):
-        errors.append(f"citation [{page_id}] has no successful fetch_page in this task")
+        errors.append(f"citation [{page_id}] has no successful page read (fetch_page or browser_read) in this task")
     for page_id in sorted(cited_pages & set(fetched)):
         # Which version of the page the citation rests on.
         checks.append({"page": page_id, "sha256": fetched[page_id]})

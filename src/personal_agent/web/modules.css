@@ -71,3 +71,10 @@
 .outbox-failed{display:flex;align-items:center;gap:4px}
 .outbox-failed .small-link{color:#b67b7b;font-size:11px;padding:2px 4px;margin-left:0}
 .outbox-files{font-size:11px;color:#888;margin-top:4px;max-width:80%;overflow-wrap:anywhere}
+
+/* Live view of the browser tab during a login handoff */
+.live-view{position:fixed;inset:0;z-index:50;background:var(--bg,#fff);display:flex;flex-direction:column;gap:8px;padding:10px}
+.live-view header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.live-view img{flex:1;min-height:0;width:100%;object-fit:contain;background:#222;touch-action:none;cursor:crosshair}
+.live-input{display:flex;flex-wrap:wrap;gap:6px}
+.live-input input{flex:1;min-width:10em}

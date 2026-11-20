@@ -148,7 +148,7 @@ class CommitmentStore:
                 raise ValueError("账本里没有这次成功操作")
             return {"kind": "operation", "task_id": item["task_id"], "id": item["id"]}
         if kind == "page":
-            pages = [json.loads(p["result"] or "{}") for p in self.all("SELECT result FROM operations WHERE task_id=? AND tool='fetch_page' AND status='succeeded'", (item.get("task_id"),))]
+            pages = [json.loads(p["result"] or "{}") for p in self.all("SELECT result FROM operations WHERE task_id=? AND tool IN ('fetch_page','browser_read') AND status='succeeded'", (item.get("task_id"),))]
             read = next((p for p in pages if p.get("page_id") == item.get("page_id")), None)
             if not read:
                 raise ValueError("这项任务没有成功读过这个网页")

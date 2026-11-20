@@ -70,6 +70,21 @@ class Plugin:
     # only these, so it hands work over instead of claiming it cannot be done.
     # Return nothing when the capability is not configured or not usable.
     describe: Callable[[Any], list[str]] | None = None
+    # A capability package: its tools stay out of the tool list, and its
+    # prompt out of the system prompt, until the model calls
+    # load_capability(package) in the task. Keeps rarely used tool groups
+    # from costing tokens on every request.
+    package: str = ""
+    # Optional web console extension: an object with routes(console_key) ->
+    # aiohttp route definitions and question_extra(store, question_id) -> dict.
+    web: Any = None
+    # Optional rewrite of a model request's messages before it is sent
+    # (messages -> messages), e.g. to drop stale bulky tool output. It may
+    # only shorten tool results; the ledger keeps the originals.
+    shape_request: Callable[[list], list] | None = None
+
+
+LOAD_TOOL = "load_capability"
 
 
 def validate_schema_arguments(schema: dict, args: dict) -> None:
@@ -101,6 +116,24 @@ class PluginRegistry:
         self._builtin: list[ToolSpec] = []
         for plugin in plugins:
             self.add(plugin)
+        packages = sorted({p.package for p in self.plugins if p.package})
+        if packages:
+            self.add(Plugin("core.packages", "1", [ToolSpec(
+                {"type": "function", "function": {"name": LOAD_TOOL, "description": "Load an installed capability package; its tools are usable from your next step. Packages: " + "; ".join(f"{name}: {self._package_summary(name)}" for name in packages),
+                 "parameters": {"type": "object", "properties": {"name": {"type": "string", "enum": packages}}, "required": ["name"]}}},
+                self._load, available=lambda runtime, run: bool(set(packages) - runtime.loaded_packages(run)))]))
+
+    def _package_summary(self, name):
+        return " ".join(line for p in self.plugins if p.package == name for line in (p.describe(None) if p.describe else []))[:300] or name
+
+    def _load(self, call, args):
+        plugins = [p for p in self.plugins if p.package == args["name"]]
+        return {"loaded": args["name"], "tools": [s.name for p in plugins for s in p.tools],
+                "guide": "\n".join(p.prompt.strip() for p in plugins if p.prompt.strip())}
+
+    def package_schemas(self, name, runtime, run) -> list[dict]:
+        return [spec.schema for plugin in self.plugins if plugin.package == name for spec in plugin.tools
+                if spec.available is None or spec.available(runtime, run)]
 
     def add(self, plugin: Plugin) -> None:
         if not isinstance(plugin, Plugin) or not PLUGIN_NAME.fullmatch(plugin.name or ""):
@@ -134,11 +167,15 @@ class PluginRegistry:
         return entry[1] if entry else None
 
     def schemas(self, runtime, run) -> list[dict]:
-        return [spec.schema for plugin in self.plugins for spec in plugin.tools
+        # Packages loaded in this task come last, so the declarations before
+        # them (and the provider's prompt cache over them) stay unchanged.
+        loaded = runtime.loaded_packages(run) if any(p.package for p in self.plugins) else set()
+        base = [p for p in self.plugins if not p.package] + [p for p in self.plugins if p.package in loaded]
+        return [spec.schema for plugin in base for spec in plugin.tools
                 if spec.available is None or spec.available(runtime, run)]
 
     def prompt(self) -> str:
-        return "\n".join(p.prompt.strip() for p in self.plugins if p.prompt.strip())
+        return "\n".join(p.prompt.strip() for p in self.plugins if p.prompt.strip() and not p.package)
 
     def capabilities(self, runtime) -> list[str]:
         found = []
@@ -147,6 +184,12 @@ class PluginRegistry:
                 if isinstance(line, str) and line.strip() and line.strip() not in found:
                     found.append(line.strip())
         return found
+
+    def shape_request(self, messages: list) -> list:
+        for plugin in self.plugins:
+            if plugin.shape_request:
+                messages = plugin.shape_request(messages)
+        return messages
 
     def identities(self) -> list[str]:
         return [f"{p.name}@{p.version}" for p in self.plugins]

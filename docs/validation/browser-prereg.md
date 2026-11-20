@@ -34,4 +34,13 @@
 
 ## 结果
 
-（验收后填）
+（验收后填。正式结果写在 `results.jsonl`，跑一半中断就用同一条命令续跑。）
+
+正式验收命令（模型走 deepseek-flash 官方接口，密钥变量名经 `PA_API_KEY_ENV` 指定，不写值）：
+
+```
+python scripts/run-browser-check.py --mode compare e2e --runs 5 --output .pa/browser-check
+python scripts/run-browser-check.py --summary --output .pa/browser-check
+```
+
+实现期间的试跑（每站 1 次，不计入验收，只用来发现机制问题）：必应搜索结果页会自己跳转一次、上下文级请求拦截让必应返回空白页、表单 POST 在网络层中止会变错误页，三处都已在机制层改掉（见设计稿第 13 节）。改完后对照层 3 站各 1 次：Noyi 组 3/3 正确，输入 token 24.6K / 17.6K / 11.6K；截图组 2/3（翻页那次中途报错），67.8K / 35.8K / 50.9K。整链路 form 1 次：交付通过，1 次确认。

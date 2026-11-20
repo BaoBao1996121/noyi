@@ -102,7 +102,9 @@ export async function runSession(start, rpc, { signal } = {}) {
   let finishReason = 'stop';
   const executed = new Set();
   const toolNames = new Set();
-  const tools = start.tools.map(definition => {
+  // Tools a capability package adds during the run; Pi picks them up before the next turn.
+  const added = [];
+  const toTool = definition => {
     const fn = definition?.function;
     if (definition.type !== 'function' || !fn || typeof fn.name !== 'string' || !fn.parameters || toolNames.has(fn.name)) {
       throw new BridgeProtocolError('invalid tool schema');
@@ -115,10 +117,16 @@ export async function runSession(start, rpc, { signal } = {}) {
         executed.add(id);
         const response = await rpc('tool', { call: { id, function: { name: fn.name, arguments: JSON.stringify(args) } },
           batch_size: activeCalls.length });
+        if (Array.isArray(response.add_tools)) {
+          for (const definition of response.add_tools) {
+            if (!toolNames.has(definition?.function?.name)) added.push(toTool(definition));
+          }
+        }
         return { content: [{ type: 'text', text: JSON.stringify(response.result) }], details: response.result,
           isError: response.is_error === true, terminate: response.terminate === true };
       } };
-  });
+  };
+  const tools = start.tools.map(toTool);
   // Transport-only metadata. Python provides the real endpoint, limits, key and usage receipt.
   const model = { id: start.model, name: start.model, api: 'openai-completions', provider: 'python-qwen',
     baseUrl: '', reasoning: false, input: ['text'], contextWindow: 0, maxTokens: 0,
@@ -145,6 +153,11 @@ export async function runSession(start, rpc, { signal } = {}) {
         stream.push({ type: 'done', reason: message.stopReason, message });
       }
       return stream;
+    },
+    prepareNextTurnWithContext: turn => {
+      if (!added.length) return undefined;
+      tools.push(...added.splice(0));
+      return { context: { ...turn.context, tools: [...tools] } };
     },
     finishTurn: async () => {
       if (halted || signal?.aborted) return { action: 'end' };

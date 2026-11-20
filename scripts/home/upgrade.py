@@ -131,6 +131,12 @@ class Upgrader:
                 code, out = run(step, cwd=target, timeout=1800)
                 if code:
                     raise UpgradeFailed("rehearsal_failed", "install", out)
+            # The browser package's Chromium lives in a shared folder, so an
+            # unchanged version is not downloaded again. A failed download does
+            # not stop the upgrade; the browser tools stay hidden until it works.
+            code, out = run([release_python(self.layout, self.cfg, tag), "-m", "playwright", "install", "chromium", "--only-shell"], cwd=target, timeout=1800)
+            if code:
+                self.log(f"{tag}: browser download failed, browser tools stay off: {out[-300:]}")
         if self.cfg["smoke"]:
             self.progress("testing", tag)
             code, out = run([release_python(self.layout, self.cfg, tag), "-m", "pytest", "-q", "-p", "no:cacheprovider", *self.cfg["smoke"]],

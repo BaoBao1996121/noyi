@@ -17,4 +17,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Application installation failed.' }
 & npm.cmd ci --prefix ./src/personal_agent/pi_bridge --ignore-scripts
 if ($LASTEXITCODE -ne 0) { throw 'Pi installation failed.' }
+# Browser package (headless Chromium, its own profile; never the everyday Chrome).
+# A failed download only leaves the browser tools hidden.
+& ./.venv/Scripts/python.exe -m playwright install chromium --only-shell
+if ($LASTEXITCODE -ne 0) { Write-Warning 'Browser download failed; browser tools stay off until it is installed.' }
 Write-Host 'Installation complete. Run: noyi start'

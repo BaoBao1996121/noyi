@@ -116,7 +116,9 @@ def _tool_names():
     from .conversation import CONVERSATION_SCHEMA
     from .runtime import ANSWER_TOOL
     names = {s.name for p in builtin_plugins() for s in p.tools} | {ANSWER_TOOL["function"]["name"]}
-    names |= {t["function"]["name"] for t in HEALTH_TOOLS + [FETCH, SEARCH] + CONVERSATION_SCHEMA}
+    from .browser import TOOL_NAMES as BROWSER_TOOLS
+    from .plugins import LOAD_TOOL
+    names |= {t["function"]["name"] for t in HEALTH_TOOLS + [FETCH, SEARCH] + CONVERSATION_SCHEMA} | BROWSER_TOOLS | {LOAD_TOOL}
     return names
 
 

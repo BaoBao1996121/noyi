@@ -160,8 +160,12 @@ class Console:
                 if speaker:
                     d['actor_id'] = speaker['actor_id']
         questions = self.store.all("SELECT a.id,a.task_id,a.question,a.options,a.state,a.answer,a.created FROM attentions a JOIN tasks t ON t.id=a.task_id WHERE t.room_id=? AND a.account='local-user' ORDER BY a.created", (room,))
+        extras = [p.web for p in self.service.runtime.plugins.plugins if p.web is not None]
         for q in questions:
             q["question"], q["options"] = chat_text(q["question"]), [chat_text(o) for o in json.loads(q["options"])]
+            for extra in extras:
+                if q["state"] == "pending":
+                    q.update(extra.question_extra(self.store, q["id"]))
         pending = self.store.all("SELECT f.id,f.state,m.content FROM followups f JOIN messages m ON m.id=f.message_id WHERE m.room_id=? AND f.owner_task IS NULL AND f.state='unassigned'", (room,))
         config = getattr(self.model, "config", ModelConfig())
         return {"workspace_id": self.workspace_id, "tasks": tasks, "messages": list(reversed(messages)), "deliveries": list(reversed(deliveries)), "questions": questions,
@@ -561,7 +565,7 @@ async def shutdown(request):
 
 
 STATIC_FILES = {"index.html", "app.js", "timeline.js", "progress.js", "outbox.js", "style.css", "modules.css", "goals.js", "goals.css", "reviews.js", "replay.js", "replay.css",
-                "replay-pixel.js", "galaxy.js", "galaxy.css", "mobile.css", "mobile.js", "updates.js", "pair.js", "pair.css", "pair.html", "sw.js",
+                "replay-pixel.js", "galaxy.js", "galaxy.css", "mobile.css", "mobile.js", "updates.js", "live.js", "pair.js", "pair.css", "pair.html", "sw.js",
                 "icon-192.png", "icon-512.png", "apple-touch-icon.png"}
 
 
@@ -731,6 +735,8 @@ def create_app(store, data, model, *, run_service=True, shutdown_event=None, plu
                     web.post("/api/shutdown", shutdown),
                     web.post("/api/manage/{name}", manage), web.post("/api/goals/{name}", goal_manage),
                     web.get("/api/policies/{policy_id}", policy_detail)])
+    for extension in [p.web for p in app[CONSOLE].service.runtime.plugins.plugins if p.web is not None]:
+        app.add_routes(extension.routes(CONSOLE))
     app.router.add_get("/api/reviews/{review_id}", review_report)
     app.router.add_get("/r/{task_id}", result_page)
     app.cleanup_ctx.append(lifecycle)

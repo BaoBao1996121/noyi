@@ -8,6 +8,8 @@ import uuid
 
 from .contracts import TaskSpec, digest, encode
 
+PAGE_TOOLS = {"fetch_page", "browser_read"}   # same as tools.PAGE_TOOLS; imported here would be circular
+
 
 class LifecycleStore:
     def __init__(self, path):
@@ -55,7 +57,7 @@ class LifecycleStore:
                 summary = encode({k: result[k] for k in ("source_id", "start", "end", "total", "eof", "sha256")})
             elif tool == "read_source" and result.get("error") == "SourceUnavailable":
                 kind, fingerprint, summary = "negative_evidence", args["source_id"], "Authorized source unavailable: " + args["source_id"]
-            elif tool == "fetch_page" and not failed:
+            elif tool in PAGE_TOOLS and not failed:
                 kind = "web_coverage"
                 fingerprint = encode([result["page_id"], result["sha256"], result["start"], result["end"]])
                 summary = encode({k: result.get(k) for k in ("page_id", "url", "title", "start", "end", "total", "eof")})

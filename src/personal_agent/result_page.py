@@ -70,7 +70,7 @@ def markdown(text, links):
 def source_links(store, task):
     """Citation targets: fetched web pages and authorized HTTP sources of this task tree."""
     links = {s["id"]: s["location"] for s in task["spec"]["sources"] if s.get("kind") == "http"}
-    for op in store.all("SELECT o.result FROM operations o JOIN tasks t ON t.id=o.task_id WHERE t.root_task_id=? AND o.tool='fetch_page' AND o.status='succeeded'", (task["root_task_id"],)):
+    for op in store.all("SELECT o.result FROM operations o JOIN tasks t ON t.id=o.task_id WHERE t.root_task_id=? AND o.tool IN ('fetch_page','browser_read') AND o.status='succeeded'", (task["root_task_id"],)):
         result = json.loads(op["result"] or "{}")
         if result.get("page_id") and str(result.get("url", "")).startswith(("http://", "https://")):
             links[result["page_id"]] = result["url"]
