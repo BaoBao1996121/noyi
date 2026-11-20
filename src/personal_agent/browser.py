@@ -55,6 +55,16 @@ SETTLE_JS = """() => new Promise(done => {
 SECRET_JS = """e => { const t = (e.type || '').toLowerCase(); const ac = (e.getAttribute && e.getAttribute('autocomplete') || '').toLowerCase();
   return t === 'password' || /(^|\\s)(one-time-code|current-password|new-password|cc-number|cc-csc)(\\s|$)/.test(ac); }"""
 
+# One task, one tab: links, forms and window.open that would open a new window
+# open in the same tab instead (search results open in new windows by default).
+SAME_TAB_JS = """(() => {
+  const same = el => { const t = (el.getAttribute('target') || '').toLowerCase(); if (t && t !== '_self' && t !== '_top' && t !== '_parent') el.setAttribute('target', '_self'); };
+  window.addEventListener('click', e => { const a = e.target && e.target.closest && e.target.closest('a[target],area[target]'); if (a) same(a); }, true);
+  window.addEventListener('submit', e => { if (e.target && e.target.getAttribute) same(e.target); }, true);
+  const open = window.open;
+  window.open = function (url, name, features) { if (url) { location.assign(url); return window; } return open.call(this, url, name, features); };
+})()"""
+
 # Form submissions are stopped inside the page while a write window is open:
 # aborting a document POST on the network leaves an error page and loses the form.
 GUARD_JS = """(() => {
@@ -179,11 +189,13 @@ class Browser:
                         str(self.config.profile), headless=self.config.headless, service_workers="block",
                         viewport={"width": 1280, "height": 800}, locale="zh-CN", accept_downloads=False)
                     await context.add_init_script(GUARD_JS)
+                    await context.add_init_script(SAME_TAB_JS)
                     await context.expose_binding("__noyiHeld", self._form_held)
                     # No context-wide route: Playwright's interception turns the
                     # HTTP cache off, and some sites (Bing) then serve a near-empty
                     # page. Addresses are checked through CDP Fetch per page instead.
                     context.on("page", self._address_guard)
+                    context.on("page", self._adopt_popup)
                     for page in context.pages:
                         await page.close()
                 except BaseException:
@@ -225,6 +237,28 @@ class Browser:
             self._pages.pop(id(tab.page), None)
             if not tab.page.is_closed():
                 await tab.page.close()
+
+    async def _adopt_popup(self, page):
+        """A window a task's page opened anyway (SAME_TAB_JS missed it): the
+        task tab goes there instead, so refs and the live view stay on one tab."""
+        try:
+            opener = await page.opener()
+        except Exception:
+            return
+        tab = self._pages.get(id(opener)) if opener else None
+        if tab is None:
+            return
+        try:
+            await page.wait_for_load_state("commit", timeout=NAV_TIMEOUT_MS)
+        except Exception:
+            pass
+        url = page.url
+        await page.close()
+        if url.startswith(("http://", "https://")) and not tab.page.is_closed():
+            try:
+                await tab.page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+            except Exception:
+                pass
 
     def _mark(self, tab, kind):
         if tab.window:

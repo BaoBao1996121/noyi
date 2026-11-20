@@ -38,6 +38,7 @@ PAGES = {
         <label>密码<input type=password name=p></label><label>验证码<input autocomplete=one-time-code name=otp></label>
         <button>登录</button></form>""",
 }
+PAGES["/links"] = """<title>结果</title><h1>结果</h1><a href=/spa target=_blank>文章（新窗口打开）</a>"""
 PAGES["/filled"] = PAGES["/login"].replace("name=p>", f"name=p value={CANARY}>").replace("name=otp>", f"name=otp value={OTP}>")
 
 
@@ -163,6 +164,15 @@ async def test_a_page_that_replaces_itself_while_loading_still_gives_a_snapshot(
     opened = result(model.requests[2]["messages"], "browser_open")
     assert "error" not in opened, opened
     assert "新页面的结果" in opened["snapshot"]
+
+
+async def test_a_link_that_opens_a_new_window_opens_in_the_task_tab(store, tmp_path, tools, site, chromium):
+    def click(messages, tools_now):
+        return tool_reply("browser_act", {"actions": [{"do": "click", "ref": ref(result(messages, "browser_open")["snapshot"], "文章（新窗口打开）")}]}, "c")
+    _, model = await run(store, tmp_path / "data", tools, open_page(site.base + "/links") + [click, stop])
+    clicked = result(model.requests[3]["messages"], "browser_act")
+    assert clicked["url"].endswith("/spa") and "点赞" in clicked["snapshot"]
+    assert len((await chromium.context()).pages) == len(chromium.tabs)     # no stray window left behind
 
 
 # ---- confirmation ----------------------------------------------------------------------
