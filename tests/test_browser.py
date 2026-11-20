@@ -39,6 +39,9 @@ PAGES = {
         <button>登录</button></form>""",
 }
 PAGES["/links"] = """<title>结果</title><h1>结果</h1><a href=/spa target=_blank>文章（新窗口打开）</a>"""
+# Replaces itself a while after loading, after its own requests (a search page's redirect).
+PAGES["/late"] = """<title>跳转中</title><p>旧页面</p><script>
+  addEventListener('load', () => setTimeout(() => fetch('/beacon', {method: 'POST', body: 'x'}).then(() => setTimeout(() => location.replace('/spa'), 250)), 200));</script>"""
 PAGES["/filled"] = PAGES["/login"].replace("name=p>", f"name=p value={CANARY}>").replace("name=otp>", f"name=otp value={OTP}>")
 
 
@@ -166,13 +169,21 @@ async def test_a_page_that_replaces_itself_while_loading_still_gives_a_snapshot(
     assert "新页面的结果" in opened["snapshot"]
 
 
+async def test_a_page_that_redirects_itself_shortly_after_loading_is_shown_after_the_redirect(store, tmp_path, tools, site):
+    _, model = await run(store, tmp_path / "data", tools, open_page(site.base + "/late") + [stop])
+    opened = result(model.requests[2]["messages"], "browser_open")
+    assert opened["url"].endswith("/spa") and "点赞" in opened["snapshot"], opened
+
+
 async def test_a_link_that_opens_a_new_window_opens_in_the_task_tab(store, tmp_path, tools, site, chromium):
     def click(messages, tools_now):
         return tool_reply("browser_act", {"actions": [{"do": "click", "ref": ref(result(messages, "browser_open")["snapshot"], "文章（新窗口打开）")}]}, "c")
     _, model = await run(store, tmp_path / "data", tools, open_page(site.base + "/links") + [click, stop])
     clicked = result(model.requests[3]["messages"], "browser_act")
     assert clicked["url"].endswith("/spa") and "点赞" in clicked["snapshot"]
-    assert sum(p.url.endswith("/spa") for p in (await chromium.context()).pages) == 1     # no stray window left behind
+    # No stray window left behind: every open page is a task's tab or the ready spare.
+    spare = await chromium._spare
+    assert all(p is spare or any(p is t.page for t in chromium.tabs.values()) for p in (await chromium.context()).pages)
 
 
 async def test_each_call_reports_how_much_of_its_time_the_website_spent_loading(store, tmp_path, tools, site):

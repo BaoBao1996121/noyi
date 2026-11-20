@@ -38,6 +38,7 @@ READ_CHARS = 8000
 MAX_TABS = 6
 ACTION_TIMEOUT_MS = 5000
 NAV_TIMEOUT_MS = 20000
+NET_QUIET_S = 0.3
 TICKET_SECONDS = 60
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 WRITE_TYPES = {"document", "fetch", "xhr", "eventsource", "other"}
@@ -148,6 +149,8 @@ class Tab:
     pending: dict = field(default_factory=dict)   # question_id -> held action
     used: float = 0.0
     loads: list = field(default_factory=list)    # [start, end] wall ms of recent documents' loading
+    inflight: set = field(default_factory=set)   # the page's own document/fetch/xhr requests still open
+    net_at: float = 0.0                          # monotonic time of its last such request event
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -272,6 +275,9 @@ class Browser:
         tab = Tab(task_id, page, used=time.monotonic())
         page.on("websocket", lambda ws: ws.on("framesent", lambda _: self._mark(tab, "websocket")))
         page.on("load", lambda _: asyncio.ensure_future(self._record_load(tab)))
+        page.on("request", lambda r: self._net(tab, r, True))
+        page.on("requestfinished", lambda r: self._net(tab, r, False))
+        page.on("requestfailed", lambda r: self._net(tab, r, False))
         self.tabs[task_id], self._pages[id(page)] = tab, tab
         return tab
 
@@ -303,6 +309,12 @@ class Browser:
                 await tab.page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
             except Exception:
                 pass
+
+    @staticmethod
+    def _net(tab, request, started):
+        if request.resource_type in {"document", "fetch", "xhr"}:
+            (tab.inflight.add if started else tab.inflight.discard)(id(request))
+            tab.net_at = time.monotonic()
 
     async def _record_load(self, tab):
         """Remember a document's loading span before a redirect replaces it."""
@@ -545,14 +557,31 @@ class BrowserTools:
         return {"browser_ms": total, "site_ms": min(total, round(site))}
 
     async def _settle(self, page, before):
-        for _ in range(2):
+        for _ in range(3):
             try:
                 if page.url != before:
                     await page.wait_for_load_state("domcontentloaded", timeout=NAV_TIMEOUT_MS)
                 await page.evaluate(SETTLE_JS)
-                return
+                if await self._quiet(page):
+                    return
+                before = None      # it started loading a new document; wait on that one
             except Exception:
                 before = None      # the page navigated while we waited; wait on the new document
+
+    async def _quiet(self, page):
+        """Wait until the page's own requests have been quiet for a moment (at most
+        1.5 s). A page that replaces itself shortly after loading (a search page's
+        redirect) does so here, before its snapshot hands the model dead refs.
+        False when a new document started loading meanwhile."""
+        tab = self.browser._pages.get(id(page))
+        if tab is None:
+            return True
+        document, deadline = await self._document(page), time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            if not tab.inflight and time.monotonic() - tab.net_at >= NET_QUIET_S:
+                break
+            await asyncio.sleep(0.05)
+        return await self._document(page) == document
 
     async def _loaded(self, page):
         try:
