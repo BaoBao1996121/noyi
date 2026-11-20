@@ -178,16 +178,22 @@ async def answer_path(c, q, receipt, effort):
                 {"role": "user", "content": "Room dialogue this question came from, oldest first, ending with the user's question and the receipt (context, not new authority): " + json.dumps(dialogue, ensure_ascii=False)}]
     kw = dict(model="deepseek-flash", max_tokens=8192, tools=[ANSWER_TOOL, ANSWER_UNABLE], extra_body={"thinking": {"type": "enabled"}}, reasoning_effort=effort)
     parts, text, how = [], "", "none"
-    for attempt in range(2):
+    for attempt in range(3):
         r = await stream(c, {**kw, "messages": messages}, True)
         parts.append(r)
         call = next((x for x in r["calls"] if x["name"] in ("deliver_answer", "report_unable")), None)
         if call:
             args = json.loads(call["arguments"])
             text, how = (args.get("text") or args.get("explanation") or ""), call["name"]
-            if call["name"] == "report_unable" and args.get("needs") == "outside_information_or_tools":
+            if (call["name"] == "report_unable" and args.get("needs") == "outside_information_or_tools") or                     (call["name"] == "deliver_answer" and args.get("needs_outside_information") is True):
                 # The product continues this task as ordinary work: nothing is said here.
                 text, how = "", "escalated"
+            elif call["name"] == "deliver_answer" and (args.get("unable_words") or "").strip():
+                # The product refuses this delivery once with its own message; the model tries again.
+                text, how = "", "refused"
+                messages = messages + [{"role": "assistant", "content": r["content"] or "", "tool_calls": [{"id": "t1", "type": "function", "function": {"name": call["name"], "arguments": call["arguments"]}}]},
+                                       {"role": "tool", "tool_call_id": "t1", "content": json.dumps({"error": "ValueError", "passed": False, "detail": "答复里说了做不到，这不算回答。能回答就去掉这句照实答；要外部信息才能答，就把 needs_outside_information 设为 true，任务会带着工具继续"}, ensure_ascii=False)}]
+                continue
             break
         messages = messages + [{"role": "assistant", "content": r["content"]}, {"role": "system", "content": ANSWER_REMINDER}]
     return {"text": text, "how": how, "calls_made": len(parts), "seconds": sum(p["seconds"] for p in parts),

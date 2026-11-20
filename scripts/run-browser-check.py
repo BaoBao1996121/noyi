@@ -71,7 +71,7 @@ async def chat(client, model, msgs, tools, record):
 async def compare_run(group, task, browser, client, model, work):
     start, goal = TASKS[task]
     rec = {"layer": "compare", "group": group, "task": task, "turns": 0, "tokens_in": 0, "tokens_out": 0, "model_ms": 0,
-           "browser_ms": [], "retries": 0, "answer": None, "error": None}
+           "browser_ms": [], "own_ms": [], "retries": 0, "answer": None, "error": None}
     task_id = f"{group}-{task}-{time.time_ns()}"
     tools = BrowserTools(browser, work)
     call = Call(task_id, work / task_id)
@@ -81,6 +81,7 @@ async def compare_run(group, task, browser, client, model, work):
         first = {"name": "browser_open", "args": {"url": start}}
         out = await tools.open(call, first["args"])
         rec["browser_ms"].append(out["browser_ms"])
+        rec["own_ms"].append(out["browser_ms"] - out.get("site_ms", 0))
         first_text, image = json.dumps(out, ensure_ascii=False), None
     else:
         first = {"name": "computer", "args": {"action": "open_url", "text": start}}
@@ -117,10 +118,12 @@ async def compare_run(group, task, browser, client, model, work):
                         out = await getattr(tools, {"browser_open": "open", "browser_act": "act", "browser_snapshot": "snapshot", "browser_read": "read", "browser_back": "back"}[c.function.name])(call, args)
                         if out.get("confirmation") == "held":
                             rec["browser_ms"].append(out["browser_ms"])
+                            rec["own_ms"].append(out["browser_ms"] - out.get("site_ms", 0))
                             rec["approvals"] = rec.get("approvals", 0) + 1
                             out = await tools.confirmed(call, {"question_id": out["question_id"]})
                         if "browser_ms" in out:
                             rec["browser_ms"].append(out["browser_ms"])
+                            rec["own_ms"].append(out["browser_ms"] - out.get("site_ms", 0))
                         text = json.dumps(out, ensure_ascii=False)
                     except Exception as exc:
                         text = json.dumps({"error": type(exc).__name__, "detail": str(exc)[:200]}, ensure_ascii=False)
@@ -170,7 +173,7 @@ def trace_line(name, args, text):
         out = json.loads(text)
     except ValueError:
         return {"tool": name, "result": text[:60]}
-    keep = {k: out[k] for k in ("error", "detail", "confirmation", "held_writes", "unguarded", "url", "truncated", "browser_ms", "login_page") if k in out}
+    keep = {k: out[k] for k in ("error", "detail", "confirmation", "held_writes", "unguarded", "url", "truncated", "browser_ms", "site_ms", "login_page") if k in out}
     sizes = {k: len(out[k]) for k in ("snapshot", "snapshot_changes", "text") if isinstance(out.get(k), str)}
     shape = [a.get("do") for a in args.get("actions", [])] if name == "browser_act" else {k: v for k, v in args.items() if k in {"url", "find", "action"}}
     return {"tool": name, "args": shape, **keep, "sizes": sizes}
@@ -258,6 +261,8 @@ async def e2e_run(task, browser, model, out):
     rec["answer"] = answers[-1] if answers else None
     results = [json.loads(o["result"]) for o in store.all("SELECT result FROM operations WHERE tool LIKE 'browser_%' AND result IS NOT NULL")]
     rec["browser_ms"] = [r["browser_ms"] for r in results if isinstance(r.get("browser_ms"), int)]
+    # Noyi's own cost: browser-side time minus the website's own document loading (Navigation Timing).
+    rec["own_ms"] = [r["browser_ms"] - r.get("site_ms", 0) for r in results if isinstance(r.get("browser_ms"), int)]
     rec["tools"] = [o["tool"] for o in store.all("SELECT tool FROM operations ORDER BY created")]
     steps = [json.loads(s["data"]) for s in store.all("SELECT data FROM steps WHERE kind='model'")]
     rec["tokens_in"] = sum(s.get("input_tokens") or 0 for s in steps)
@@ -269,6 +274,12 @@ async def e2e_run(task, browser, model, out):
 
 
 def summary(rows):
+    e2e = [r for r in rows if r["layer"] == "e2e"]
+    if e2e:
+        own = [m for r in e2e for m in r.get("own_ms", [])]
+        print(json.dumps({"e2e_all_sites": True, "calls": sum(len(r["browser_ms"]) for r in e2e),
+                          "browser_ms_p50": statistics.median([m for r in e2e for m in r["browser_ms"]]) if e2e else None,
+                          "own_ms_p50": statistics.median(own) if own else None}))
     med = lambda xs: statistics.median(xs) if xs else None
     for layer in ("compare", "e2e"):
         for task in TASKS:
@@ -279,7 +290,8 @@ def summary(rows):
                                       "delivered": sum(1 for r in rs if r.get("delivered")) if layer == "e2e" else None,
                                       "tokens_in_median": med([r["tokens_in"] for r in rs]), "total_s_median": round(med([r["total_ms"] for r in rs]) / 1000, 1),
                                       "turns_median": med([r.get("turns", 0) for r in rs]),
-                                      "browser_ms_p50": med([m for r in rs for m in r["browser_ms"]]), "retries": sum(r.get("retries", 0) for r in rs),
+                                      "browser_ms_p50": med([m for r in rs for m in r["browser_ms"]]),
+                                      "own_ms_p50": med([m for r in rs for m in r.get("own_ms", [])]), "retries": sum(r.get("retries", 0) for r in rs),
                                       "errors": [r["error"] for r in rs if r.get("error")]}, ensure_ascii=False))
 
 

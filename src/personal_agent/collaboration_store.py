@@ -536,7 +536,7 @@ class CollaborationStore:
             self.db.execute("UPDATE events SET state='pending',claimed_by_run=NULL WHERE claimed_by_run=? AND state='claimed'", (run["id"],))
         return {"question_id": qid, "status": "waiting_user"}
 
-    def escalate_answer(self, run, op_id, args):
+    def escalate_answer(self, run, op_id, args, tool="report_unable"):
         """A chat answer that needs outside information or tools becomes ordinary work.
 
         Same task, same user message, same receipt and commitment: the run ends
@@ -552,7 +552,7 @@ class CollaborationStore:
             spec = dict(t["spec"], result_kind="artifact")
             now = time.time()
             self.db.execute("INSERT INTO operations(id,task_id,run_id,tool,arguments,status,result,created,ended) VALUES(?,?,?,?,?,?,?,?,?)",
-                            (op_id, t["id"], run["id"], "report_unable", encode(args), "succeeded", encode(result), now, now))
+                            (op_id, t["id"], run["id"], tool, encode(args), "succeeded", encode(result), now, now))
             self._charge_elapsed(t, run)
             self.db.execute("UPDATE tasks SET spec=?,status='ready',reason='answer_needs_tools',acceptance='pending' WHERE id=?", (encode(spec), t["id"]))
             self.db.execute("UPDATE runs SET phase='ended',end_reason='answer_needs_tools',ended=? WHERE id=?", (now, run["id"]))

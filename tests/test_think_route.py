@@ -39,7 +39,7 @@ async def test_hard_question_gets_receipt_then_a_plain_text_answer_without_artif
     def answer(messages, tools):
         seen["tools"] = sorted(t["function"]["name"] for t in tools)
         seen["system"] = messages[0]["content"]
-        return tool_reply("deliver_answer", {"text": "每天大约吃 2000 千卡。\n- 基础代谢约 1750 千卡……", "promise": ""}, "ans")
+        return tool_reply("deliver_answer", {"text": "每天大约吃 2000 千卡。\n- 基础代谢约 1750 千卡……", "promise": "", "needs_outside_information": False, "unable_words": ""}, "ans")
 
     model = ScriptedModel([tool_reply("resolve_conversation", HARD), answer])
     runtime = Runtime(store, tmp_path / "data", model)
@@ -68,8 +68,8 @@ async def test_hard_question_gets_receipt_then_a_plain_text_answer_without_artif
 async def test_answer_cannot_promise_later_work(store, tmp_path):
     incoming(store, "轻断食和少吃一点哪个好？")
     model = ScriptedModel([tool_reply("resolve_conversation", {**HARD, "receipt": "我对比一下两种做法的坚持难度和效果。"}),
-                           tool_reply("deliver_answer", {"text": "少吃一点更好坚持。明天我再提醒你。", "promise": "明天我再提醒你"}, "a1"),
-                           tool_reply("deliver_answer", {"text": "少吃一点更好坚持。", "promise": ""}, "a2")])
+                           tool_reply("deliver_answer", {"text": "少吃一点更好坚持。明天我再提醒你。", "promise": "明天我再提醒你", "needs_outside_information": False, "unable_words": ""}, "a1"),
+                           tool_reply("deliver_answer", {"text": "少吃一点更好坚持。", "promise": "", "needs_outside_information": False, "unable_words": ""}, "a2")])
     runtime = Runtime(store, tmp_path / "data", model)
     await runtime.execute(store.claim_conversation())
     await runtime.execute(store.claim())
@@ -85,7 +85,7 @@ async def test_answer_written_as_plain_text_is_asked_once_to_send_it(store, tmp_
 
     def resend(messages, tools):
         seen.append(messages[-1])
-        return tool_reply("deliver_answer", {"text": "因为代谢适应和食欲上升。", "promise": ""}, "a")
+        return tool_reply("deliver_answer", {"text": "因为代谢适应和食欲上升。", "promise": "", "needs_outside_information": False, "unable_words": ""}, "a")
 
     model = ScriptedModel([tool_reply("resolve_conversation", {**HARD, "receipt": "我从代谢和行为两方面讲讲节食为什么容易反弹。"}),
                            ModelReply({"role": "assistant", "content": "因为代谢适应和食欲上升。"}), resend])
@@ -192,3 +192,50 @@ def test_answer_route_declares_needing_tools_in_a_structured_field():
     needs = ANSWER_UNABLE["function"]["parameters"]["properties"]["needs"]
     assert set(needs["enum"]) == {"outside_information_or_tools", "nothing_available"}
     assert "needs" in ANSWER_UNABLE["function"]["parameters"]["required"]
+
+
+def test_every_answer_must_declare_whether_it_needs_outside_information():
+    from personal_agent.runtime import ANSWER_PROMPT, ANSWER_TOOL
+    params = ANSWER_TOOL["function"]["parameters"]
+    assert params["properties"]["needs_outside_information"]["type"] == "boolean"
+    assert {"needs_outside_information", "unable_words"} <= set(params["required"])
+    assert "needs_outside_information" in ANSWER_PROMPT
+    # Intake is told the answer route has no tools, so lookups go to ordinary work.
+    assert "never result_kind=answer" in INTAKE_PROMPT
+
+
+@pytest.mark.asyncio
+async def test_an_answer_declaring_it_needs_outside_information_continues_with_tools(store, tmp_path):
+    incoming(store, "playwright 在 PyPI 上最新版本是多少？")
+    seen = {}
+
+    def worker(messages, tools):
+        seen["worker_tools"] = {t["function"]["name"] for t in tools}
+        return tool_reply("report_unable", {"explanation": "测试到此为止。"}, "end")
+    model = ScriptedModel([tool_reply("resolve_conversation", LOOKUP),
+                           tool_reply("deliver_answer", {"text": "我查不了网页。", "promise": "", "needs_outside_information": True, "unable_words": "我查不了网页"}, "a"),
+                           worker])
+    runtime = Runtime(store, tmp_path / "data", model)
+    await runtime.execute(store.claim_conversation())
+    await runtime.execute(store.claim())
+    [task] = store.all("SELECT id FROM tasks")
+    assert store.task(task["id"])["spec"]["result_kind"] == "artifact"
+    assert [d["content"] for d in store.all("SELECT content FROM deliveries ORDER BY rowid")] == [LOOKUP["receipt"]]
+    await runtime.execute(store.claim())
+    assert "write_artifact" in seen["worker_tools"]
+
+
+@pytest.mark.asyncio
+async def test_an_answer_that_says_it_cannot_help_is_not_delivered_as_an_answer(store, tmp_path):
+    incoming(store, "playwright 在 PyPI 上最新版本是多少？")
+    model = ScriptedModel([tool_reply("resolve_conversation", LOOKUP),
+                           tool_reply("deliver_answer", {"text": "我没法打开网页，查不到。", "promise": "", "needs_outside_information": False, "unable_words": "我没法打开网页，查不到"}, "a1"),
+                           tool_reply("deliver_answer", {"text": "x", "promise": "", "needs_outside_information": True, "unable_words": ""}, "a2"),
+                           tool_reply("report_unable", {"explanation": "测试到此为止。"}, "end")])
+    runtime = Runtime(store, tmp_path / "data", model)
+    await runtime.execute(store.claim_conversation())
+    await runtime.execute(store.claim())
+    said = [d["content"] for d in store.all("SELECT content FROM deliveries ORDER BY rowid")]
+    assert not any("没法打开网页" in s for s in said)
+    refused = json.loads(store.one("SELECT result FROM operations WHERE tool='deliver_answer' ORDER BY created LIMIT 1")["result"])
+    assert refused["passed"] is False and "needs_outside_information" in refused["detail"]

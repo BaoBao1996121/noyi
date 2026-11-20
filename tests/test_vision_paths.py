@@ -66,7 +66,7 @@ async def test_reply_layer_sees_the_photo_sent_with_this_message(store, tmp_path
 async def test_answer_task_sees_the_photo_it_was_asked_about(store, tmp_path):
     incoming(store, "这个吃了一半，多少热量", [photo_source(tmp_path)])
     model = Model([tool_reply("resolve_conversation", ANSWER),
-                   tool_reply("deliver_answer", {"text": "约 120 千卡。", "promise": ""}, "a")])
+                   tool_reply("deliver_answer", {"text": "约 120 千卡。", "promise": "", "needs_outside_information": False, "unable_words": ""}, "a")])
     runtime = Runtime(store, tmp_path / "data", model)
     await runtime.execute(store.claim_conversation())
     await runtime.execute(store.claim())

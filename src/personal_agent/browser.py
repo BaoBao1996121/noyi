@@ -43,11 +43,14 @@ SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 WRITE_TYPES = {"document", "fetch", "xhr", "eventsource", "other"}
 KEYS = {"Enter", "Tab", "Escape", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageDown", "PageUp", "Home", "End", "Space"}
 
-# Settle: no DOM change for 150 ms, at most 3 s.
+# Settle: no structural DOM change (nodes added or removed, text changed) for
+# 150 ms, at most 1 s. Attribute churn (animations, hover classes, timers
+# that toggle styles) does not hold it open: it never changes what the
+# snapshot shows, and on busy pages it used to keep every call waiting 1-3 s.
 SETTLE_JS = """() => new Promise(done => {
-  let t = setTimeout(fin, 150); const cap = setTimeout(fin, 3000);
+  let t = setTimeout(fin, 150); const cap = setTimeout(fin, 1000);
   const ob = new MutationObserver(() => { clearTimeout(t); t = setTimeout(fin, 150); });
-  ob.observe(document, {subtree: true, childList: true, attributes: true, characterData: true});
+  ob.observe(document, {subtree: true, childList: true, characterData: true});
   function fin() { ob.disconnect(); clearTimeout(cap); done(true); }
 })"""
 
@@ -97,6 +100,12 @@ DESCRIBE_JS = """e => {
 VALUE_LINE = re.compile(r"^(?P<head>\s*- '?(?:textbox|searchbox|combobox|spinbutton)\b[^\n]*?\[ref=(?P<ref>\w+)\][^\n:]*'?): (?P<value>.+)$", re.M)
 
 
+# The website's own loading time for a document: navigation start to the end of
+# its load event (Navigation Timing), in wall-clock milliseconds; end 0 = not loaded yet.
+NAV_JS = """() => { const n = performance.getEntriesByType('navigation')[0];
+  return n ? [performance.timeOrigin + n.startTime, n.loadEventEnd ? performance.timeOrigin + n.loadEventEnd : 0] : null; }"""
+
+
 def ms(start):
     return round((time.perf_counter() - start) * 1000)
 
@@ -138,6 +147,7 @@ class Tab:
     document: str | None = None        # the document those refs belong to
     pending: dict = field(default_factory=dict)   # question_id -> held action
     used: float = 0.0
+    loads: list = field(default_factory=list)    # [start, end] wall ms of recent documents' loading
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -261,6 +271,7 @@ class Browser:
         page = await self._new_page(context)
         tab = Tab(task_id, page, used=time.monotonic())
         page.on("websocket", lambda ws: ws.on("framesent", lambda _: self._mark(tab, "websocket")))
+        page.on("load", lambda _: asyncio.ensure_future(self._record_load(tab)))
         self.tabs[task_id], self._pages[id(page)] = tab, tab
         return tab
 
@@ -292,6 +303,15 @@ class Browser:
                 await tab.page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
             except Exception:
                 pass
+
+    async def _record_load(self, tab):
+        """Remember a document's loading span before a redirect replaces it."""
+        try:
+            span = await tab.page.evaluate(NAV_JS)
+        except Exception:
+            return
+        if span and span not in tab.loads:
+            tab.loads[:] = (tab.loads + [span])[-10:]
 
     def _mark(self, tab, kind):
         if tab.window:
@@ -503,6 +523,27 @@ class BrowserTools:
         except Exception:
             return None
 
+    async def _timing(self, tab, started, wall):
+        """browser_ms: all browser-side time of this call. site_ms: the part of it
+        spent while the website itself was loading a document (union of
+        loading spans inside the call). The difference is Noyi's own cost."""
+        now = time.time() * 1000
+        spans = list(tab.loads)
+        try:
+            current = await tab.page.evaluate(NAV_JS)
+        except Exception:
+            current = None
+        if current:
+            spans.append(current)
+        clipped = sorted((max(s, wall), min(e or now, now)) for s, e in spans)
+        site, edge = 0.0, wall
+        for s, e in clipped:
+            s = max(s, edge)
+            if e > s:
+                site, edge = site + e - s, e
+        total = ms(started)
+        return {"browser_ms": total, "site_ms": min(total, round(site))}
+
     async def _settle(self, page, before):
         for _ in range(2):
             try:
@@ -642,7 +683,7 @@ class BrowserTools:
     async def open(self, call, args):
         url = args["url"].strip()
         check_page_url(url)
-        started = time.perf_counter()
+        started, wall = time.perf_counter(), time.time() * 1000
         tab = await self.browser.tab(call.run["task_id"])
         async with tab.lock:
             try:
@@ -651,20 +692,20 @@ class BrowserTools:
                 raise _error(exc) from None
             await self._settle(tab.page, None)
             tab.last = None
-            return {**await self._snapshot(tab), "browser_ms": ms(started)}
+            return {**await self._snapshot(tab), **await self._timing(tab, started, wall)}
 
     async def snapshot(self, call, args):
         find = args.get("find")
         if find is not None and (not isinstance(find, str) or not 1 <= len(find.strip()) <= 100):
             raise ValueError("find must be 1-100 characters")
-        started = time.perf_counter()
+        started, wall = time.perf_counter(), time.time() * 1000
         tab = await self.browser.tab(call.run["task_id"])
         self._opened(tab)
         async with tab.lock:
-            return {**await self._snapshot(tab, find=find and find.strip()), "browser_ms": ms(started)}
+            return {**await self._snapshot(tab, find=find and find.strip()), **await self._timing(tab, started, wall)}
 
     async def back(self, call, args):
-        started = time.perf_counter()
+        started, wall = time.perf_counter(), time.time() * 1000
         tab = await self.browser.tab(call.run["task_id"])
         self._opened(tab)
         async with tab.lock:
@@ -673,7 +714,7 @@ class BrowserTools:
             except Exception as exc:
                 raise _error(exc) from None
             await self._settle(tab.page, None)
-            return {**await self._snapshot(tab), "browser_ms": ms(started)}
+            return {**await self._snapshot(tab), **await self._timing(tab, started, wall)}
 
     async def read(self, call, args):
         offset = args.get("offset", 0)
@@ -729,7 +770,7 @@ class BrowserTools:
             raise ValueError("actions must list 1-20 actions")
         for action in actions:
             validate_action(action)
-        started = time.perf_counter()
+        started, wall = time.perf_counter(), time.time() * 1000
         tab = await self.browser.tab(call.run["task_id"])
         self._opened(tab)
         done, unguarded = [], set()
@@ -742,7 +783,7 @@ class BrowserTools:
                     result = {"done": done, "confirmation": "not_needed", "unguarded": sorted(unguarded), "skipped_actions": actions[index:],
                               "note": "The page changed to a new document since your snapshot, so its refs no longer exist. These actions were not run; use the refs in this new snapshot."}
                     result.update(await self._snapshot(tab))
-                    return {**result, "browser_ms": ms(started)}
+                    return {**result, **await self._timing(tab, started, wall)}
                 element, info = await self._element(page, action)
                 kind = classify(action["do"], info, action.get("text", ""))
                 try:
@@ -755,16 +796,16 @@ class BrowserTools:
                 if window.held:
                     writes = sorted({f"{h['method']} {h['host']}" for h in window.held})
                     qid = await self._ask(call, tab, action, info, writes, element)
-                    return self._held(tab, qid, done, actions[index + 1:], writes, unguarded, started)
+                    return {**self._held(tab, qid, done, actions[index + 1:], writes, unguarded, started), **await self._timing(tab, started, wall)}
                 done.append({"do": action["do"], **({"ref": action["ref"]} if action.get("ref") else {})})
             result = {"done": done, "confirmation": "not_needed", "unguarded": sorted(unguarded)}
             result.update(await self._snapshot(tab, delta=True))
         if unguarded:
             result["unguarded_note"] = "These writes cannot be held for confirmation and may already have reached the website."
-        return {**result, "browser_ms": ms(started)}
+        return {**result, **await self._timing(tab, started, wall)}
 
     async def confirmed(self, call, args):
-        qid, started = args["question_id"], time.perf_counter()
+        qid, started, wall = args["question_id"], time.perf_counter(), time.time() * 1000
         tab = await self.browser.tab(call.run["task_id"])
         pending = tab.pending.pop(qid, None)        # one use, whatever the outcome
         question = call.runtime.store.one("SELECT state,answer,task_id FROM attentions WHERE id=?", (qid,))
@@ -793,7 +834,7 @@ class BrowserTools:
             window = await self._run_one(tab, pending["action"], "allow", element)
             result = {"done": [{"do": pending["action"]["do"]}], "confirmation": "confirmed", "unguarded": sorted(window.unguarded)}
             result.update(await self._snapshot(tab, delta=True))
-        return {**result, "browser_ms": ms(started)}
+        return {**result, **await self._timing(tab, started, wall)}
 
     async def login(self, call, args):
         reason = args["reason"].strip()[:120]

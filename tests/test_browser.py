@@ -175,6 +175,14 @@ async def test_a_link_that_opens_a_new_window_opens_in_the_task_tab(store, tmp_p
     assert sum(p.url.endswith("/spa") for p in (await chromium.context()).pages) == 1     # no stray window left behind
 
 
+async def test_each_call_reports_how_much_of_its_time_the_website_spent_loading(store, tmp_path, tools, site):
+    # /slow holds its body for 1.2 s: that is the website's own time, not Noyi's.
+    _, model = await run(store, tmp_path / "data", tools, open_page(site.base + "/slow") + [stop])
+    opened = result(model.requests[2]["messages"], "browser_open")
+    assert opened["site_ms"] >= 1000 and opened["browser_ms"] >= opened["site_ms"]
+    assert opened["browser_ms"] - opened["site_ms"] < 1000
+
+
 async def test_a_new_task_tab_is_taken_from_a_ready_spare(chromium):
     # Opening a Chromium tab takes about 1.5 s; a task's first call should not wait for it.
     await chromium.context()
