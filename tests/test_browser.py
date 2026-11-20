@@ -172,7 +172,16 @@ async def test_a_link_that_opens_a_new_window_opens_in_the_task_tab(store, tmp_p
     _, model = await run(store, tmp_path / "data", tools, open_page(site.base + "/links") + [click, stop])
     clicked = result(model.requests[3]["messages"], "browser_act")
     assert clicked["url"].endswith("/spa") and "点赞" in clicked["snapshot"]
-    assert len((await chromium.context()).pages) == len(chromium.tabs)     # no stray window left behind
+    assert sum(p.url.endswith("/spa") for p in (await chromium.context()).pages) == 1     # no stray window left behind
+
+
+async def test_a_new_task_tab_is_taken_from_a_ready_spare(chromium):
+    # Opening a Chromium tab takes about 1.5 s; a task's first call should not wait for it.
+    await chromium.context()
+    spare = await chromium._spare
+    tab = await chromium.tab("spare-check")
+    assert tab.page is spare and chromium._spare is not None      # used, and the next one is on its way
+    await chromium.drop("spare-check")
 
 
 # ---- confirmation ----------------------------------------------------------------------

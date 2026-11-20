@@ -177,6 +177,9 @@ class Browser:
         self._pw = self._context = None
         self._start = asyncio.Lock()
         self._public: dict[str, bool] = {}
+        # Chromium takes about 1.5 s to open a tab; one blank tab is kept ready
+        # so a task's first browser_open does not wait for it.
+        self._spare: asyncio.Future | None = None
 
     async def context(self):
         async with self._start:
@@ -203,9 +206,40 @@ class Browser:
                     self._pw = None
                     raise
                 self._context = context
+                self._prepare_spare()
             return self._context
 
+    def _prepare_spare(self):
+        async def make():
+            page = await self._context.new_page()
+            await self._address_guard(page)
+            return page
+        self._spare = asyncio.ensure_future(make())
+
+    async def _new_page(self, context):
+        spare, self._spare = self._spare, None
+        page = None
+        if spare is not None:
+            try:
+                page = await spare
+            except Exception:
+                page = None
+            if page is not None and page.is_closed():
+                page = None
+        if page is None:
+            page = await context.new_page()
+            await self._address_guard(page)
+        self._prepare_spare()
+        return page
+
     async def close(self):
+        spare, self._spare = self._spare, None
+        if spare is not None:
+            spare.cancel()
+            try:
+                await spare
+            except BaseException:
+                pass
         if self._context is not None:
             await self._context.close()
             await self._pw.stop()
@@ -224,8 +258,7 @@ class Browser:
             if oldest is None:
                 break
             await self.drop(oldest.task_id)
-        page = await context.new_page()
-        await self._address_guard(page)
+        page = await self._new_page(context)
         tab = Tab(task_id, page, used=time.monotonic())
         page.on("websocket", lambda ws: ws.on("framesent", lambda _: self._mark(tab, "websocket")))
         self.tabs[task_id], self._pages[id(page)] = tab, tab
